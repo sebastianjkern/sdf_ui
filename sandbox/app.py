@@ -1,6 +1,6 @@
-from gpu_sdf.compose import RECT, fragment_shader
-from gpu_sdf.shader import *
-from gpu_sdf.window import *
+from sdf_ui.compose import RECT, fragment_shader
+from sdf_ui.shader import *
+from sdf_ui.window import *
 
 
 class GLSLTypes:
