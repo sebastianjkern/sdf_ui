@@ -4,7 +4,46 @@ import glfw
 from OpenGL.GL import *
 from PIL import ImageOps, Image
 
-from sandbox.app import Uniforms
+from sdf_ui.shader import ShaderProgram, LINE, RECT, CIRCLE
+
+
+class GLSLTypes:
+    def __init__(self):
+        self.FLOAT = (0.0,)
+        self.VEC2 = (0.0, 0.0)
+        self.VEC3 = (0.0, 0.0, 0.0)
+        self.VEC4 = (0.0, 0.0, 0.0, 0.0)
+
+
+class Uniforms:
+    def __init__(self):
+        _t = GLSLTypes()
+
+        self.ANTIALIASING_DISTANCE = ["antialiasing_distance", _t.FLOAT]
+        self.ELEVATION = ["elevation", _t.FLOAT]
+        self.CENTER = ["center", _t.VEC2]
+        self.SIZE = ["size", _t.VEC2]
+        self.CORNER_RADIUS = ["corner_radius", _t.VEC4]
+        self.RADIUS = ["radius", _t.FLOAT]
+        self.VERTICAL_STRETCH = ["vertical_stretch", _t.FLOAT]
+        self.COLOR = ["obj_col", _t.VEC4]
+        self.SHADOW_COL = ["shadow_col", _t.VEC3]
+
+
+class ObjectDescriptor:
+    def __init__(self, t: str):
+        self.uniforms = Uniforms()
+        self.shader_name = t
+
+
+def get_shader(t):
+    if t == RECT:
+        return ShaderProgram().rect
+    if t == LINE:
+        return ShaderProgram().line
+    if t == CIRCLE:
+        return ShaderProgram().circle
+    return -1
 
 
 def init_glfw(width, height, visible: bool = True):
@@ -23,6 +62,7 @@ def init_glfw(width, height, visible: bool = True):
         raise ValueError("Failed to create glfw window")
 
     glfw.make_context_current(win)
+    glfw.swap_interval(1)
 
     print(glGetString(GL_VERSION).decode("UTF-8"))
 
@@ -48,7 +88,7 @@ def set_uniform(location, v):
     lut[len(v)](location, *v)
 
 
-def render(window, program, uniforms: Uniforms = None, save_image: Optional[bool] = False):
+def render(window, objects: list[ObjectDescriptor], save_image: Optional[bool] = False):
     width, height = glfw.get_framebuffer_size(window)
     glViewport(0, 0, width, height)
 
@@ -60,22 +100,19 @@ def render(window, program, uniforms: Uniforms = None, save_image: Optional[bool
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
     glClearColor(1.0, 1.0, 1.0, 1.0)
 
-    us = Uniforms()
-    us.ELEVATION[1] = (0.0 / height,)
-    us.CENTER[1] = (0.5, 0.5)
-    us.ANTIALIASING_DISTANCE[1] = (2.0 / width,)
-    us.VERTICAL_STRETCH[1] = (height / width,)
-    us.SIZE[1] = (0.1, 0.1)
-    us.CORNER_RADIUS[1] = (0.015, 0.015, 0.015, 0.015)
-    us.OBJ_COL[1] = (0.1, 0.1, 0.1, 1.0)
+    for obj in objects:
+        obj.uniforms.VERTICAL_STRETCH[1] = (width / height,)
+        obj.uniforms.ANTIALIASING_DISTANCE[1] = (2.0 / height,)
 
-    glUseProgram(program)
-    for uniform in us.__dict__.values():
-        location = glGetUniformLocation(program, uniform[0].encode("UTF-8"))
-        set_uniform(location, uniform[1])
+        program = get_shader(obj.shader_name)
 
-    glDrawArrays(GL_POINTS, 0, 1)
-    glUseProgram(0)
+        glUseProgram(program)
+        for uniform in obj.uniforms.__dict__.values():
+            location = glGetUniformLocation(program, uniform[0].encode("UTF-8"))
+            set_uniform(location, uniform[1])
+
+        glDrawArrays(GL_POINTS, 0, 1)
+        glUseProgram(0)
 
     if save_image:
         data = glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE)

@@ -106,8 +106,8 @@ vec3 lab2rgb(vec3 c)
 void main()
 {
     vec2 fragCoord = uv;
-    fragCoord.y *= vertical_stretch;
-    fragCoord.y -= (vertical_stretch - 1) / 2;
+    fragCoord.x *= vertical_stretch;
+    fragCoord.x -= (vertical_stretch - 1) / 2;
 
     #ifdef CIRCLE
     float distance = sdf_circle(fragCoord, radius, center);

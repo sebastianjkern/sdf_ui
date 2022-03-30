@@ -2,6 +2,8 @@ from pathlib import Path
 
 from OpenGL.GL import *
 
+from .singleton import Singleton
+
 
 def check_compile_status(shader):
     if glGetShaderiv(shader, GL_COMPILE_STATUS) != GL_TRUE:
@@ -18,9 +20,9 @@ def check_program_status(program):
 
 
 def compile_shader_program(
-        vertex_source: bytes = None,
-        fragment_source: bytes = None,
-        geometry_source: bytes = None):
+        vertex_source=None,
+        fragment_source=None,
+        geometry_source=None):
     if vertex_source is None:
         vs_path = Path(__file__).parent / "shader_files/vertex.glsl"
         vertex_source = open(vs_path).read()
@@ -68,3 +70,58 @@ def compile_shader_program(
     check_program_status(shader_program)
 
     return shader_program
+
+
+RECT = "RECT"
+LINE = "LINE"
+CIRCLE = "CIRCLE"
+
+
+def version(v: int) -> str:
+    return f"#version {v} \r\n"
+
+
+def define(name: str, val: str) -> str:
+    return f'#define {name} {val} \r\n'
+
+
+def fragment_shader(type_string: str):
+    v = version(330)
+    defines = define(type_string, "")
+
+    fs_path = Path(__file__).parent / "shader_files/fragment.glsl"
+    fragment_source = open(fs_path).read()
+
+    return f'{v}{defines}{fragment_source}'.encode('UTF-8')
+
+
+class ShaderProgram(Singleton):
+    _rect = None
+    _line = None
+    _circle = None
+
+    @property
+    def rect(self):
+        if ShaderProgram._rect is None:
+            ShaderProgram._rect = compile_shader_program(fragment_source=fragment_shader(RECT))
+        return ShaderProgram._rect
+
+    @property
+    def line(self):
+        if ShaderProgram._line is None:
+            ShaderProgram._line = compile_shader_program(fragment_source=fragment_shader(LINE))
+        return ShaderProgram._line
+
+    @property
+    def circle(self):
+        if ShaderProgram._circle is None:
+            ShaderProgram._circle = compile_shader_program(fragment_source=fragment_shader(CIRCLE))
+        return ShaderProgram._circle
+
+    def cleanup(self):
+        if ShaderProgram._rect is not None:
+            glDeleteProgram(ShaderProgram._rect)
+        if ShaderProgram._line is not None:
+            glDeleteProgram(ShaderProgram._line)
+        if ShaderProgram._circle is not None:
+            glDeleteProgram(ShaderProgram._circle)

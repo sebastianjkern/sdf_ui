@@ -1,39 +1,60 @@
-from sdf_ui.compose import RECT, fragment_shader
-from sdf_ui.shader import *
+import numpy as np
+
 from sdf_ui.window import *
 
 
-class GLSLTypes:
-    def __init__(self):
-        self.FLOAT = (0.0,)
-        self.VEC2 = (0.0, 0.0)
-        self.VEC3 = (0.0, 0.0, 0.0)
-        self.VEC4 = (0.0, 0.0, 0.0, 0.0)
+def rgb_col(r: int, g: int, b: int, *a):
+    values = np.array([r, g, b, *a], dtype=np.float)
+    values /= 255
+    return tuple(values.tolist())
 
 
-class Uniforms:
-    def __init__(self):
-        _t = GLSLTypes()
-
-        self.ANTIALIASING_DISTANCE = ["antialiasing_distance", _t.FLOAT]
-        self.ELEVATION = ["elevation", _t.FLOAT]
-        self.CENTER = ["center", _t.VEC2]
-        self.SIZE = ["size", _t.VEC2]
-        self.CORNER_RADIUS = ["corner_radius", _t.VEC4]
-        self.RADIUS = ["radius", _t.FLOAT]
-        self.VERTICAL_STRETCH = ["vertical_stretch", _t.FLOAT]
-        self.OBJ_COL = ["obj_col", _t.VEC4]
-        self.SHADOW_COL = ["shadow_col", _t.VEC3]
+def hex_col(string: str):
+    g = string.lstrip("#")
+    col = tuple(int(g[i:i + 2], 16) for i in (0, 2, 4))
+    return rgb_col(*col, 255)
 
 
 if __name__ == '__main__':
-    window = init_glfw(1280, 720, visible=True)
+    width, height = 1280, 720
 
-    program = compile_shader_program(fragment_source=fragment_shader(RECT))
+    window = init_glfw(width, height, visible=True)
 
-    while not glfw.window_should_close(window):
-        render(window, program, save_image=False)
+    col1 = hex_col("#4E7FBA")
+    col2 = hex_col("#76A9AE")
+    col3 = hex_col("#C69463")
+    col4 = hex_col("#2C2D35")
 
-    glDeleteProgram(program)
+    bgr = ObjectDescriptor(RECT)
+    bgr.uniforms.COLOR[1] = (1.0, 1.0, 1.0, 1.0)
+    bgr.uniforms.CENTER[1] = (0.5, 0.5)
+    bgr.uniforms.SIZE[1] = (0.5 * width / height, 1.0)
+
+    obj1 = ObjectDescriptor(RECT)
+
+    obj1.uniforms.ELEVATION[1] = (.000010,)
+    obj1.uniforms.CENTER[1] = (0.6, 0.5)
+    obj1.uniforms.SIZE[1] = (0.30, 0.30)
+    obj1.uniforms.CORNER_RADIUS[1] = (0.03, 0.03, 0.03, 0.03)
+    obj1.uniforms.COLOR[1] = col1
+
+    obj2 = ObjectDescriptor(CIRCLE)
+
+    obj2.uniforms.ELEVATION[1] = (.000010,)
+    obj2.uniforms.CENTER[1] = (0.30, 0.55)
+    obj2.uniforms.RADIUS[1] = (0.2,)
+    obj2.uniforms.COLOR[1] = col3
+
+    obj3 = ObjectDescriptor(CIRCLE)
+
+    obj3.uniforms.ELEVATION[1] = (.000010,)
+    obj3.uniforms.CENTER[1] = (0.15, 0.60)
+    obj3.uniforms.RADIUS[1] = (0.15,)
+    obj3.uniforms.COLOR[1] = col2
+
+    # while not glfw.window_should_close(window):
+    render(window, [bgr, obj1, obj2, obj3], save_image=True)
+
+    ShaderProgram().cleanup()
 
     terminate_glfw(window)
