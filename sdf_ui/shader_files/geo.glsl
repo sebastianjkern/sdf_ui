@@ -3,7 +3,7 @@
 layout(points) in;
 layout(triangle_strip, max_vertices=4) out;
 
-varying vec2 uv;
+out vec2 uv;
 
 void main()
 {

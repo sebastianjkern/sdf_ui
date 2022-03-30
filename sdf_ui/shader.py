@@ -86,7 +86,7 @@ def define(name: str, val: str) -> str:
 
 
 def fragment_shader(type_string: str):
-    v = version(330)
+    v = version(460)
     defines = define(type_string, "")
 
     fs_path = Path(__file__).parent / "shader_files/fragment.glsl"

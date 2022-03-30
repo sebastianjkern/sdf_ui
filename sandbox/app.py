@@ -4,7 +4,7 @@ from sdf_ui.window import *
 
 
 def rgb_col(r: int, g: int, b: int, *a):
-    values = np.array([r, g, b, *a], dtype=np.float)
+    values = np.array([r, g, b, *a], dtype=float)
     values /= 255
     return tuple(values.tolist())
 
@@ -52,8 +52,8 @@ if __name__ == '__main__':
     obj3.uniforms.RADIUS[1] = (0.15,)
     obj3.uniforms.COLOR[1] = col2
 
-    # while not glfw.window_should_close(window):
-    render(window, [bgr, obj1, obj2, obj3], save_image=True)
+    while not glfw.window_should_close(window):
+        render(window, [bgr, obj1, obj2, obj3], save_image=False)
 
     ShaderProgram().cleanup()
 

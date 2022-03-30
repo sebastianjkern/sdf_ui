@@ -52,7 +52,7 @@ def init_glfw(width, height, visible: bool = True):
     glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 4)
     glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 6)
     glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_COMPAT_PROFILE)
-    glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, True)
+    glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, False)
 
     glfw.window_hint(glfw.VISIBLE, visible)
     win = glfw.create_window(width, height, "SDF GPU Renderer", None, None)

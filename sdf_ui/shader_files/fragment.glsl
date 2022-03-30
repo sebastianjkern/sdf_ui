@@ -1,4 +1,4 @@
-varying vec2 uv;
+in vec2 uv;
 
 #define PI 3.1415926538
 #define BLACK vec3(0)
@@ -52,7 +52,7 @@ vec3 rgb2xyz(vec3 c)
     0.2126, 0.7152, 0.0722,
     0.0193, 0.1192, 0.9505
     );
-    return 100.0 * mul(tmp, mat);
+    return 100.0 * tmp * mat;
 }
 
 vec3 xyz2lab(vec3 c)
@@ -90,7 +90,7 @@ vec3 xyz2rgb(vec3 c)
     -0.9689, 1.8758, 0.0415,
     0.0557, -0.2040, 1.0570
     );
-    vec3 v = mul(c / 100.0, mat);
+    vec3 v = c / 100.0 * mat;
     vec3 r;
     r.x = (v.r > 0.0031308) ? ((1.055 * pow(v.r, (1.0 / 2.4))) - 0.055) : 12.92 * v.r;
     r.y = (v.g > 0.0031308) ? ((1.055 * pow(v.g, (1.0 / 2.4))) - 0.055) : 12.92 * v.g;
