@@ -1,10 +1,17 @@
+import sys
+import threading
+import traceback
 from typing import Optional
 
 import glfw
 from OpenGL.GL import *
 from PIL import ImageOps, Image
 
-from sdf_ui.shader import ShaderProgram, LINE, RECT, CIRCLE
+from sdf_ui.log import logger
+from sdf_ui.shader import get_shader
+
+state = 1
+state_mutex = threading.Lock()
 
 
 class GLSLTypes:
@@ -28,6 +35,8 @@ class Uniforms:
         self.VERTICAL_STRETCH = ["vertical_stretch", _t.FLOAT]
         self.COLOR = ["obj_col", _t.VEC4]
         self.SHADOW_COL = ["shadow_col", _t.VEC3]
+        self.A = ["a", _t.VEC2]
+        self.B = ["b", _t.VEC2]
 
 
 class ObjectDescriptor:
@@ -36,35 +45,32 @@ class ObjectDescriptor:
         self.shader_name = t
 
 
-def get_shader(t):
-    if t == RECT:
-        return ShaderProgram().rect
-    if t == LINE:
-        return ShaderProgram().line
-    if t == CIRCLE:
-        return ShaderProgram().circle
-    return -1
-
 
 def init_glfw(width, height, visible: bool = True):
     if not glfw.init():
-        raise ValueError("Failed to init glfw")
+        msg = ValueError("Failed to init glfw").with_traceback(traceback.print_exc(5))
+        logger().error(msg)
+        sys.exit(-1)
     glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 4)
     glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 6)
     glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_COMPAT_PROFILE)
     glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, False)
 
+    # glfw.window_hint(glfw.RESIZABLE, GL_FALSE)
+
     glfw.window_hint(glfw.VISIBLE, visible)
     win = glfw.create_window(width, height, "SDF GPU Renderer", None, None)
 
     if not win:
+        msg = ValueError("Failed to create glfw window").with_traceback(traceback.print_stack())
+        logger().error(msg)
         glfw.terminate()
-        raise ValueError("Failed to create glfw window")
+        sys.exit(-1)
 
     glfw.make_context_current(win)
     glfw.swap_interval(1)
 
-    print(glGetString(GL_VERSION).decode("UTF-8"))
+    logger().debug(glGetString(GL_VERSION).decode("UTF-8"))
 
     return win
 
@@ -89,6 +95,8 @@ def set_uniform(location, v):
 
 
 def render(window, objects: list[ObjectDescriptor], save_image: Optional[bool] = False):
+    glfw.wait_events()
+
     width, height = glfw.get_framebuffer_size(window)
     glViewport(0, 0, width, height)
 
@@ -101,8 +109,9 @@ def render(window, objects: list[ObjectDescriptor], save_image: Optional[bool] =
     glClearColor(1.0, 1.0, 1.0, 1.0)
 
     for obj in objects:
-        obj.uniforms.VERTICAL_STRETCH[1] = (width / height,)
-        obj.uniforms.ANTIALIASING_DISTANCE[1] = (2.0 / height,)
+        if height != 0:
+            obj.uniforms.VERTICAL_STRETCH[1] = (width / height,)
+            obj.uniforms.ANTIALIASING_DISTANCE[1] = (2.0 / height,)
 
         program = get_shader(obj.shader_name)
 
@@ -115,10 +124,10 @@ def render(window, objects: list[ObjectDescriptor], save_image: Optional[bool] =
         glUseProgram(0)
 
     if save_image:
+        logger().debug("Save image...")
         data = glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE)
         image = Image.frombytes("RGBA", (width, height), data)
         image = ImageOps.flip(image)  # in my case image is flipped top-bottom for some reason
         image.save('glutout.png', 'PNG')
 
     glfw.swap_buffers(window)
-    glfw.poll_events()

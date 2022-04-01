@@ -1,7 +1,9 @@
+import sys
 from pathlib import Path
 
 from OpenGL.GL import *
 
+from .log import logger
 from .singleton import Singleton
 
 
@@ -9,20 +11,24 @@ def check_compile_status(shader):
     if glGetShaderiv(shader, GL_COMPILE_STATUS) != GL_TRUE:
         log = glGetShaderInfoLog(shader)
         glDeleteShader(shader)
-        print(log.decode())
+        logger().critical(log.decode("UTF-8"))
+        sys.exit(1)
 
 
 def check_program_status(program):
     if glGetProgramiv(program, GL_LINK_STATUS) != GL_TRUE:
         log = glGetProgramInfoLog(program)
         glDeleteProgram(program)
-        print(log.decode())
+        logger().critical(log.decode("UTF-8"))
+        sys.exit(1)
 
 
 def compile_shader_program(
         vertex_source=None,
         fragment_source=None,
         geometry_source=None):
+    logger().debug("Start shader program compilation...")
+
     if vertex_source is None:
         vs_path = Path(__file__).parent / "shader_files/vertex.glsl"
         vertex_source = open(vs_path).read()
@@ -37,11 +43,15 @@ def compile_shader_program(
     glShaderSource(vs, vertex_source)
     glCompileShader(vs)
 
+    logger().debug("Compile vertex shader...")
+
     check_compile_status(vs)
 
     fs = glCreateShader(GL_FRAGMENT_SHADER)
     glShaderSource(fs, fragment_source)
     glCompileShader(fs)
+
+    logger().debug("Compile fragment shader...")
 
     check_compile_status(fs)
 
@@ -49,12 +59,16 @@ def compile_shader_program(
     glShaderSource(gs, geometry_source)
     glCompileShader(gs)
 
+    logger().debug("Compile geometry shader...")
+
     check_compile_status(gs)
 
     shader_program = glCreateProgram()
     glAttachShader(shader_program, vs)
     glAttachShader(shader_program, fs)
     glAttachShader(shader_program, gs)
+
+    logger().debug("Link shader program...")
 
     glLinkProgram(shader_program)
     glValidateProgram(shader_program)
@@ -103,25 +117,39 @@ class ShaderProgram(Singleton):
     @property
     def rect(self):
         if ShaderProgram._rect is None:
+            logger().debug("Compile RECT shader...")
             ShaderProgram._rect = compile_shader_program(fragment_source=fragment_shader(RECT))
         return ShaderProgram._rect
 
     @property
     def line(self):
         if ShaderProgram._line is None:
+            logger().debug("Compile LINE shader...")
             ShaderProgram._line = compile_shader_program(fragment_source=fragment_shader(LINE))
         return ShaderProgram._line
 
     @property
     def circle(self):
         if ShaderProgram._circle is None:
+            logger().debug("Compile CIRCLE shader...")
             ShaderProgram._circle = compile_shader_program(fragment_source=fragment_shader(CIRCLE))
         return ShaderProgram._circle
 
     def cleanup(self):
+        logger().debug("Delete shader programs...")
         if ShaderProgram._rect is not None:
             glDeleteProgram(ShaderProgram._rect)
         if ShaderProgram._line is not None:
             glDeleteProgram(ShaderProgram._line)
         if ShaderProgram._circle is not None:
             glDeleteProgram(ShaderProgram._circle)
+
+
+def get_shader(t):
+    if t == RECT:
+        return ShaderProgram().rect
+    if t == LINE:
+        return ShaderProgram().line
+    if t == CIRCLE:
+        return ShaderProgram().circle
+    return -1
