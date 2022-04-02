@@ -1,5 +1,4 @@
 import sys
-import threading
 import traceback
 from typing import Optional
 
@@ -9,9 +8,6 @@ from PIL import ImageOps, Image
 
 from sdf_ui.log import logger
 from sdf_ui.shader import get_shader
-
-state = 1
-state_mutex = threading.Lock()
 
 
 class GLSLTypes:
@@ -45,7 +41,6 @@ class ObjectDescriptor:
         self.shader_name = t
 
 
-
 def init_glfw(width, height, visible: bool = True):
     if not glfw.init():
         msg = ValueError("Failed to init glfw").with_traceback(traceback.print_exc(5))
@@ -68,7 +63,7 @@ def init_glfw(width, height, visible: bool = True):
         sys.exit(-1)
 
     glfw.make_context_current(win)
-    glfw.swap_interval(1)
+    glfw.swap_interval(0)
 
     logger().debug(glGetString(GL_VERSION).decode("UTF-8"))
 

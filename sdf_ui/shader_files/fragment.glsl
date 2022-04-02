@@ -1,13 +1,15 @@
 in vec2 uv;
 
+// Universal compile time constants
 #define PI 3.1415926538
 #define BLACK vec3(0)
 #define WHITE vec3(1)
 #define SMOOTHSTEP_OFFSET 0.0000000001
 
-
+// Universal runtime constants
 uniform float antialiasing_distance;
 uniform float elevation;
+
 uniform vec2 center;
 uniform vec2 size;
 uniform vec4 corner_radius;
@@ -16,9 +18,13 @@ uniform float vertical_stretch;
 uniform vec4 obj_col;
 uniform vec3 shadow_col;
 
+// Line stuff
 uniform vec2 a;
 uniform vec2 b;
 
+// Universal
+uniform vec4 outline_color;
+uniform vec4 outline_r;
 
 float sdf_circle(in vec2 uv, in float radius, in vec2 center)
 {
@@ -105,6 +111,7 @@ vec3 lab2rgb(vec3 c)
 
 void main()
 {
+    // Unstretch screen space
     vec2 fragCoord = uv;
     fragCoord.x *= vertical_stretch;
     fragCoord.x -= (vertical_stretch - 1) / 2;
@@ -121,19 +128,23 @@ void main()
     float distance = sdf_linesegment(fragCoord, a, b, radius);
     #endif
 
+    // Antialising
     float smooth_d = smoothstep(0, antialiasing_distance + SMOOTHSTEP_OFFSET, distance);
+
+    // Shadow rendering
     float shadow_angle = PI - atan(elevation / (distance * distance));
 
+    // Clip elevation to 0 or 1 depending on the activation of the shadow rendering
     float bgr_factor = smoothstep(0, SMOOTHSTEP_OFFSET, elevation);
 
     // Convert colors to lab color space
-    // for visually more pleasing look
+    // for visually more pleasing color interpolation
     vec4 obj_col_lab = vec4(rgb2lab(obj_col.xyz), obj_col.w);
     vec3 sha_col_lab = rgb2lab(shadow_col);
 
-    vec4 bgr_col = vec4(mix(obj_col_lab.xyz, sha_col_lab, bgr_factor), 1-shadow_angle/PI);
+    // Interpolate between object color and shadow color if elevation is non zero
+    vec4 bgr_col = vec4(mix(obj_col_lab.xyz, sha_col_lab.xyz, bgr_factor), 1-shadow_angle/PI);
 
-    // TODO: Maybe only mix with L component off LAB color space
     vec4 out_lab = mix(obj_col_lab, bgr_col, smooth_d);
     vec4 out_rgb = vec4(lab2rgb(out_lab.xyz), out_lab.w);
 
