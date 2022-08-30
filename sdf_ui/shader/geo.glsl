@@ -3,6 +3,9 @@
 layout(points) in;
 layout(triangle_strip, max_vertices=4) out;
 
+uniform vec2 size;
+uniform vec2 center;
+
 out vec2 uv;
 
 void main()

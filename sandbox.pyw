@@ -1,45 +1,45 @@
-from sdf_ui.colors import hex_col
-from sdf_ui.shader import ShaderProgram, RECT, CIRCLE
-from sdf_ui.window import ObjectDescriptor, init_glfw, render, terminate_glfw
+from sdf_ui.util import hex_col
+from sdf_ui.window import SdfUiContext, Rect, Circle, Line
 
-width = 920
-height = int(width / 16 * 10)
+with SdfUiContext(720, int(720 / 16 * 10)) as context:
+    col1 = hex_col("#e9c46a")
+    col2 = hex_col("#2a9d8f")
+    col3 = hex_col("#e76f51")
+    col4 = hex_col("#2C2D35")
+    col5 = hex_col("#550f96")
 
-window = init_glfw(width, height, visible=True)
+    bgr = Rect()
+    bgr.color(col4)
+    bgr.center((0.5, 0.5))
+    bgr.size((2.0, 2.0))
 
-col1 = hex_col("#e9c46a")
-col2 = hex_col("#2a9d8f")
-col3 = hex_col("#e76f51")
-col4 = hex_col("#2C2D35")
+    rect = Rect()
+    rect.elevation((.000010,))
+    rect.center((0.6, 0.5))
+    rect.size((0.30, 0.30))
+    rect.corner_radius((0.03, 0.03, 0.03, 0.03))
+    rect.color(col1)
 
-bgr = ObjectDescriptor(RECT)
-bgr.uniforms.COLOR[1] = col4
-bgr.uniforms.CENTER[1] = (0.5, 0.5)
-bgr.uniforms.SIZE[1] = (2.0, 2.0)
+    circle1 = Circle()
+    circle1.elevation((.000010,))
+    circle1.center((0.30, 0.55))
+    circle1.radius((0.2,))
+    circle1.color(col3)
 
-obj1 = ObjectDescriptor(RECT)
-obj1.uniforms.ELEVATION[1] = (.000010,)
-obj1.uniforms.CENTER[1] = (0.6, 0.5)
-obj1.uniforms.SIZE[1] = (0.30, 0.30)
-obj1.uniforms.CORNER_RADIUS[1] = (0.03, 0.03, 0.03, 0.03)
-obj1.uniforms.COLOR[1] = col1
+    circle2 = Circle()
+    circle2.elevation((.000010,))
+    circle2.center((0.15, 0.60))
+    circle2.radius((0.15,))
+    circle2.color(col2)
 
-obj2 = ObjectDescriptor(CIRCLE)
-obj2.uniforms.ELEVATION[1] = (.000010,)
-obj2.uniforms.CENTER[1] = (0.30, 0.55)
-obj2.uniforms.RADIUS[1] = (0.2,)
-obj2.uniforms.COLOR[1] = col3
+    line = Line()
+    line.elevation((.0000010,))
+    line.radius(.001)
+    line.a((0.5, 0.5,))
+    line.b((0.6, 0.7,))
+    line.color(col5)
 
-obj3 = ObjectDescriptor(CIRCLE)
-obj3.uniforms.ELEVATION[1] = (.000010,)
-obj3.uniforms.CENTER[1] = (0.15, 0.60)
-obj3.uniforms.RADIUS[1] = (0.15,)
-obj3.uniforms.COLOR[1] = col2
+    objects = [bgr, rect, circle1, circle2, line]
 
-
-# while not glfw.window_should_close(window):
-render(window, [bgr, obj1, obj2, obj3, ], save_image=True)
-
-ShaderProgram().cleanup()
-
-terminate_glfw(window)
+    while not context.should_close():
+        context.render(objects)

@@ -3,8 +3,7 @@ from pathlib import Path
 
 from OpenGL.GL import *
 
-from .log import logger
-from .singleton import Singleton
+from .util import logger, Singleton
 
 
 def check_compile_status(shader):
@@ -30,13 +29,13 @@ def compile_shader_program(
     logger().debug("Start shader program compilation...")
 
     if vertex_source is None:
-        vs_path = Path(__file__).parent / "shader_files/vertex.glsl"
+        vs_path = Path(__file__).parent / "shader/vertex.glsl"
         vertex_source = open(vs_path).read()
     if fragment_source is None:
-        fs_path = Path(__file__).parent / "shader_files/fragment.glsl"
+        fs_path = Path(__file__).parent / "shader/fragment.glsl"
         fragment_source = open(fs_path).read()
     if geometry_source is None:
-        gs_path = Path(__file__).parent / "shader_files/geo.glsl"
+        gs_path = Path(__file__).parent / "shader/geo.glsl"
         geometry_source = open(gs_path).read()
 
     vs = glCreateShader(GL_VERTEX_SHADER)
@@ -103,7 +102,7 @@ def fragment_shader(type_string: str):
     v = version(460)
     defines = define(type_string, "")
 
-    fs_path = Path(__file__).parent / "shader_files/fragment.glsl"
+    fs_path = Path(__file__).parent / "shader/fragment.glsl"
     fragment_source = open(fs_path).read()
 
     return f'{v}{defines}{fragment_source}'.encode('UTF-8')
@@ -135,7 +134,8 @@ class ShaderProgram(Singleton):
             ShaderProgram._circle = compile_shader_program(fragment_source=fragment_shader(CIRCLE))
         return ShaderProgram._circle
 
-    def cleanup(self):
+    @staticmethod
+    def cleanup():
         logger().debug("Delete shader programs...")
         if ShaderProgram._rect is not None:
             glDeleteProgram(ShaderProgram._rect)
