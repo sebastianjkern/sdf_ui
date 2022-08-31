@@ -6,6 +6,6 @@
 
 ## Example
 
-```python:sandbox.py
+```python:sandbox.pyw
 
 ```
