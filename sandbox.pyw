@@ -1,17 +1,19 @@
-from sdf_ui.util import hex_col
-from sdf_ui.window import SdfUiContext, Rect, Circle, Line
+import math
 
-with SdfUiContext(720, int(720 / 16 * 10)) as context:
+import glfw
+
+from sdf_ui.shader import Rect, Circle, Line
+from sdf_ui.util import hex_col
+from sdf_ui.window import SdfUiContext
+
+with SdfUiContext(500, 500, resizable=True, title="Render Engine") as context:
     col1 = hex_col("#e9c46a")
     col2 = hex_col("#2a9d8f")
     col3 = hex_col("#e76f51")
-    col4 = hex_col("#2C2D35")
-    col5 = hex_col("#550f96")
-
-    bgr = Rect()
-    bgr.color(col4)
-    bgr.center((0.5, 0.5))
-    bgr.size((2.0, 2.0))
+    col4 = hex_col("#550f96")
+    white = hex_col("#ffffff")
+    black = hex_col("#000000")
+    bgr = hex_col("#2C2D35")
 
     rect = Rect()
     rect.elevation((.000010,))
@@ -32,14 +34,16 @@ with SdfUiContext(720, int(720 / 16 * 10)) as context:
     circle2.radius((0.15,))
     circle2.color(col2)
 
-    line = Line()
-    line.elevation((.0000010,))
-    line.radius(.001)
-    line.a((0.5, 0.5,))
-    line.b((0.6, 0.7,))
-    line.color(col5)
-
-    objects = [bgr, rect, circle1, circle2, line]
+    context.set_background(bgr)
 
     while not context.should_close():
+        line = Line()
+        line.radius(50 * context.px())
+        # line.elevation((.000010,))
+        line.a((.25 * math.cos(context.get_dt() / 100) + 0.5, .25 * math.sin(context.get_dt() / 100) + 0.5,))
+        line.b((.25 * -math.cos(context.get_dt() / 100) + 0.5, .25 * -math.sin(context.get_dt() / 100) + 0.5,))
+        line.color(black)
+
+        objects = [rect, circle1, circle2, line]
+
         context.render(objects)
