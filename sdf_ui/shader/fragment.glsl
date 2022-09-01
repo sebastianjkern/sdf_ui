@@ -2,8 +2,6 @@ in vec2 uv;
 
 // Universal compile time constants
 #define PI 3.1415926538
-#define BLACK vec3(0)
-#define WHITE vec3(1)
 #define SMOOTHSTEP_OFFSET 0.0000000001
 
 // Universal runtime constants
@@ -111,21 +109,16 @@ vec3 lab2rgb(vec3 c)
 
 void main()
 {
-    // Unstretch screen space
-    vec2 fragCoord = uv;
-    fragCoord.x *= vertical_stretch;
-    fragCoord.x -= (vertical_stretch - 1) / 2;
-
     #ifdef CIRCLE
-    float distance = sdf_circle(fragCoord, radius, center);
+    float distance = sdf_circle(uv, radius, center);
     #endif
 
     #ifdef RECT
-    float distance = sdf_roundbox(fragCoord - center, size, corner_radius);
+    float distance = sdf_roundbox(uv - center, size, corner_radius);
     #endif
 
     #ifdef LINE
-    float distance = sdf_linesegment(fragCoord, a, b, radius);
+    float distance = sdf_linesegment(uv, a, b, radius);
     #endif
 
     // Antialising

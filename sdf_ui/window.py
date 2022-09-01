@@ -1,11 +1,12 @@
 import sys
 import traceback
+from typing import List
 
 import glfw
 from OpenGL.GL import *
 from PIL import ImageOps, Image
 
-from sdf_ui.shader import ShaderProgram
+from sdf_ui.shader import ShaderProgram, RenderObject
 from sdf_ui.util import logger, hex_col
 
 
@@ -48,7 +49,7 @@ class SdfUiContext:
             sys.exit(-1)
 
         glfw.make_context_current(self.window)
-        glfw.swap_interval(1)
+        glfw.swap_interval(0)
 
         logger().debug(glGetString(GL_VERSION).decode("UTF-8"))
 
@@ -63,14 +64,12 @@ class SdfUiContext:
         glfw.destroy_window(self.window)
         glfw.terminate()
 
-    def render(self, objects, save_image=False,
+    def render(self, objects: List[RenderObject], save_image=False,
                return_img=False, image_name="glutout.png"):
 
         self._now_time = glfw.get_time()
         self._dt += (self._now_time - self._last_time) / (1 / 60)
         self._last_time = self._now_time
-
-        glfw.poll_events()
 
         width, height = glfw.get_framebuffer_size(self.window)
         glViewport(0, 0, width, height)
@@ -86,15 +85,20 @@ class SdfUiContext:
         for obj in objects:
             if height != 0:
                 obj.vertical_stretch((width / height,))
-                obj.antialiasing_distance((2.0 / height,))
+                ratio = width / height
+                obj.antialiasing_distance((4.0 / height,))
+                obj.bb()
 
             self.shader_program.draw_shader(obj.get_shader_name(), obj.get_uniforms())
 
-        data = glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE)
-        image = Image.frombytes("RGBA", (width, height), data)
-        image = ImageOps.flip(image)
+        if save_image or return_img:
+            data = glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE)
+            image = Image.frombytes("RGBA", (width, height), data)
+            image = ImageOps.flip(image)
 
         glfw.swap_buffers(self.window)
+        # glfw.wait_events()
+        glfw.poll_events()
 
         if save_image:
             logger().debug("Save image...")
@@ -116,3 +120,6 @@ class SdfUiContext:
         width, height = glfw.get_framebuffer_size(self.window)
         m = min(width, height)
         return 1.0 / m
+
+    def set_title(self, title):
+        glfw.set_window_title(self.window, title)

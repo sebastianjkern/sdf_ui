@@ -1,8 +1,6 @@
-import math
-
 import glfw
 
-from sdf_ui.shader import Rect, Circle, Line
+from sdf_ui.shader import Rect, Circle
 from sdf_ui.util import hex_col
 from sdf_ui.window import SdfUiContext
 
@@ -17,33 +15,28 @@ with SdfUiContext(500, 500, resizable=True, title="Render Engine") as context:
 
     rect = Rect()
     rect.elevation((.000010,))
-    rect.center((0.6, 0.5))
-    rect.size((0.30, 0.30))
+    rect.center((0.2, 0))
+    rect.size((0.60, 0.60))
     rect.corner_radius((0.03, 0.03, 0.03, 0.03))
     rect.color(col1)
 
     circle1 = Circle()
     circle1.elevation((.000010,))
-    circle1.center((0.30, 0.55))
-    circle1.radius((0.2,))
+    circle1.center((-.4, 0.1))
+    circle1.radius((0.4,))
     circle1.color(col3)
 
     circle2 = Circle()
     circle2.elevation((.000010,))
-    circle2.center((0.15, 0.60))
-    circle2.radius((0.15,))
+    circle2.center((-.7, 0.2))
+    circle2.radius((0.3,))
     circle2.color(col2)
 
     context.set_background(bgr)
 
     while not context.should_close():
-        line = Line()
-        line.radius(50 * context.px())
-        # line.elevation((.000010,))
-        line.a((.25 * math.cos(context.get_dt() / 100) + 0.5, .25 * math.sin(context.get_dt() / 100) + 0.5,))
-        line.b((.25 * -math.cos(context.get_dt() / 100) + 0.5, .25 * -math.sin(context.get_dt() / 100) + 0.5,))
-        line.color(black)
+        objects = [rect, circle1, circle2]
 
-        objects = [rect, circle1, circle2, line]
-
+        start = glfw.get_time()
         context.render(objects)
+        context.set_title(f"{glfw.get_time() - start}")

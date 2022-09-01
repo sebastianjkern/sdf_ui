@@ -1,4 +1,5 @@
 import sys
+from abc import abstractmethod
 from pathlib import Path
 
 from OpenGL.GL import *
@@ -201,7 +202,8 @@ _Uniforms = namedlist('_Uniforms', [
     ("obj_col", _t.VEC4),
     ("shadow_col", _t.VEC3),
     ("a", _t.VEC2),
-    ("b", _t.VEC2)])
+    ("b", _t.VEC2),
+    ("bb", _t.VEC4)])
 
 
 class RenderObject:
@@ -230,6 +232,13 @@ class RenderObject:
     def get_shader_name(self):
         return self._shader_name
 
+    def bb(self):
+        self._uniforms.bb = self.get_bounding_box()
+
+    @abstractmethod
+    def get_bounding_box(self) -> tuple:
+        return -1, 1, 1, -1
+
 
 class Rect(RenderObject):
     def __init__(self):
@@ -244,6 +253,18 @@ class Rect(RenderObject):
     def corner_radius(self, value):
         self._uniforms.corner_radius = value
 
+    def get_bounding_box(self) -> tuple:
+        c1, c2 = self._uniforms.center
+        s1, s2 = self._uniforms.size
+
+        min_x = c1 - s1 - 0.05
+        max_x = c1 + s1 + 0.05
+
+        min_y = c2 - s2 - 0.05
+        max_y = c2 + s2 + 0.05
+
+        return min_x, max_y, max_x, min_y
+
 
 class Circle(RenderObject):
     def __init__(self):
@@ -254,6 +275,18 @@ class Circle(RenderObject):
 
     def radius(self, value):
         self._uniforms.radius = value
+
+    def get_bounding_box(self) -> tuple:
+        c1, c2 = self._uniforms.center
+        r = self._uniforms.radius[0]
+
+        min_x = c1 - r - 0.05
+        max_x = c1 + r + 0.05
+
+        min_y = c2 - r - 0.05
+        max_y = c2 + r + 0.05
+
+        return min_x, max_y, max_x, min_y
 
 
 class Line(RenderObject):
@@ -268,3 +301,7 @@ class Line(RenderObject):
 
     def radius(self, value):
         self._uniforms.radius = value
+
+    def get_bounding_box(self) -> tuple:
+        # TODO: Implement actual solution
+        return -1, 1, 1, -1
