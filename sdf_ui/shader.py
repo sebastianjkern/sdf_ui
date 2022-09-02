@@ -303,5 +303,14 @@ class Line(RenderObject):
         self._uniforms.radius = value
 
     def get_bounding_box(self) -> tuple:
-        # TODO: Implement actual solution
-        return -1, 1, 1, -1
+        x1, y1 = self._uniforms.a
+        x2, y2 = self._uniforms.b
+        r = self._uniforms.radius
+
+        min_x = min(x1, x2) - r - 0.05
+        max_x = max(x1, x2) + r + 0.05
+
+        min_y = min(y1, y2) - r - 0.05
+        max_y = max(y1, y2) + r + 0.05
+
+        return min_x, max_y, max_x, min_y
