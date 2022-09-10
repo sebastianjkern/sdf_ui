@@ -8,6 +8,16 @@ from namedlist import namedlist
 from .util import logger, Singleton
 
 
+class Shader:
+    def __init__(self) -> None:
+        self.shader_locations = []
+        self.program_id = None
+
+        self.geometry_shader_source = ""
+        self.vertex_shader_source = ""
+        self.fragment_shader_source = ""
+
+
 class ShaderTypes:
     RECT = "RECT"
     LINE = "LINE"
