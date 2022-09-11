@@ -8,27 +8,19 @@ from namedlist import namedlist
 from .util import logger, Singleton
 
 
-class Shader:
-    def __init__(self) -> None:
-        self.shader_locations = []
-        self.program_id = None
-
-        self.geometry_shader_source = ""
-        self.vertex_shader_source = ""
-        self.fragment_shader_source = ""
-
-
 class ShaderTypes:
     RECT = "RECT"
     LINE = "LINE"
     CIRCLE = "CIRCLE"
 
 
-class ShaderProgram:
-    def __init__(self):
-        self._rect = None
-        self._line = None
-        self._circle = None
+class Shader:
+    def __init__(self, shader_type) -> None:
+        self.uniform_locations = dict()
+
+        self.shader_type = shader_type
+
+        self.program_id = self.compile_shader_program(fragment_source=self.fragment_shader(shader_type))
 
     @staticmethod
     def version(v: int) -> str:
@@ -125,46 +117,6 @@ class ShaderProgram:
 
         return shader_program
 
-    @property
-    def rect(self):
-        if self._rect is None:
-            logger().debug("Compile RECT shader...")
-            self._rect = self.compile_shader_program(fragment_source=self.fragment_shader(ShaderTypes.RECT))
-        return self._rect
-
-    @property
-    def line(self):
-        if self._line is None:
-            logger().debug("Compile LINE shader...")
-            self._line = self.compile_shader_program(fragment_source=self.fragment_shader(ShaderTypes.LINE))
-        return self._line
-
-    @property
-    def circle(self):
-        if self._circle is None:
-            logger().debug("Compile CIRCLE shader...")
-            self._circle = self.compile_shader_program(
-                fragment_source=self.fragment_shader(ShaderTypes.CIRCLE))
-        return self._circle
-
-    def cleanup(self):
-        logger().debug("Delete shader programs...")
-        if self._rect is not None:
-            glDeleteProgram(self._rect)
-        if self._line is not None:
-            glDeleteProgram(self._line)
-        if self._circle is not None:
-            glDeleteProgram(self._circle)
-
-    def get_shader(self, t):
-        if t == ShaderTypes.RECT:
-            return self.rect
-        if t == ShaderTypes.LINE:
-            return self.line
-        if t == ShaderTypes.CIRCLE:
-            return self.circle
-        return -1
-
     @staticmethod
     def set_uniform(location, v):
         if isinstance(v, float):
@@ -179,17 +131,37 @@ class ShaderProgram:
 
         lut[len(v)](location, *v)
 
-    def draw_shader(self, name, uniforms):
-        program = self.get_shader(name)
-
-        glUseProgram(program)
+    def activate_and_draw(self, uniforms):
+        glUseProgram(self.program_id)
 
         for uniform_identifier in uniforms.__slots__:
-            location = glGetUniformLocation(program, uniform_identifier.encode("UTF-8"))
+            if uniform_identifier in self.uniform_locations:
+                location = self.uniform_locations[uniform_identifier]
+            else:
+                location = glGetUniformLocation(self.program_id, uniform_identifier.encode("UTF-8"))
+                self.uniform_locations[uniform_identifier] = location
             self.set_uniform(location, getattr(uniforms, uniform_identifier))
 
         glDrawArrays(GL_POINTS, 0, 1)
         glUseProgram(0)
+
+    def cleanup(self):
+        logger().debug(f"Delete {self.shader_type} shader program...")
+
+        glDeleteProgram(self.program_id)
+
+
+class ShaderCache:
+    def __init__(self):
+        self.cache = dict()
+
+    def get_shader(self, shader_name: str):
+        if shader_name in self.cache:
+            return self.cache[shader_name]
+        else:
+            shader = Shader(shader_name)
+            self.cache[shader_name] = shader
+            return shader
 
 
 class GLSLTypeDefaults(Singleton):

@@ -6,7 +6,7 @@ import glfw
 from OpenGL.GL import *
 from PIL import ImageOps, Image
 
-from sdf_ui.shader import ShaderProgram, RenderObject
+from sdf_ui.shader import RenderObject, ShaderCache
 from sdf_ui.util import logger, hex_col
 
 
@@ -19,13 +19,15 @@ class SdfUiContext:
         self.window = None
         self.title = title
 
-        self.shader_program = ShaderProgram()
+        self.shader_cache = ShaderCache()
 
         self.background = hex_col("#ffffff")
 
         self._last_time = 0
         self._now_time = 0
         self._dt = 0
+
+        self.image = None
 
     def __enter__(self):
         if not glfw.init():
@@ -59,7 +61,8 @@ class SdfUiContext:
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
-        self.shader_program.cleanup()
+        for shader in self.shader_cache.cache:
+            self.shader_cache.cache[shader].cleanup()
 
         glfw.destroy_window(self.window)
         glfw.terminate()
@@ -85,16 +88,16 @@ class SdfUiContext:
         for obj in objects:
             if height != 0:
                 obj.vertical_stretch((width / height,))
-                ratio = width / height
                 obj.antialiasing_distance((4.0 / height,))
                 obj.bb()
 
-            self.shader_program.draw_shader(obj.get_shader_name(), obj.get_uniforms())
+            shader = self.shader_cache.get_shader(obj.get_shader_name())
+            shader.activate_and_draw(obj.get_uniforms())
 
         if save_image or return_img:
             data = glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE)
-            image = Image.frombytes("RGBA", (width, height), data)
-            image = ImageOps.flip(image)
+            self.image = Image.frombytes("RGBA", (width, height), data)
+            self.image = ImageOps.flip(self.image)
 
         glfw.swap_buffers(self.window)
         # glfw.wait_events()
@@ -102,10 +105,10 @@ class SdfUiContext:
 
         if save_image:
             logger().debug("Save image...")
-            image.save(image_name)
+            self.image.save(image_name)
 
         if return_img:
-            return image
+            return self.image
 
     def should_close(self):
         return glfw.window_should_close(self.window)
