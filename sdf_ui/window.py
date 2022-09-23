@@ -11,7 +11,7 @@ from sdf_ui.util import logger, hex_col
 
 
 class SdfUiContext:
-    def __init__(self, width=500, height=500, resizable=True, visible=True, title="SDF GPU Renderer"):
+    def __init__(self, width=500, height=500, resizable=True, visible=True, title="SDF GPU Renderer", vsync=True):
         self.width = width
         self.height = height
         self.resizable = resizable
@@ -25,9 +25,11 @@ class SdfUiContext:
 
         self._last_time = 0
         self._now_time = 0
-        self._dt = 0
+        self.dt = 0
 
         self.image = None
+
+        self.vsync = vsync
 
     def __enter__(self):
         if not glfw.init():
@@ -51,7 +53,7 @@ class SdfUiContext:
             sys.exit(-1)
 
         glfw.make_context_current(self.window)
-        glfw.swap_interval(0)
+        glfw.swap_interval(1 if self.vsync else 0)
 
         logger().debug(glGetString(GL_VERSION).decode("UTF-8"))
 
@@ -71,7 +73,7 @@ class SdfUiContext:
                return_img=False, image_name="glutout.png"):
 
         self._now_time = glfw.get_time()
-        self._dt += (self._now_time - self._last_time) / (1 / 60)
+        self.dt += (self._now_time - self._last_time) / (1 / 60)
         self._last_time = self._now_time
 
         width, height = glfw.get_framebuffer_size(self.window)
@@ -100,7 +102,6 @@ class SdfUiContext:
             self.image = ImageOps.flip(self.image)
 
         glfw.swap_buffers(self.window)
-        # glfw.wait_events()
         glfw.poll_events()
 
         if save_image:
@@ -113,16 +114,7 @@ class SdfUiContext:
     def should_close(self):
         return glfw.window_should_close(self.window)
 
-    def set_background(self, color):
-        self.background = color
-
-    def get_dt(self):
-        return self._dt
-
     def px(self):
         width, height = glfw.get_framebuffer_size(self.window)
         m = min(width, height)
         return 1.0 / m
-
-    def set_title(self, title):
-        glfw.set_window_title(self.window, title)

@@ -12,6 +12,7 @@ class ShaderTypes:
     RECT = "RECT"
     LINE = "LINE"
     CIRCLE = "CIRCLE"
+    BEZIER = "BEZIER"
 
 
 class Shader:
@@ -185,6 +186,7 @@ _Uniforms = namedlist('_Uniforms', [
     ("shadow_col", _t.VEC3),
     ("a", _t.VEC2),
     ("b", _t.VEC2),
+    ("c", _t.VEC2),
     ("bb", _t.VEC4)])
 
 
@@ -296,3 +298,23 @@ class Line(RenderObject):
         max_y = max(y1, y2) + r + 0.05
 
         return min_x, max_y, max_x, min_y
+
+
+class Bezier(RenderObject):
+    def __init__(self):
+        super(Bezier, self).__init__(ShaderTypes.BEZIER)
+
+    def a(self, value):
+        self._uniforms.a = value
+
+    def b(self, value):
+        self._uniforms.b = value
+
+    def c(self, value):
+        self._uniforms.c = value
+
+    def radius(self, value):
+        self._uniforms.radius = value
+
+    def get_bounding_box(self) -> tuple:
+        return -1, 1, 1, -1
