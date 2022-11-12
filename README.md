@@ -1,7 +1,7 @@
 # SDF UI
 ___
 
-<img src="./image1.png" width="250" > <img src="./image2.png" width="250" >
+<img src="./image1.png" width="500" > <img src="./image2.png" width="500" >
 
 ## Example
 
