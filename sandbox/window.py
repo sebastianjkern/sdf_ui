@@ -17,7 +17,7 @@ class SdfUiContext:
         self.resizable = resizable
         self.visible = visible
         self.window = None
-        self.title = title
+        self._title = title
 
         self.shader_cache = ShaderCache()
 
@@ -30,6 +30,10 @@ class SdfUiContext:
         self.image = None
 
         self.vsync = vsync
+
+    def set_title(self, title):
+        self._title = title
+        glfw.set_window_title(self.window, title)
 
     def __enter__(self):
         if not glfw.init():
@@ -44,7 +48,7 @@ class SdfUiContext:
         glfw.window_hint(glfw.RESIZABLE, self.resizable)
         glfw.window_hint(glfw.VISIBLE, self.visible)
 
-        self.window = glfw.create_window(self.width, self.height, self.title, None, None)
+        self.window = glfw.create_window(self.width, self.height, self._title, None, None)
 
         if not self.window:
             msg = ValueError("Failed to create glfw window").with_traceback(traceback.print_stack())
