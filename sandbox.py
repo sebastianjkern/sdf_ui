@@ -1,4 +1,4 @@
-from sdf_ui.framework.context import Context, hex_col
+from framework.context import Context, hex_col
 
 size = (1920, 1080)
 

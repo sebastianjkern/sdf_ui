@@ -6,8 +6,8 @@ import ttfquery
 from PIL import Image
 from ttfquery import describe, glyph, glyphquery
 
-from sdf_ui.framework.log import logger
-from sdf_ui.framework.shader import ShaderFileDescriptor, Shaders
+from framework.log import logger
+from framework.shader import ShaderFileDescriptor, Shaders
 
 
 def rgb_col(r: int, g: int, b: int, *a):
