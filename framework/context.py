@@ -41,6 +41,11 @@ class Layer:
         image = image.transpose(Image.FLIP_TOP_BOTTOM)
         image.show()
 
+    def save(self, name):
+        image = Image.frombytes("RGBA", self.tex.size, self.tex.read(), "raw")
+        image = image.transpose(Image.FLIP_TOP_BOTTOM)
+        image.save(name)
+
 
 class Context:
     def __init__(self, size):
@@ -109,7 +114,7 @@ class Context:
         tex.filter = mgl.LINEAR, mgl.LINEAR
         return tex
 
-    def smin(self, obj1: SDF, obj2: SDF, k=0.025):
+    def smooth_min(self, obj1: SDF, obj2: SDF, k=0.025):
         def initial():
             shader = self._get_shader(Shaders.SMOOTH_MIN)
             shader['destTex'] = 0

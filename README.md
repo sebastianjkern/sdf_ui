@@ -1,3 +1,12 @@
+# SDF UI
+___
+
+<img src="./image1.png" width="500" >
+<img src="./image2.png" width="500" >
+
+## Example
+
+```python
 from framework.context import Context, hex_col
 
 size = (1920, 1080)
@@ -66,3 +75,5 @@ with Context(size) as ctx:
 
     layer = ctx.fill(union, hex_col("#e9c46a"), hex_col("#2C2D35"), 1.25)
     layer.save("image2.png")
+
+```
