@@ -303,6 +303,33 @@ class Context:
 
         return Layer(initial=initial)
 
+    def glyph(self, glyph, scale, ox, oy, path="fonts/SFUIDisplay-Bold.ttf"):
+        control_points = self._get_glyph(path, glyph)
+
+        union_sdf = None
+
+        for x, shape in enumerate(control_points):
+            for y, stroke in enumerate(shape):
+                ax, ay = stroke[0][0] * scale + ox, stroke[0][1] * scale + oy
+                bx, by = stroke[1][0] * scale + ox, stroke[1][1] * scale + oy
+                cx, cy = stroke[2][0] * scale + ox, stroke[2][1] * scale + oy
+
+                a = (ax, ay)
+                b = (bx, by)
+                c = (cx, cy)
+
+                if not self._collinear(ax, ay, bx, by, cx, cy):
+                    bezier_sdf = self.bezier(a, b, c)
+                else:
+                    bezier_sdf = self.line(a, c)
+
+                if y == 0 and x == 0:
+                    union_sdf = bezier_sdf
+                else:
+                    union_sdf = self.union(union_sdf, bezier_sdf)
+
+        return union_sdf
+
     # Postprocessing
     def blur(self, layer: Layer, n=0):
         def initial():
@@ -382,7 +409,7 @@ class Context:
         return Layer(initial=initial)
 
     @staticmethod
-    def get_glyph(font_file_path, char):
+    def _get_glyph(font_file_path, char):
         font = describe.openFont(font_file_path)
         g = glyph.Glyph(ttfquery.glyphquery.glyphName(font, char))
         ttf_contours = g.calculateContours(font)
@@ -418,6 +445,12 @@ class Context:
             bezier_control_points.append(bezier_curves_control_points)
 
         return bezier_control_points
+
+    @staticmethod
+    def _collinear(x1, y1, x2, y2, x3, y3):
+        area = abs(x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2))
+
+        return area <= 0.000000001
 
 
 if __name__ == '__main__':
