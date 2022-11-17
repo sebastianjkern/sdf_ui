@@ -1,12 +1,11 @@
 # SDF UI
 ___
 
-<img src="./image1.png" width="150" ><img src="./image2.png" width="150" >
+<img src="./image1.png" width="500" > <img src="./image2.png" width="500" >
 
 ## Example
 
 ```python
-
 from framework.context import Context, hex_col
 
 size = (1920, 1080)
@@ -17,10 +16,10 @@ with Context(size) as ctx:
 
     bezier = ctx.bezier((900, 800), (700, 400), (350, 350))
 
-    glyph_sdf = ctx.smooth_min(rect, disc, k=0.025)
-    glyph_sdf = ctx.smooth_min(bezier, glyph_sdf, k=0.025)
+    union = ctx.smooth_min(rect, disc, k=0.025)
+    union = ctx.smooth_min(bezier, union, k=0.025)
 
-    layer = ctx.fill(glyph_sdf, hex_col("#e9c46a"), hex_col("#2C2D35"), 0)
+    layer = ctx.fill(union, hex_col("#e9c46a"), hex_col("#2C2D35"), 0)
     blur = ctx.blur(layer, 10)
 
     mask_sdf = ctx.rounded_rect((int(size[0] / 2), int(size[1] / 2)), (int(size[0] / 5), int(size[1] / 3)),
@@ -28,34 +27,52 @@ with Context(size) as ctx:
 
     mask_layer = ctx.fill(mask_sdf, (.0, .0, .0, 1.0), (1.0, 1.0, 1.0, 1.0), 0)
 
-    overlay_outline = ctx.outline(mask_sdf, (1.0, 1.0, 1.0, .25), (0.75, 0.75, 0.75, 0.0), inflate=-1.5)
-
-    glass = ctx.fill(mask_sdf, (44 / 255 + 0.15, 45 / 255 + 0.15, 53 / 255 + 0.15, 0.4), (0.0, 0.0, 0.0, 0.0), 0)
+    overlay_outline = ctx.outline(mask_sdf, (1.0, 1.0, 1.0, .25), (0.75, 0.75, 0.75, 0.0))
 
     masked = ctx.mask(blur, layer, mask_layer)
-    overlay = ctx.overlay(glass, masked)
-    overlay = ctx.overlay(overlay_outline, overlay)
+    overlayed = ctx.overlay(overlay_outline, masked)
 
-    overlay.save("image1.png")
-    overlay.show()
+    overlayed.save("image1.png")
 
-with Context((1920, 1080)) as ctx:
-    scale = 0.65
-    offset_x = 50
-    offset_y = 50
 
-    glyph_sdf = ctx.glyph("M", scale, offset_x, offset_y)
+def collinear(x1, y1, x2, y2, x3, y3):
+    area = abs(x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2))
 
-    layer = ctx.fill(glyph_sdf, hex_col("#e9c46a"), (0.0, 0.0, 0.0, 0.0), 7.5)
-    bg = ctx.fill(glyph_sdf, hex_col("#2C2D35"), hex_col("#2C2D35"), 7.5)
+    return area <= 0.000000001
 
-    mask = ctx.fill(glyph_sdf, (0.0, 0.0, 0.0, 1.0), (0.0, 0.0, 0.0, 0.0), 7.5)
-    shadow = ctx.blur(mask, 5)
-    with_shadow = ctx.overlay(layer, shadow)
 
-    overlay = ctx.overlay(with_shadow, bg)
+with Context(size) as ctx:
+    control_points = ctx.get_glyph("fonts/SFUIDisplay-Bold.ttf", "A")
 
-    overlay.show()
-    overlay.save("image2.png")
+    scale = 0.45
+    offx = 250
+    offy = 150
+
+    union = None
+
+    for x, shape in enumerate(control_points):
+        for y, stroke in enumerate(shape):
+            ax, ay = stroke[0][0] * scale + offx, stroke[0][1] * scale + offy
+            bx, by = stroke[1][0] * scale + offx, stroke[1][1] * scale + offy
+            cx, cy = stroke[2][0] * scale + offx, stroke[2][1] * scale + offy
+
+            bezier = None
+
+            a = (ax, ay)
+            b = (bx, by)
+            c = (cx, cy)
+
+            if not collinear(ax, ay, bx, by, cx, cy):
+                bezier = ctx.bezier(a, b, c)
+            else:
+                bezier = ctx.line(a, c)
+
+            if y == 0 and x == 0:
+                union = bezier
+            else:
+                union = ctx.union(union, bezier)
+
+    layer = ctx.fill(union, hex_col("#e9c46a"), hex_col("#2C2D35"), 1.25)
+    layer.save("image2.png")
 
 ```
