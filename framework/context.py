@@ -66,9 +66,13 @@ class Context:
             ShaderFileDescriptor(Shaders.INTERSECTION, "shader_files/primitives/booleans/intersection.glsl"),
             ShaderFileDescriptor(Shaders.INTERPOLATION, "shader_files/primitives/booleans/interpolate.glsl"),
             ShaderFileDescriptor(Shaders.SUBTRACT, "shader_files/primitives/booleans/subtract.glsl"),
+            # SDF Transform
+            ShaderFileDescriptor(Shaders.ABS, "shader_files/primitives/abs.glsl"),
+
             # Postprocessing
             ShaderFileDescriptor(Shaders.BLUR_HOR, "shader_files/postprocessing/blur5_hor.glsl"),
             ShaderFileDescriptor(Shaders.BLUR_VER, "shader_files/postprocessing/blur5_vert.glsl"),
+            ShaderFileDescriptor(Shaders.TO_RGB, "shader_files/postprocessing/to_rgb.glsl"),
             # Shading
             ShaderFileDescriptor(Shaders.FILL, "shader_files/shading/fill.glsl"),
             ShaderFileDescriptor(Shaders.OUTLINE, "shader_files/shading/outline.glsl"),
@@ -262,6 +266,24 @@ class Context:
 
         return SDF(initial=initial)
 
+    # SDF Transform
+    def abs(self, sdf: SDF):
+        def initial():
+            shader = self._get_shader(Shaders.ABS)
+            shader['destTex'] = 0
+            shader['sdf0'] = 0
+
+            tex = self.r32f()
+            tex.bind_to_image(0, read=False, write=True)
+            sdf.tex.bind_to_image(1, read=True, write=False)
+            shader.run(*self.local_size)
+
+            logger().debug(f"Running {Shaders.ABS} shader...")
+
+            return tex
+
+        return SDF(initial=initial)
+
     # Shading
     def fill(self, sdf: SDF, fg_color, bg_color, inflate):
         def initial():
@@ -365,6 +387,23 @@ class Context:
 
             return tex1
 
+        return Layer(initial=initial)
+
+    def to_rgb(self, layer: Layer):
+        def initial():
+            shader = self._get_shader(Shaders.TO_RGB)
+            shader['destTex'] = 0
+            shader['origTex'] = 1
+
+            tex = self.rgba8()
+            tex.bind_to_image(0, read=False, write=True)
+            layer.tex.bind_to_image(1, read=True, write=False)
+            shader.run(*self.local_size)
+
+            logger().debug(f"Running {Shaders.TO_RGB} shader...")
+
+            return tex
+        
         return Layer(initial=initial)
 
     # Layer blending

@@ -65,7 +65,7 @@ float sdf_quadratic_bezier(vec2 p, vec2 A, vec2 B, vec2 C)
 void main() {
     ivec2 texelPos = ivec2(gl_GlobalInvocationID.xy);
 
-    float distance = abs(sdf_quadratic_bezier(texelPos, a, b, c));
+    float distance = sdf_quadratic_bezier(texelPos, a, b, c);
 
     imageStore(destTex, texelPos, vec4(distance, .0, .0, .0));
 }

@@ -12,7 +12,10 @@ void main() {
     vec4 col0 = imageLoad(tex0, texelPos);
     vec4 col1 = imageLoad(tex1, texelPos);
 
-    vec4 col = col0 * col0.a + col1 * (1.0 - col0.a);
+    float ac = col0.a + (1-col0.a) * col1.a;
 
-    imageStore(destTex, texelPos, col);
+    vec3 col = 1/ac * (col0.rgb * col0.a + col1.rgb * (1.0 - col0.a) * col1.a);
+    vec4 o_col = vec4(col, ac);
+
+    imageStore(destTex, texelPos, o_col);
 }

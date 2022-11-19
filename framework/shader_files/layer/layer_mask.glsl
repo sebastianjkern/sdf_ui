@@ -15,7 +15,7 @@ void main() {
     vec4 col1 = imageLoad(tex1, texelPos);
     float alpha = imageLoad(mask, texelPos).r;
 
-    vec4 col = col0 * alpha + col1 * (1.0 - alpha);
+    vec4 col = mix(col1, col0, alpha);
 
     imageStore(destTex, texelPos, col);
 }

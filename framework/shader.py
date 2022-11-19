@@ -5,15 +5,19 @@ class Shaders:
     LINE = "line"
 
     # Booleans
-    SMOOTH_MIN = "smin"
+    SMOOTH_MIN = "smooth_min"
     UNION = "union"
     INTERSECTION = "intersection"
     INTERPOLATION = "interpolation"
     SUBTRACT = "subtract"
 
+    # SDF Transform
+    ABS = "abs"
+
     # Postprocessing
     BLUR_HOR = "blur_hor"
     BLUR_VER = "blur_ver"
+    TO_RGB = "to_rgb"
 
     # Shading
     FILL = "fill"
