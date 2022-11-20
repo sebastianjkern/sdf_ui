@@ -70,8 +70,11 @@ class Context:
             ShaderFileDescriptor(Shaders.ABS, "shader_files/primitives/abs.glsl"),
 
             # Postprocessing
-            ShaderFileDescriptor(Shaders.BLUR_HOR, "shader_files/postprocessing/blur5_hor.glsl"),
-            ShaderFileDescriptor(Shaders.BLUR_VER, "shader_files/postprocessing/blur5_vert.glsl"),
+            ShaderFileDescriptor(Shaders.BLUR_HOR_9, "shader_files/postprocessing/blur9_hor.glsl"),
+            ShaderFileDescriptor(Shaders.BLUR_VER_9, "shader_files/postprocessing/blur9_vert.glsl"),
+            ShaderFileDescriptor(Shaders.BLUR_VER_13, "shader_files/postprocessing/blur13_vert.glsl"),
+            ShaderFileDescriptor(Shaders.BLUR_HOR_13, "shader_files/postprocessing/blur13_hor.glsl"),
+            ShaderFileDescriptor(Shaders.TO_LAB, "shader_files/postprocessing/to_lab.glsl"),
             ShaderFileDescriptor(Shaders.TO_RGB, "shader_files/postprocessing/to_rgb.glsl"),
             # Shading
             ShaderFileDescriptor(Shaders.FILL, "shader_files/shading/fill.glsl"),
@@ -353,13 +356,13 @@ class Context:
         return union_sdf
 
     # Postprocessing
-    def blur(self, layer: Layer, n=0):
+    def _blur_13(self, layer: Layer, n=0):
         def initial():
-            vert = self._get_shader(Shaders.BLUR_VER)
+            vert = self._get_shader(Shaders.BLUR_VER_13)
             vert['destTex'] = 0
             vert['origTex'] = 1
 
-            hor = self._get_shader(Shaders.BLUR_HOR)
+            hor = self._get_shader(Shaders.BLUR_HOR_13)
             hor['destTex'] = 0
             hor['origTex'] = 1
 
@@ -383,7 +386,43 @@ class Context:
                 tex0.bind_to_image(1, read=True, write=False)
                 hor.run(*self.local_size)
 
-            logger().debug(f"Running {Shaders.BLUR_HOR} and {Shaders.BLUR_VER} shader {n + 1} times ...")
+            logger().debug(f"Running {Shaders.BLUR_HOR_13} and {Shaders.BLUR_VER_13} shader {n + 1} times ...")
+
+            return tex1
+
+        return Layer(initial=initial)
+
+    def _blur_9(self, layer: Layer, n=0):
+        def initial():
+            vert = self._get_shader(Shaders.BLUR_VER_9)
+            vert['destTex'] = 0
+            vert['origTex'] = 1
+
+            hor = self._get_shader(Shaders.BLUR_HOR_9)
+            hor['destTex'] = 0
+            hor['origTex'] = 1
+
+            tex0 = self.rgba8()
+            tex1 = self.rgba8()
+
+            tex0.bind_to_image(0, read=False, write=True)
+            layer.tex.bind_to_image(1, read=True, write=False)
+            vert.run(*self.local_size)
+
+            tex1.bind_to_image(0, read=False, write=True)
+            tex0.bind_to_image(1, read=True, write=False)
+            hor.run(*self.local_size)
+
+            for _ in range(n):
+                tex0.bind_to_image(0, read=False, write=True)
+                tex1.bind_to_image(1, read=True, write=False)
+                vert.run(*self.local_size)
+
+                tex1.bind_to_image(0, read=False, write=True)
+                tex0.bind_to_image(1, read=True, write=False)
+                hor.run(*self.local_size)
+
+            logger().debug(f"Running {Shaders.BLUR_HOR_9} and {Shaders.BLUR_VER_9} shader {n + 1} times ...")
 
             return tex1
 
@@ -403,8 +442,36 @@ class Context:
             logger().debug(f"Running {Shaders.TO_RGB} shader...")
 
             return tex
-        
+
         return Layer(initial=initial)
+
+    def to_lab(self, layer: Layer):
+        def initial():
+            shader = self._get_shader(Shaders.TO_LAB)
+            shader['destTex'] = 0
+            shader['origTex'] = 1
+
+            tex = self.rgba8()
+            tex.bind_to_image(0, read=False, write=True)
+            layer.tex.bind_to_image(1, read=True, write=False)
+            shader.run(*self.local_size)
+
+            logger().debug(f"Running {Shaders.TO_LAB} shader...")
+
+            return tex
+
+        return Layer(initial=initial)
+
+    def blur(self, layer: Layer, n=0, base=9):
+        temp = self.to_rgb(layer)
+        if base == 9:
+            temp = self._blur_9(temp, n)
+        elif base == 13:
+            temp = self._blur_13(temp, n)
+        else:
+            logger().debug("Defaulting to 9x9 kernel size for blurring")
+            temp = self._blur_9(temp, n)
+        return self.to_lab(temp)
 
     # Layer blending
     def mask(self, top: Layer, bottom: Layer, mask: Layer):
@@ -505,7 +572,7 @@ if __name__ == '__main__':
         union = ctx.union(bezier, union, k=0.025)
 
         layer = ctx.fill(union, hex_col("#e9c46a"), hex_col("#2C2D35"), 0)
-        blur = ctx.blur(layer, 10)
+        blur = ctx._blur_9(layer, 10)
 
         mask_sdf = ctx.rounded_rect((int(size[0] / 2), int(size[1] / 2)), (int(size[0] / 5), int(size[1] / 3)),
                                     (150, 150, 150, 150))

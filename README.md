@@ -36,7 +36,7 @@ with Context(size) as ctx:
         f = ctx.fill(sdf, col1, col2, inflate=0.5)
         layer = ctx.overlay(f, layer)
 
-    blur = ctx.blur(layer, 100)
+    blur = ctx._blur_9(layer, 100)
 
     # Mask and glass overlay
     mask_sdf = ctx.rounded_rect((int(size[0] / 2), int(size[1] / 2)), (int(size[0] / 5), int(size[1] / 3)),
@@ -56,6 +56,8 @@ with Context(size) as ctx:
     overlay.show()
     overlay.save("image1.png")
 
+exit(0)
+
 with Context(size) as ctx:
     scale = 0.65
     offset_x = 50
@@ -68,7 +70,7 @@ with Context(size) as ctx:
     bg = ctx.fill(glyph_sdf, hex_col("#2C2D35"), hex_col("#2C2D35"), 7.5)
 
     mask = ctx.fill(glyph_sdf, (0.0, 0.0, 0.0, 1.0), (0.0, 0.0, 0.0, 0.0), 7.5)
-    shadow = ctx.blur(mask, 10)
+    shadow = ctx._blur_9(mask, 10)
     with_shadow = ctx.overlay(layer, shadow)
 
     overlay = ctx.overlay(with_shadow, bg)
