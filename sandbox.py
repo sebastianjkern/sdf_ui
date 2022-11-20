@@ -17,7 +17,7 @@ with Context(size) as ctx:
     bg = hex_col("#2C2D35")
     layer = ctx.fill(sdf, (*rand_color(), 1.0), bg, inflate=0, inner=0, outer=750)
 
-    for _ in range(100):
+    for _ in range(25):
         x, y = random.randint(50, size[0] - 50), random.randint(50, size[1] - 50)
         r = random.randint(10, 100)
         sdf = ctx.disc((x, y), r)
@@ -48,9 +48,10 @@ with Context(size) as ctx:
     overlay = ctx.overlay(glass, masked)
     overlay = ctx.overlay(overlay_outline, overlay)
 
-    overlay.save("lab_image1.png")
+    # overlay.save("lab_image1.png")
 
     overlay = ctx.to_rgb(overlay)
+    overlay = ctx.dithering(overlay)
     # overlay.show()
     overlay.save("image1.png")
 
@@ -73,6 +74,7 @@ with Context(size) as ctx:
 
     overlay = ctx.overlay(with_shadow, bg)
     overlay = ctx.to_rgb(overlay)
+    overlay = ctx.dithering(overlay)
 
     overlay.show()
     overlay.save("image2.png")

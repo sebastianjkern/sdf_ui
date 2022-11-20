@@ -21,6 +21,7 @@ class Shaders:
     BLUR_HOR_13 = "blur_vert_13"
     TO_LAB = "to_lab"
     TO_RGB = "to_rgb"
+    DITHERING = "dithering"
 
     # Shading
     FILL = "fill"

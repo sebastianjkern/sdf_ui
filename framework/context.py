@@ -76,6 +76,7 @@ class Context:
             ShaderFileDescriptor(Shaders.BLUR_HOR_13, "shader_files/postprocessing/blur13_hor.glsl"),
             ShaderFileDescriptor(Shaders.TO_LAB, "shader_files/postprocessing/to_lab.glsl"),
             ShaderFileDescriptor(Shaders.TO_RGB, "shader_files/postprocessing/to_rgb.glsl"),
+            ShaderFileDescriptor(Shaders.DITHERING, "shader_files/postprocessing/dithering.glsl"),
             # Shading
             ShaderFileDescriptor(Shaders.FILL, "shader_files/shading/fill.glsl"),
             ShaderFileDescriptor(Shaders.OUTLINE, "shader_files/shading/outline.glsl"),
@@ -474,6 +475,23 @@ class Context:
             logger().debug("Defaulting to 9x9 kernel size for blurring")
             temp = self._blur_9(temp, n)
         return self.to_lab(temp)
+
+    def dithering(self, layer: Layer):
+        def initial():
+            shader = self._get_shader(Shaders.DITHERING)
+            shader['destTex'] = 0
+            shader['origTex'] = 1
+
+            tex = self.rgba8()
+            tex.bind_to_image(0, read=False, write=True)
+            layer.tex.bind_to_image(1, read=True, write=False)
+            shader.run(*self.local_size)
+
+            logger().debug(f"Running {Shaders.DITHERING} shader...")
+
+            return tex
+
+        return Layer(initial=initial)
 
     # Layer blending
     def mask(self, top: Layer, bottom: Layer, mask: Layer):
