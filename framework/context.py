@@ -288,7 +288,7 @@ class Context:
         return SDF(initial=initial)
 
     # Shading
-    def fill(self, sdf: SDF, fg_color, bg_color, inflate):
+    def fill(self, sdf: SDF, fg_color, bg_color, inflate, inner=-1.5, outer=0):
         def initial():
             shader = self._get_shader(Shaders.FILL)
             shader['destTex'] = 0
@@ -296,6 +296,8 @@ class Context:
             shader['inflate'] = inflate
             shader['background'] = bg_color
             shader['color'] = fg_color
+            shader['first'] = inner
+            shader['second'] = outer
 
             tex = self.rgba8()
             tex.bind_to_image(0, read=False, write=True)

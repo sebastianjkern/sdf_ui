@@ -13,9 +13,9 @@ def rand_color():
 
 
 with Context(size) as ctx:
-    sdf = ctx.disc((250, 250), 200)
+    sdf = ctx.disc((size[0]/2, size[1]/2), 0)
     bg = hex_col("#2C2D35")
-    layer = ctx.fill(sdf, (*rand_color(), 1.0), bg, inflate=0)
+    layer = ctx.fill(sdf, (*rand_color(), 1.0), bg, inflate=0, inner=0, outer=750)
 
     for _ in range(100):
         x, y = random.randint(50, size[0] - 50), random.randint(50, size[1] - 50)
@@ -53,6 +53,8 @@ with Context(size) as ctx:
     overlay = ctx.to_rgb(overlay)
     # overlay.show()
     overlay.save("image1.png")
+
+exit()
 
 with Context(size) as ctx:
     scale = 0.65

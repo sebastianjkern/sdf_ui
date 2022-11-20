@@ -1,7 +1,6 @@
 #version 430
 #define SMOOTHSTEP_OFFSET 0.0001
 #define PI 3.1415926538
-#define AA_DISTANCE 1.5
 
 layout (local_size_x = 16, local_size_y = 16) in;
 
@@ -11,6 +10,9 @@ layout(r32f, location=1) readonly uniform image2D sdf;
 uniform float inflate;
 uniform vec4 color;
 uniform vec4 background;
+
+uniform float first;
+uniform float second;
 
 vec3 rgb2xyz(vec3 c)
 {
@@ -48,7 +50,7 @@ void main() {
 
     float distance = imageLoad(sdf, texelPos).r - inflate;
 
-    float fill = smoothstep(0-AA_DISTANCE-SMOOTHSTEP_OFFSET, 0, distance);
+    float fill = smoothstep(first, second+SMOOTHSTEP_OFFSET, distance);
 
     vec4 fg_lab = vec4(rgb2lab(color.rgb), color.a);
     vec4 bg_lab = vec4(rgb2lab(background.rgb), background.a);
