@@ -80,9 +80,11 @@ class Context:
             # Shading
             ShaderFileDescriptor(Shaders.FILL, "shader_files/shading/fill.glsl"),
             ShaderFileDescriptor(Shaders.OUTLINE, "shader_files/shading/outline.glsl"),
+            ShaderFileDescriptor(Shaders.CLEAR_COLOR, "shader_files/shading/clear_color.glsl"),
             # Layer
             ShaderFileDescriptor(Shaders.LAYER_MASK, "shader_files/layer/layer_mask.glsl"),
             ShaderFileDescriptor(Shaders.OVERLAY, "shader_files/layer/overlay.glsl"),
+            ShaderFileDescriptor(Shaders.TRANSPARENCY, "shader_files/layer/transparency.glsl")
         ]
 
         for s in self.shader:
@@ -331,6 +333,22 @@ class Context:
 
         return Layer(initial=initial)
 
+    def clear_color(self, color):
+        def initial():
+            shader = self._get_shader(Shaders.CLEAR_COLOR)
+            shader['destTex'] = 0
+            shader['color'] = color
+
+            tex = self.rgba8()
+            tex.bind_to_image(0, read=False, write=True)
+            shader.run(*self.local_size)
+
+            logger().debug(f"Running {Shaders.CLEAR_COLOR} shader...")
+
+            return tex
+
+        return Layer(initial=initial)
+
     def glyph(self, glyph, scale, ox, oy, path="fonts/SFUIDisplay-Bold.ttf"):
         control_points = self._get_glyph(path, glyph)
 
@@ -533,6 +551,25 @@ class Context:
             return tex
 
         return Layer(initial=initial)
+
+    def transparency(self, layer: Layer, alpha: float):
+        def initial():
+            shader = self._get_shader(Shaders.TRANSPARENCY)
+            shader['destTex'] = 0
+            shader['tex0'] = 1
+            shader['alpha'] = alpha
+
+            tex = self.rgba8()
+            tex.bind_to_image(0, read=False, write=True)
+            layer.tex.bind_to_image(1, read=True, write=False)
+            shader.run(*self.local_size)
+
+            logger().debug(f"Running {Shaders.TRANSPARENCY} shader...")
+
+            return tex
+
+        return Layer(initial=initial)
+
 
     @staticmethod
     def _get_glyph(font_file_path, char):

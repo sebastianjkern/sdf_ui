@@ -13,7 +13,7 @@ def rand_color():
 
 
 with Context(size) as ctx:
-    sdf = ctx.disc((size[0]/2, size[1]/2), 0)
+    sdf = ctx.disc((size[0] / 2, size[1] / 2), 0)
     bg = hex_col("#2C2D35")
     layer = ctx.fill(sdf, (*rand_color(), 1.0), bg, inflate=0, inner=0, outer=750)
 
@@ -24,10 +24,13 @@ with Context(size) as ctx:
         col0 = rand_color()
         col1 = (*col0, 1.0)
         col2 = (*col0, 0.0)
-        f = ctx.fill(sdf, col1, col2, inflate=0.5)
+        f = ctx.fill(sdf, col1, col2, 0)
         layer = ctx.overlay(f, layer)
 
-    blur = ctx.blur(layer, n=50, base=13)
+    sdf = ctx.line((100, 100), (900, 100))
+    gradient = ctx.fill(sdf, (*rand_color(), 1.0), (*rand_color(), 1.0), inflate=0, inner=0, outer=500)
+
+    blur = ctx.blur(layer, n=10, base=13)
 
     rgb = ctx.to_rgb(blur)
     rgb.save("blur.png")
@@ -40,20 +43,25 @@ with Context(size) as ctx:
 
     overlay_outline = ctx.outline(mask_sdf, (1.0, 1.0, 1.0, .25), (0.75, 0.75, 0.75, 0.0), inflate=-1.5)
 
-    # glass_col = (44 / 200, 45 / 200, 53 / 200, 0.45)
-    glass_col = (0.85, 0.75, 0.85, 0.45)
+    glass_col = (44 / 200, 45 / 200, 53 / 200, 0.45)
+    # glass_col = (0.85, 0.75, 0.85, 0.45)
     glass = ctx.fill(mask_sdf, glass_col, (0.0, 0.0, 0.0, 0.0), 0)
 
+    TRANSPARENT = ctx.clear_color((0.0, 0.0, 0.0, 0.0))
+
+    gradient = ctx.transparency(gradient, 0.45)
+
+    gradient_masked = ctx.mask(gradient, TRANSPARENT, mask_layer)
     masked = ctx.mask(blur, layer, mask_layer)
-    overlay = ctx.overlay(glass, masked)
+    overlay = ctx.overlay(gradient_masked, masked)
     overlay = ctx.overlay(overlay_outline, overlay)
 
-    # overlay.save("lab_image1.png")
-
     overlay = ctx.to_rgb(overlay)
+    overlay.save("image1_wod.png")
     overlay = ctx.dithering(overlay)
-    # overlay.show()
     overlay.save("image1.png")
+
+    overlay.show()
 
 exit()
 
@@ -62,7 +70,7 @@ with Context(size) as ctx:
     offset_x = 50
     offset_y = 50
 
-    glyph_sdf = ctx.glyph("M", scale, offset_x, offset_y)
+    glyph_sdf = ctx.glyph("e", scale, offset_x, offset_y, path="fonts/georgia_regular.ttf")
     glyph_sdf.show()
 
     layer = ctx.fill(glyph_sdf, hex_col("#e9c46a"), (0.0, 0.0, 0.0, 0.0), 7.5)

@@ -26,10 +26,12 @@ class Shaders:
     # Shading
     FILL = "fill"
     OUTLINE = "outline"
+    CLEAR_COLOR = "clear_color"
 
     # Layer
     LAYER_MASK = "layer_mask"
     OVERLAY = "overlay"
+    TRANSPARENCY = "transparency"
 
 
 class ShaderFileDescriptor:
