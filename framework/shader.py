@@ -1,4 +1,5 @@
 class Shaders:
+    GRID = "grid"
     RECT = "rect"
     CIRCLE = "circle"
     BEZIER = "bezier"

@@ -60,12 +60,15 @@ class Context:
             ShaderFileDescriptor(Shaders.CIRCLE, "shader_files/primitives/sdfs/circle.glsl"),
             ShaderFileDescriptor(Shaders.BEZIER, "shader_files/primitives/sdfs/bezier.glsl"),
             ShaderFileDescriptor(Shaders.LINE, "shader_files/primitives/sdfs/line.glsl"),
+            ShaderFileDescriptor(Shaders.GRID, "shader_files/primitives/sdfs/grid.glsl"),
+
             # Booleans
             ShaderFileDescriptor(Shaders.SMOOTH_MIN, "shader_files/primitives/booleans/smin.glsl"),
             ShaderFileDescriptor(Shaders.UNION, "shader_files/primitives/booleans/union.glsl"),
             ShaderFileDescriptor(Shaders.INTERSECTION, "shader_files/primitives/booleans/intersection.glsl"),
             ShaderFileDescriptor(Shaders.INTERPOLATION, "shader_files/primitives/booleans/interpolate.glsl"),
             ShaderFileDescriptor(Shaders.SUBTRACT, "shader_files/primitives/booleans/subtract.glsl"),
+
             # SDF Transform
             ShaderFileDescriptor(Shaders.ABS, "shader_files/primitives/abs.glsl"),
 
@@ -77,10 +80,12 @@ class Context:
             ShaderFileDescriptor(Shaders.TO_LAB, "shader_files/postprocessing/to_lab.glsl"),
             ShaderFileDescriptor(Shaders.TO_RGB, "shader_files/postprocessing/to_rgb.glsl"),
             ShaderFileDescriptor(Shaders.DITHERING, "shader_files/postprocessing/dithering.glsl"),
+
             # Shading
             ShaderFileDescriptor(Shaders.FILL, "shader_files/shading/fill.glsl"),
             ShaderFileDescriptor(Shaders.OUTLINE, "shader_files/shading/outline.glsl"),
             ShaderFileDescriptor(Shaders.CLEAR_COLOR, "shader_files/shading/clear_color.glsl"),
+
             # Layer
             ShaderFileDescriptor(Shaders.LAYER_MASK, "shader_files/layer/layer_mask.glsl"),
             ShaderFileDescriptor(Shaders.OVERLAY, "shader_files/layer/overlay.glsl"),
@@ -267,6 +272,23 @@ class Context:
             shader.run(*self.local_size)
 
             logger().debug(f"Running {Shaders.LINE} shader...")
+
+            return tex
+
+        return SDF(initial=initial)
+
+    def grid(self, offset, size):
+        def initial():
+            shader = self._get_shader(Shaders.GRID)
+            shader['destTex'] = 0
+            shader['grid_size'] = size
+            shader['offset'] = offset
+
+            tex = self.r32f()
+            tex.bind_to_image(0, read=False, write=True)
+            shader.run(*self.local_size)
+
+            logger().debug(f"Running {Shaders.GRID} shader...")
 
             return tex
 
@@ -569,7 +591,6 @@ class Context:
             return tex
 
         return Layer(initial=initial)
-
 
     @staticmethod
     def _get_glyph(font_file_path, char):
