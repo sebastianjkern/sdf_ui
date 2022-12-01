@@ -6,9 +6,9 @@ ___
 
 ## Ideas for further development
 
--[ ] Native Support for animation
--[ ] Vector Fields
--[ ] 
+- [ ] Native Support for animation
+- [ ] Vector Fields
+- [ ] 
 
 ## Example
 
