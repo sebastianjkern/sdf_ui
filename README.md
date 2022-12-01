@@ -2,7 +2,13 @@
 
 ___
 
-<img src="./image1.png" width="500" > <img src="./image2.png" width="500" >
+<img src="./image1.png" width="500" > <img src="./image2.png" width="500" > <img src="./console.png" width="500" > 
+
+## Ideas for further development
+
+-[ ] Native Support for animation
+-[ ] Vector Fields
+-[ ] 
 
 ## Example
 

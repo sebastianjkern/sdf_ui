@@ -1,9 +1,13 @@
 from pathlib import Path
 
+import PIL.ImageOps
+import PIL.ImageOps
 import moderngl as mgl
 import numpy as np
 import ttfquery
 from PIL import Image
+from PIL import ImageEnhance
+from console import fg, fx, bg
 from ttfquery import describe, glyph, glyphquery
 
 from framework.log import logger
@@ -16,10 +20,143 @@ def rgb_col(r: int, g: int, b: int, *a):
     return tuple(values)
 
 
-def hex_col(string: str):
+def hex_col(string: str, alpha=255):
     g = string.lstrip("#")
     col = tuple(int(g[i:i + 2], 16) for i in (0, 2, 4))
-    return rgb_col(*col, 255)
+    return rgb_col(*col, alpha)
+
+
+def get_average_l(image):
+    im = np.array(image)
+    w, h = im.shape
+    return np.average(im.reshape(w * h))
+
+
+def get_average_c(image):
+    im = np.array(image)
+    return tuple(np.array(np.mean(im, axis=(0, 1)).astype(int)))
+
+
+def rgb_to_hex(rgb):
+    return '%02x%02x%02x' % rgb[:3]
+
+
+def convert_image_to_ascii_colored(image, cols, scale, more_levels, invert, enhance, as_background):
+    hr_ascii_table = "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\|()1{}[]?-_+~<>i!lI;:,\"^`'. "
+    lr_ascii_table = '@%#*+=-:. '
+
+    bw_image = image.convert('L')
+
+    if enhance:
+        image = PIL.ImageEnhance.Contrast(image).enhance(3)
+        image = PIL.ImageEnhance.Brightness(image).enhance(0.85)
+
+        bw_image = PIL.ImageEnhance.Contrast(bw_image).enhance(3)
+        bw_image = PIL.ImageEnhance.Brightness(bw_image).enhance(0.85)
+
+    if invert:
+        image = PIL.ImageOps.invert(image)
+        bw_image = PIL.ImageOps.invert(bw_image)
+
+    original_width, original_height = image.size[0], image.size[1]
+
+    new_width = original_width / cols
+    new_height = new_width / scale
+
+    rows = int(original_height / new_height)
+
+    if cols > original_width or rows > original_height:
+        # TODO: Upscale in case of low input resolution
+        exit(0)
+
+    ascii_image = []
+    for j in range(rows):
+        y1 = int(j * new_height)
+        y2 = int((j + 1) * new_height)
+
+        if j == rows - 1:
+            y2 = original_height
+
+        ascii_image.append("")
+
+        for i in range(cols):
+            x1 = int(i * new_width)
+            x2 = int((i + 1) * new_width)
+            if i == cols - 1:
+                x2 = original_width
+
+            img = image.crop((x1, y1, x2, y2))
+            bg_img = bw_image.crop((x1, y1, x2, y2))
+
+            avg = int(get_average_l(bg_img))
+            clr = get_average_c(img)
+
+            if more_levels:
+                symbol = hr_ascii_table[int((avg * 69) / 255)]
+            else:
+                symbol = lr_ascii_table[int((avg * 9) / 255)]
+
+            if as_background:
+                symbol = getattr(bg, "t_" + rgb_to_hex(clr)) + ' ' + fx.end
+            else:
+                symbol = getattr(fg, "t_" + rgb_to_hex(clr)) + symbol + fx.end
+
+            ascii_image[j] += symbol
+
+    for row in ascii_image:
+        print(row)
+
+
+def convert_image_to_ascii(image, cols, scale, more_levels, invert, enhance):
+    hr_ascii_table = "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\|()1{}[]?-_+~<>i!lI;:,\"^`'. "
+    lr_ascii_table = '@%#*+=-:. '
+
+    image = image.convert('L')
+
+    if enhance:
+        image = PIL.ImageEnhance.Contrast(image).enhance(3)
+        image = PIL.ImageEnhance.Brightness(image).enhance(0.85)
+
+    if invert:
+        image = PIL.ImageOps.invert(image)
+
+    original_width, original_height = image.size[0], image.size[1]
+
+    new_width = original_width / cols
+    new_height = new_width / scale
+
+    rows = int(original_height / new_height)
+
+    if cols > original_width or rows > original_height:
+        # TODO: Upscale in case of low input resolution
+        exit(0)
+
+    ascii_image = []
+    for j in range(rows):
+        y1 = int(j * new_height)
+        y2 = int((j + 1) * new_height)
+        if j == rows - 1:
+            y2 = original_height
+        ascii_image.append("")
+
+        for i in range(cols):
+            x1 = int(i * new_width)
+            x2 = int((i + 1) * new_width)
+            if i == cols - 1:
+                x2 = original_width
+
+            img = image.crop((x1, y1, x2, y2))
+            avg = int(get_average_l(img))
+
+            if more_levels:
+                greyscale_value = hr_ascii_table[int((avg * 69) / 255)]
+            else:
+                greyscale_value = lr_ascii_table[int((avg * 9) / 255)]
+
+            ascii_image[j] += greyscale_value
+
+    for row in ascii_image:
+        print(row)
 
 
 class SDF:
@@ -46,6 +183,15 @@ class Layer:
         image = image.transpose(Image.FLIP_TOP_BOTTOM)
         image.save(name)
 
+    def print(self, colored=True):
+        image = Image.frombytes("RGBA", self.tex.size, self.tex.read(), "raw")
+        image = image.transpose(Image.FLIP_TOP_BOTTOM)
+        if not colored:
+            convert_image_to_ascii(image, 150, 0.43, True, True, True)
+        else:
+            convert_image_to_ascii_colored(image, 150, 0.43, more_levels=False, invert=False, enhance=True,
+                                           as_background=True)
+
 
 class Context:
     def __init__(self, size):
@@ -70,7 +216,7 @@ class Context:
             ShaderFileDescriptor(Shaders.SUBTRACT, "shader_files/primitives/booleans/subtract.glsl"),
 
             # SDF Transform
-            ShaderFileDescriptor(Shaders.ABS, "shader_files/primitives/abs.glsl"),
+            ShaderFileDescriptor(Shaders.ABS, "shader_files/primitives/transforms/abs.glsl"),
 
             # Postprocessing
             ShaderFileDescriptor(Shaders.BLUR_HOR_9, "shader_files/postprocessing/blur9_hor.glsl"),
@@ -80,11 +226,13 @@ class Context:
             ShaderFileDescriptor(Shaders.TO_LAB, "shader_files/postprocessing/to_lab.glsl"),
             ShaderFileDescriptor(Shaders.TO_RGB, "shader_files/postprocessing/to_rgb.glsl"),
             ShaderFileDescriptor(Shaders.DITHERING, "shader_files/postprocessing/dithering.glsl"),
+            ShaderFileDescriptor(Shaders.DITHER_1BIT, "shader_files/postprocessing/dither_1bit.glsl"),
 
             # Shading
             ShaderFileDescriptor(Shaders.FILL, "shader_files/shading/fill.glsl"),
             ShaderFileDescriptor(Shaders.OUTLINE, "shader_files/shading/outline.glsl"),
             ShaderFileDescriptor(Shaders.CLEAR_COLOR, "shader_files/shading/clear_color.glsl"),
+            ShaderFileDescriptor(Shaders.PERLIN_NOISE, "shader_files/primitives/sdfs/perlin_noise.glsl"),
 
             # Layer
             ShaderFileDescriptor(Shaders.LAYER_MASK, "shader_files/layer/layer_mask.glsl"),
@@ -106,6 +254,12 @@ class Context:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         pass
+
+    def percent(self, alpha):
+        return alpha / 100 * self._size[0]
+
+    def percent_of_min(self, alpha):
+        return alpha / 100 * min(self._size)
 
     def _get_shader(self, shader: str):
         if shader not in self._shader_cache.keys():
@@ -371,6 +525,21 @@ class Context:
 
         return Layer(initial=initial)
 
+    def perlin_noise(self):
+        def initial():
+            shader = self._get_shader(Shaders.PERLIN_NOISE)
+            shader['destTex'] = 0
+
+            tex = self.rgba8()
+            tex.bind_to_image(0, read=False, write=True)
+            shader.run(*self.local_size)
+
+            logger().debug(f"Running {Shaders.PERLIN_NOISE} shader...")
+
+            return tex
+
+        return Layer(initial=initial)
+
     def glyph(self, glyph, scale, ox, oy, path="fonts/SFUIDisplay-Bold.ttf"):
         control_points = self._get_glyph(path, glyph)
 
@@ -519,6 +688,23 @@ class Context:
     def dithering(self, layer: Layer):
         def initial():
             shader = self._get_shader(Shaders.DITHERING)
+            shader['destTex'] = 0
+            shader['origTex'] = 1
+
+            tex = self.rgba8()
+            tex.bind_to_image(0, read=False, write=True)
+            layer.tex.bind_to_image(1, read=True, write=False)
+            shader.run(*self.local_size)
+
+            logger().debug(f"Running {Shaders.DITHERING} shader...")
+
+            return tex
+
+        return Layer(initial=initial)
+
+    def dither_1bit(self, layer: Layer):
+        def initial():
+            shader = self._get_shader(Shaders.DITHER_1BIT)
             shader['destTex'] = 0
             shader['origTex'] = 1
 

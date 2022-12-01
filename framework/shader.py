@@ -23,11 +23,13 @@ class Shaders:
     TO_LAB = "to_lab"
     TO_RGB = "to_rgb"
     DITHERING = "dithering"
+    DITHER_1BIT = "dither_1bit"
 
     # Shading
     FILL = "fill"
     OUTLINE = "outline"
     CLEAR_COLOR = "clear_color"
+    PERLIN_NOISE = "perlin_noise"
 
     # Layer
     LAYER_MASK = "layer_mask"
