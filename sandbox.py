@@ -12,24 +12,33 @@ def rand_color():
     return red, green, blue
 
 
+COLORS = [
+    "#62bb47",
+    "#fcb827",
+    "#f6821f",
+    "#e03a3c",
+    "#963d97",
+    "#009ddc"
+]
+
 with Context(size) as ctx:
     sdf = ctx.disc((size[0] / 2, size[1] / 2), 0)
-    layer = ctx.fill(sdf, hex_col("#3057E1", alpha=255), hex_col("#002082", alpha=255), inflate=0, inner=0,
+    layer = ctx.fill(sdf, hex_col("#004C81", alpha=255), hex_col("#062A4A", alpha=255), inflate=0, inner=0,
                      outer=ctx.percent_of_min(75))
 
     sdf = ctx.grid((10, 10), (50, 50))
-    grid = ctx.fill(sdf, hex_col("#CED8F7", 255), hex_col("#CED8F7", 0), inflate=.5)
+    grid = ctx.fill(sdf, hex_col("#5EC6E2", 255), hex_col("#5EC6E2", 0), inflate=.5)
     layer = ctx.overlay(grid, layer)
 
-    sdf = ctx.grid((10, 10), (250, 250))
-    grid = ctx.fill(sdf, hex_col("#CED8F7", 255), hex_col("#CED8F7", 0), inflate=1.5)
+    sdf = ctx.grid((10, 10), (150, 150))
+    grid = ctx.fill(sdf, hex_col("#5EC6E2", 255), hex_col("#5EC6E2", 0), inflate=1.5)
     layer = ctx.overlay(grid, layer)
 
-    for _ in range(2):
+    for _ in range(10):
         x, y = random.randint(50, size[0] - 50), random.randint(50, size[1] - 50)
         r = random.randint(10, 100)
         sdf = ctx.disc((x, y), r)
-        col0 = rand_color()
+        col0 = hex_col(random.choice(COLORS))[:3]
         col1 = (*col0, 1.0)
         col2 = (*col0, 0.0)
         f = ctx.fill(sdf, col1, col2, 0)
@@ -51,7 +60,7 @@ with Context(size) as ctx:
     overlay_outline = ctx.outline(mask_sdf, (1.0, 1.0, 1.0, .25), (0.75, 0.75, 0.75, 0.0), inflate=-1.5)
 
     # glass_col = (44 / 200, 45 / 200, 53 / 200, 0.45)
-    glass_col = (0.65, 0.85, 0.75, 0.45)
+    glass_col = (0.75, 0.75, 0.75, 0.75)
     glass = ctx.fill(mask_sdf, glass_col, (0.0, 0.0, 0.0, 0.0), 0)
 
     TRANSPARENT = ctx.clear_color((0.0, 0.0, 0.0, 0.0))
@@ -66,7 +75,8 @@ with Context(size) as ctx:
     overlay = ctx.to_rgb(overlay)
     # overlay = ctx.dithering(overlay)
     overlay.save("image1.png")
-    overlay.print()
+    overlay.show()
+    # overlay.print()
 
     p_noise = ctx.perlin_noise()
     # p_noise = ctx.fill(p_noise, (*rand_color(), 1.0), (*rand_color(), 1.0), inflate=10)

@@ -8,7 +8,8 @@ ___
 
 - [ ] Native Support for animation
 - [ ] Vector Fields
-- [ ] 
+- [ ] Voronoi sdf (Basically many overlayed circle sdfs)
+- [ ] Text rendering
 
 ## Example
 
