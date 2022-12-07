@@ -4,13 +4,16 @@ ___
 
 <img src="./image1.png" width="500" >
 
-Text/Letter rendering
+Text/Letter rendering:
+
 <img src="./image2.png" width="500" >
 
-Print images to console
+Print images to console:
+
 <img src="./console.png" width="500" > 
 
 Freeform Gradient:
+
 <img src="./image3.png" width="500" >
 
 ## Ideas for further development
