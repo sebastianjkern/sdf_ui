@@ -2,7 +2,16 @@
 
 ___
 
-<img src="./image1.png" width="500" > <img src="./image2.png" width="500" > <img src="./console.png" width="500" > 
+<img src="./image1.png" width="500" >
+
+Text/Letter rendering
+<img src="./image2.png" width="500" >
+
+Print images to console
+<img src="./console.png" width="500" > 
+
+Freeform Gradient:
+<img src="./image3.png" width="500" >
 
 ## Ideas for further development
 
@@ -10,6 +19,7 @@ ___
 - [ ] Vector Fields
 - [ ] Voronoi sdf (Basically many overlayed circle sdfs)
 - [ ] Text rendering
+- [x] Freeform Gradients
 
 ## Example
 

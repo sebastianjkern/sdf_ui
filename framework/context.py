@@ -1,3 +1,4 @@
+import math
 from pathlib import Path
 
 import PIL.ImageOps
@@ -159,6 +160,13 @@ def convert_image_to_ascii(image, cols, scale, more_levels, invert, enhance):
         print(row)
 
 
+tex_registry = 0
+
+
+def get_tex_registry():
+    print(tex_registry)
+
+
 class SDF:
     def __init__(self, initial: callable):
         self.tex = initial()
@@ -167,6 +175,11 @@ class SDF:
         image = Image.frombytes('F', self.tex.size, self.tex.read(), "raw")
         image = image.transpose(Image.FLIP_TOP_BOTTOM)
         image.show()
+
+    def delete(self):
+        global tex_registry
+        tex_registry -= 1
+        self.tex.release()
 
 
 class Layer:
@@ -191,6 +204,11 @@ class Layer:
         else:
             convert_image_to_ascii_colored(image, 150, 0.43, more_levels=False, invert=False, enhance=True,
                                            as_background=True)
+
+    def delete(self):
+        global tex_registry
+        tex_registry -= 1
+        self.tex.release()
 
 
 class Context:
@@ -276,11 +294,19 @@ class Context:
     def r32f(self):
         tex = self._mgl_ctx.texture(self._size, 1, dtype='f4')
         tex.filter = mgl.LINEAR, mgl.LINEAR
+
+        global tex_registry
+        tex_registry += 1
+
         return tex
 
     def rgba8(self):
         tex = self._mgl_ctx.texture(self._size, 4)
         tex.filter = mgl.LINEAR, mgl.LINEAR
+
+        global tex_registry
+        tex_registry += 1
+
         return tex
 
     def smooth_min(self, obj1: SDF, obj2: SDF, k=0.025):
@@ -467,7 +493,7 @@ class Context:
         return SDF(initial=initial)
 
     # Shading
-    def fill(self, sdf: SDF, fg_color, bg_color, inflate, inner=-1.5, outer=0):
+    def fill(self, sdf: SDF, fg_color, bg_color, inflate, inner=-1.5, outer=0.0):
         def initial():
             shader = self._get_shader(Shaders.FILL)
             shader['destTex'] = 0
@@ -486,6 +512,12 @@ class Context:
             logger().debug(f"Running {Shaders.FILL} shader...")
 
             return tex
+
+        return Layer(initial=initial)
+
+    def generate_mask(self, sdf: SDF):
+        def initial():
+            return self.fill(sdf, (.0, .0, .0, 1.0), (1.0, 1.0, 1.0, 1.0), 0).tex
 
         return Layer(initial=initial)
 
@@ -567,6 +599,42 @@ class Context:
 
         return union_sdf
 
+    # Shading || Gradients
+    def linear_gradient(self, a, b, color1, color2):
+        def initial():
+            ax, ay = a
+            bx, by = b
+
+            dx = ax - bx
+            dy = ay - by
+
+            cx = ax + dx
+            cy = ax - dy
+
+            ex = ax - dx
+            ey = ay + dy
+
+            sdf = self.line((cx, cy), (ex, ey))
+            gradient = self.fill(sdf, color1, color2, 0, inner=0, outer=math.sqrt(dx * dx + dy * dy))
+
+            sdf.delete()
+
+            return gradient.tex
+
+        return Layer(initial=initial)
+
+    def radial_gradient(self, a, color1, color2, inner=0, outer=100):
+        def initial():
+            sdf = self.disc(a, 0)
+
+            tex = self.fill(sdf, color1, color2, 0, inner=inner, outer=outer).tex
+
+            sdf.delete()
+
+            return tex
+
+        return Layer(initial=initial)
+
     # Postprocessing
     def _blur_13(self, layer: Layer, n=0):
         def initial():
@@ -599,6 +667,10 @@ class Context:
                 hor.run(*self.local_size)
 
             logger().debug(f"Running {Shaders.BLUR_HOR_13} and {Shaders.BLUR_VER_13} shader {n + 1} times ...")
+
+            global tex_registry
+            tex_registry -= 1
+            tex0.release()
 
             return tex1
 
@@ -635,6 +707,10 @@ class Context:
                 hor.run(*self.local_size)
 
             logger().debug(f"Running {Shaders.BLUR_HOR_9} and {Shaders.BLUR_VER_9} shader {n + 1} times ...")
+
+            global tex_registry
+            tex_registry -= 1
+            tex0.release()
 
             return tex1
 
@@ -675,15 +751,18 @@ class Context:
         return Layer(initial=initial)
 
     def blur(self, layer: Layer, n=0, base=9):
-        temp = self.to_rgb(layer)
+        t = self.to_rgb(layer)
         if base == 9:
-            temp = self._blur_9(temp, n)
+            temp = self._blur_9(t, n)
         elif base == 13:
-            temp = self._blur_13(temp, n)
+            temp = self._blur_13(t, n)
         else:
             logger().debug("Defaulting to 9x9 kernel size for blurring")
-            temp = self._blur_9(temp, n)
-        return self.to_lab(temp)
+            temp = self._blur_9(t, n)
+        t.delete()
+        t = self.to_lab(temp)
+        temp.delete()
+        return t
 
     def dithering(self, layer: Layer):
         def initial():
