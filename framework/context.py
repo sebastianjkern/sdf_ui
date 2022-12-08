@@ -252,6 +252,7 @@ class Context:
             ShaderFileDescriptor(Shaders.CLEAR_COLOR, "shader_files/shading/clear_color.glsl"),
             ShaderFileDescriptor(Shaders.PERLIN_NOISE, "shader_files/primitives/sdfs/perlin_noise.glsl"),
             ShaderFileDescriptor(Shaders.FILM_GRAIN, "shader_files/shading/film_grain.glsl"),
+            ShaderFileDescriptor(Shaders.FILL_FROM_TEXTURE, "shader_files/shading/fill_from_texture.glsl"),
 
             # Layer
             ShaderFileDescriptor(Shaders.LAYER_MASK, "shader_files/layer/layer_mask.glsl"),
@@ -511,6 +512,28 @@ class Context:
             shader.run(*self.local_size)
 
             logger().debug(f"Running {Shaders.FILL} shader...")
+
+            return tex
+
+        return Layer(initial=initial)
+
+    def fill_from_texture(self, sdf: SDF, layer: Layer, background=(0.0, 0.0, 0.0, 0.0), inflate=0):
+        def initial():
+            shader = self._get_shader(Shaders.FILL_FROM_TEXTURE)
+            shader['destTex'] = 0
+            shader['origTex'] = 1
+            shader['sdf'] = 2
+
+            shader['background'] = background
+            shader['inflate'] = inflate
+
+            tex = self.rgba8()
+            tex.bind_to_image(0, write=True, read=False)
+            layer.tex.bind_to_image(1, write=False, read=True)
+            sdf.tex.bind_to_image(2, write=False, read=True)
+            shader.run(*self.local_size)
+
+            logger().debug(f"Running {Shaders.FILL_FROM_TEXTURE} shader...")
 
             return tex
 

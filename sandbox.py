@@ -85,10 +85,8 @@ with Context(size) as ctx:
 
     get_tex_registry()
 
-exit()
-
 with Context(size) as ctx:
-    for _ in range(10):
+    for _ in range(1):
         start = time.time_ns()
         radial_gradient_backdrop = ctx.radial_gradient((size[0] / 2, size[1] / 2), hex_col("#004C81", alpha=255),
                                                        hex_col("#062A4A", alpha=255), inner=0,
@@ -140,15 +138,14 @@ with Context(size) as ctx:
         glass_col = (0.75, 0.75, 0.75, 0.75)
         glass = ctx.fill(mask_sdf, glass_col, (0.0, 0.0, 0.0, 0.0), 0)
 
-        mask_sdf.delete()
-
         TRANSPARENT = ctx.clear_color((0.0, 0.0, 0.0, 0.0))
 
         transparent_gradient = ctx.transparency(gradient, 0.45)
 
         gradient.delete()
 
-        gradient_masked = ctx.mask(transparent_gradient, TRANSPARENT, mask_layer)
+        gradient_masked = ctx.fill_from_texture(mask_sdf, transparent_gradient)
+        gradient_masked.show()
         masked = ctx.mask(blur, layer, mask_layer)
         overlay = ctx.overlay(glass, masked)
         with_outline = ctx.overlay(overlay_outline, overlay)
@@ -158,6 +155,7 @@ with Context(size) as ctx:
         # overlay = ctx.dithering(overlay)
         overlay.save("image1.png")
 
+        mask_sdf.delete()
         transparent_gradient.delete()
         TRANSPARENT.delete()
         with_outline.delete()
@@ -173,6 +171,8 @@ with Context(size) as ctx:
         get_tex_registry()
 
         print((time.time_ns() - start) / 1e6)
+
+exit()
 
 with Context(size) as ctx:
     scale = 0.65

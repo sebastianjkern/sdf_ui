@@ -27,6 +27,7 @@ class Shaders:
 
     # Shading
     FILL = "fill"
+    FILL_FROM_TEXTURE = "fill_from_texture"
     OUTLINE = "outline"
     CLEAR_COLOR = "clear_color"
     PERLIN_NOISE = "perlin_noise"
