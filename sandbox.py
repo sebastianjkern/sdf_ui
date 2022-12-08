@@ -1,9 +1,7 @@
-import logging
 import random
 import time
 
 from framework.context import Context, hex_col, get_tex_registry
-from framework.log import logger
 
 size = (int(1080), int(1080))
 
@@ -22,7 +20,7 @@ def rand_point():
     return x, y
 
 
-logger().setLevel(level=logging.CRITICAL)
+# logger().setLevel(level=logging.CRITICAL)
 
 COLORS = [
     "#62bb47",
@@ -53,25 +51,39 @@ with Context(size) as ctx:
     bezier = ctx.bezier(rand_point(), rand_point(), rand_point())
     filled = ctx.fill(bezier, hex_col(col3, alpha=150), hex_col(col3, alpha=0), inflate=0, inner=0, outer=250)
 
-    rgb = ctx.to_rgb(filled)
-    rgb.save("bezier.png")
-
     overlay1.delete()
     overlay1 = ctx.overlay(filled, overlay2)
 
     overlay0.delete()
     overlay0 = ctx.to_rgb(overlay1)
     # overlay0.show()
-    overlay0.save("image3.png")
+
+    bezier.delete()
+    filled.delete()
 
     base_color.delete()
     radial1.delete()
     radial2.delete()
     radial3.delete()
 
-    overlay0.delete()
     overlay1.delete()
     overlay2.delete()
+
+    grain = ctx.film_grain()
+
+    temp = ctx.transparency(grain, 10 / 255)
+    grain.delete()
+
+    out = ctx.overlay(temp, overlay0)
+
+    out.show()
+    out.save("image3.png")
+
+    temp.delete()
+    overlay0.delete()
+    out.delete()
+
+    get_tex_registry()
 
 exit()
 

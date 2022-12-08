@@ -30,6 +30,7 @@ class Shaders:
     OUTLINE = "outline"
     CLEAR_COLOR = "clear_color"
     PERLIN_NOISE = "perlin_noise"
+    FILM_GRAIN = "film_grain"
 
     # Layer
     LAYER_MASK = "layer_mask"

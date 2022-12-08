@@ -251,6 +251,7 @@ class Context:
             ShaderFileDescriptor(Shaders.OUTLINE, "shader_files/shading/outline.glsl"),
             ShaderFileDescriptor(Shaders.CLEAR_COLOR, "shader_files/shading/clear_color.glsl"),
             ShaderFileDescriptor(Shaders.PERLIN_NOISE, "shader_files/primitives/sdfs/perlin_noise.glsl"),
+            ShaderFileDescriptor(Shaders.FILM_GRAIN, "shader_files/shading/film_grain.glsl"),
 
             # Layer
             ShaderFileDescriptor(Shaders.LAYER_MASK, "shader_files/layer/layer_mask.glsl"),
@@ -793,6 +794,21 @@ class Context:
             shader.run(*self.local_size)
 
             logger().debug(f"Running {Shaders.DITHERING} shader...")
+
+            return tex
+
+        return Layer(initial=initial)
+
+    def film_grain(self):
+        def initial():
+            shader = self._get_shader(Shaders.FILM_GRAIN)
+            shader['destTex'] = 0
+
+            tex = self.rgba8()
+            tex.bind_to_image(0, read=False, write=True)
+            shader.run(*self.local_size)
+
+            logger().debug(f"Running {Shaders.FILM_GRAIN} shader...")
 
             return tex
 
