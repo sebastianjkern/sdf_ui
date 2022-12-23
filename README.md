@@ -25,6 +25,7 @@ Freeform Gradient:
 - [x] Freeform Gradients (Overlay of Different gradients, possible trough half transparent fills of sdfs)
 - [ ] Ortographic Projection of 3D SDFs
 - [ ] Fill with images (trough moderngl texture api)
+- [ ] YAML based render script
 
 ## Example
 
