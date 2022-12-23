@@ -21,8 +21,10 @@ Freeform Gradient:
 - [ ] Native Support for animation
 - [ ] Vector Fields
 - [ ] Voronoi sdf (Basically many overlayed circle sdfs)
-- [ ] Text rendering
-- [x] Freeform Gradients
+- [ ] Text rendering (Stroke rendering of single letters already possible)
+- [x] Freeform Gradients (Overlay of Different gradients, possible trough half transparent fills of sdfs)
+- [ ] Ortographic Projection of 3D SDFs
+- [ ] Fill with images (trough moderngl texture api)
 
 ## Example
 
