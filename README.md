@@ -30,11 +30,18 @@ Freeform Gradient:
 ## Example
 
 ```python
+import logging
 import random
 
-from framework.context import Context, hex_col
+from framework.context import Context
+from framework.log import logger
+from framework.main import set_context, clear_color, radial_gradient, bezier, film_grain, percent_of_min, grid, disc,
+    linear_gradient, rounded_rect, glyph_sdf
+from framework.util import hex_col
 
 size = (1920, 1080)
+
+logger().setLevel(logging.INFO)
 
 
 def rand_color():
@@ -44,62 +51,43 @@ def rand_color():
     return red, green, blue
 
 
-with Context(size) as ctx:
-    sdf = ctx.disc((250, 250), 200)
-    bg = hex_col("#2C2D35")
-    layer = ctx.fill(sdf, (*rand_color(), 1.0), bg, inflate=0)
+def rand_point():
+    x = random.randint(0, size[0])
+    y = random.randint(0, size[1])
 
-    for _ in range(20):
-        x, y = random.randint(0, size[0]), random.randint(0, size[1])
-        r = random.randint(10, 250)
-        sdf = ctx.disc((x, y), r)
-        col0 = rand_color()
-        col1 = (*col0, 1.0)
-        col2 = (*col0, 0.0)
-        f = ctx.fill(sdf, col1, col2, inflate=0.5)
-        layer = ctx.overlay(f, layer)
+    return x, y
 
-    blur = ctx._blur_9(layer, 100)
 
-    # Mask and glass overlay
-    mask_sdf = ctx.rounded_rect((int(size[0] / 2), int(size[1] / 2)), (int(size[0] / 5), int(size[1] / 3)),
-                                (150, 150, 150, 150))
+COLORS = [
+    "#62bb47",
+    "#fcb827",
+    "#f6821f",
+    "#e03a3c",
+    "#963d97",
+    "#009ddc"
+]
 
-    mask_layer = ctx.fill(mask_sdf, (.0, .0, .0, 1.0), (1.0, 1.0, 1.0, 1.0), 0)
+context = Context(size)
+set_context(context)
 
-    overlay_outline = ctx.outline(mask_sdf, (1.0, 1.0, 1.0, .25), (0.75, 0.75, 0.75, 0.0), inflate=-1.5)
+# Example 1
+col0 = random.choice(COLORS)
+col1 = random.choice(COLORS)
+col2 = random.choice(COLORS)
+col3 = random.choice(COLORS)
 
-    glass = ctx.fill(mask_sdf, (44 / 255, 45 / 255, 53 / 255, 0.15), (0.0, 0.0, 0.0, 0.0), 0)
+image = clear_color(hex_col(random.choice(COLORS)))
+    .alpha_overlay(
+    radial_gradient((100, 100), hex_col(col0, alpha=150), hex_col(col0, alpha=0.0), inner=50, outer=750))
+    .alpha_overlay(
+    radial_gradient((750, 500), hex_col(col1, alpha=255), hex_col(col1, alpha=0.0), inner=50, outer=750))
+    .alpha_overlay(
+    radial_gradient((100, 750), hex_col(col2, alpha=180), hex_col(col2, alpha=0.0), inner=50, outer=750))
+    .alpha_overlay(
+    bezier(rand_point(), rand_point(), rand_point()).fill(hex_col(col3, alpha=150), hex_col(col3, alpha=0),
+                                                          inflate=0, inner=0, outer=250))
+    .alpha_overlay(film_grain().transparency(10 / 255))
 
-    masked = ctx.mask(blur, layer, mask_layer)
-    overlay = ctx.overlay(glass, masked)
-    overlay = ctx.overlay(overlay_outline, overlay)
-
-    overlay = ctx.to_rgb(overlay)
-    overlay.show()
-    overlay.save("image1.png")
-
-exit(0)
-
-with Context(size) as ctx:
-    scale = 0.65
-    offset_x = 50
-    offset_y = 50
-
-    glyph_sdf = ctx.glyph("M", scale, offset_x, offset_y)
-    glyph_sdf.show()
-
-    layer = ctx.fill(glyph_sdf, hex_col("#e9c46a"), (0.0, 0.0, 0.0, 0.0), 7.5)
-    bg = ctx.fill(glyph_sdf, hex_col("#2C2D35"), hex_col("#2C2D35"), 7.5)
-
-    mask = ctx.fill(glyph_sdf, (0.0, 0.0, 0.0, 1.0), (0.0, 0.0, 0.0, 0.0), 7.5)
-    shadow = ctx._blur_9(mask, 10)
-    with_shadow = ctx.overlay(layer, shadow)
-
-    overlay = ctx.overlay(with_shadow, bg)
-    overlay = ctx.to_rgb(overlay)
-
-    overlay.show()
-    overlay.save("image2.png")
+image.to_rgb().show()
 
 ```
