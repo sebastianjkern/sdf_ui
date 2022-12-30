@@ -277,7 +277,7 @@ class ColorTexture:
         return ColorTexture(tex)
 
 
-class NewSDF:
+class SDFTexture:
     def __init__(self, tex):
         self.tex = tex
 
@@ -308,7 +308,7 @@ class NewSDF:
 
         logger().debug(f"Running {Shaders.SMOOTH_MIN} shader...")
 
-        return NewSDF(tex)
+        return SDFTexture(tex)
 
     def union(self, other):
         self._check_type(other)
@@ -327,7 +327,7 @@ class NewSDF:
 
         logger().debug(f"Running {Shaders.UNION} shader...")
 
-        return NewSDF(tex)
+        return SDFTexture(tex)
 
     def subtract(self, other):
         self._check_type(other)
@@ -346,7 +346,7 @@ class NewSDF:
 
         logger().debug(f"Running {Shaders.SUBTRACT} shader...")
 
-        return NewSDF(tex)
+        return SDFTexture(tex)
 
     def intersection(self, other):
         self._check_type(other)
@@ -365,7 +365,7 @@ class NewSDF:
 
         logger().debug(f"Running {Shaders.INTERSECTION} shader...")
 
-        return NewSDF(tex)
+        return SDFTexture(tex)
 
     # Postprocessing
     def abs(self):
@@ -382,10 +382,10 @@ class NewSDF:
 
         logger().debug(f"Running {Shaders.ABS} shader...")
 
-        return NewSDF(tex)
+        return SDFTexture(tex)
 
     # SDF -> Color Texture
-    def fill(self, fg_color, bg_color, inflate, inner=-1.5, outer=0.0) -> ColorTexture:
+    def fill(self, fg_color, bg_color, inflate=0, inner=-1.5, outer=0.0) -> ColorTexture:
         ctx = get_context()
 
         shader = ctx.get_shader(Shaders.FILL)
@@ -427,9 +427,6 @@ class NewSDF:
 
         return ColorTexture(tex)
 
-    def generate_mask(self, inflate=0.0, color0=(.0, .0, .0, 1.0), color1=(1.0, 1.0, 1.0, 1.0)) -> ColorTexture:
-        return self.fill(color0, color1, inflate)
-
     def outline(self, fg_color, bg_color, inflate=0.0) -> ColorTexture:
         ctx = get_context()
 
@@ -448,6 +445,15 @@ class NewSDF:
         logger().debug(f"Running {Shaders.OUTLINE} shader...")
 
         return ColorTexture(tex)
+
+    # Convenience functions (not necessary, build on top of functions above)
+
+    def generate_mask(self, inflate=0.0, color0=(.0, .0, .0, 1.0), color1=(1.0, 1.0, 1.0, 1.0)) -> ColorTexture:
+        return self.fill(color0, color1, inflate)
+
+    def shadow(self, distance=10, inflate=0, transparency=0.75):
+        return self.generate_mask(inflate=inflate, color1=(0.0, 0.0, 0.0, 0.0)) \
+            .blur(base=9, n=distance).transparency(transparency)
 
 
 # helper stuff
@@ -508,7 +514,7 @@ def _collinear(x1, y1, x2, y2, x3, y3):
 
 
 # Primitives
-def rounded_rect(center, size, corner_radius) -> NewSDF:
+def rounded_rect(center, size, corner_radius) -> SDFTexture:
     ctx = get_context()
 
     shader = ctx.get_shader(Shaders.RECT)
@@ -523,10 +529,10 @@ def rounded_rect(center, size, corner_radius) -> NewSDF:
 
     logger().debug(f"Running {Shaders.RECT} shader...")
 
-    return NewSDF(tex)
+    return SDFTexture(tex)
 
 
-def disc(center, radius) -> NewSDF:
+def disc(center, radius) -> SDFTexture:
     ctx = get_context()
     shader = ctx.get_shader(Shaders.CIRCLE)
     shader["destTex"] = 0
@@ -539,10 +545,10 @@ def disc(center, radius) -> NewSDF:
 
     logger().debug(f"Running {Shaders.CIRCLE} shader...")
 
-    return NewSDF(tex)
+    return SDFTexture(tex)
 
 
-def bezier(a, b, c) -> NewSDF:
+def bezier(a, b, c) -> SDFTexture:
     ctx = get_context()
 
     shader = ctx.get_shader(Shaders.BEZIER)
@@ -557,10 +563,10 @@ def bezier(a, b, c) -> NewSDF:
 
     logger().debug(f"Running {Shaders.BEZIER} shader...")
 
-    return NewSDF(tex)
+    return SDFTexture(tex)
 
 
-def line(a, b) -> NewSDF:
+def line(a, b) -> SDFTexture:
     ctx = get_context()
 
     shader = ctx.get_shader(Shaders.LINE)
@@ -574,10 +580,10 @@ def line(a, b) -> NewSDF:
 
     logger().debug(f"Running {Shaders.LINE} shader...")
 
-    return NewSDF(tex)
+    return SDFTexture(tex)
 
 
-def grid(offset, size) -> NewSDF:
+def grid(offset, size) -> SDFTexture:
     ctx = get_context()
 
     shader = ctx.get_shader(Shaders.GRID)
@@ -591,7 +597,7 @@ def grid(offset, size) -> NewSDF:
 
     logger().debug(f"Running {Shaders.GRID} shader...")
 
-    return NewSDF(tex)
+    return SDFTexture(tex)
 
 
 def glyph_sdf(glyph, scale, ox, oy, path="fonts/SFUIDisplay-Bold.ttf"):
