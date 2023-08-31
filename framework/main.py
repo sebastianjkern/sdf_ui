@@ -289,6 +289,11 @@ class SDFTexture:
         if not type(self) == type(obj):
             raise TypeError(f"{obj} of type {type(obj)} should be {type(self)}")
 
+    def show(self):
+        image = Image.frombytes("RGBA", self.tex.size, self.tex.read(), "raw")
+        image = image.transpose(Image.FLIP_TOP_BOTTOM)
+        image.show()
+
     # Boolean operators
     def smooth_union(self, other, k=0.025):
         self._check_type(other)
@@ -385,7 +390,7 @@ class SDFTexture:
         return SDFTexture(tex)
 
     # SDF -> Color Texture
-    def fill(self, fg_color, bg_color, inflate=0, inner=-1.5, outer=0.0) -> ColorTexture:
+    def fill(self, fg_color, bg_color, inflate=0.0, inner=-1.5, outer=0.0) -> ColorTexture:
         ctx = get_context()
 
         shader = ctx.get_shader(Shaders.FILL)
@@ -467,6 +472,18 @@ def percent_of_min(alpha):
     ctx = get_context()
 
     return alpha / 100 * min(ctx.size)
+
+
+def percent_x(alpha):
+    ctx = get_context()
+
+    return alpha / 100 * ctx.size[0]
+
+
+def percent_y(alpha):
+    ctx = get_context()
+
+    return alpha / 100 * ctx.size[1]
 
 
 def _get_glyph(font_file_path, char):
@@ -605,22 +622,18 @@ def glyph_sdf(glyph, scale, ox, oy, path="fonts/SFUIDisplay-Bold.ttf"):
 
     union_sdf = None
 
-    for x, shape in enumerate(control_points):
-        for y, stroke in enumerate(shape):
-            ax, ay = stroke[0][0] * scale + ox, stroke[0][1] * scale + oy
-            bx, by = stroke[1][0] * scale + ox, stroke[1][1] * scale + oy
-            cx, cy = stroke[2][0] * scale + ox, stroke[2][1] * scale + oy
+    for ix, shape in enumerate(control_points):
+        for iy, stroke in enumerate(shape):
+            a = (stroke[0][0] * scale + ox, stroke[0][1] * scale + oy)
+            b = (stroke[1][0] * scale + ox, stroke[1][1] * scale + oy)
+            c = (stroke[2][0] * scale + ox, stroke[2][1] * scale + oy)
 
-            a = (ax, ay)
-            b = (bx, by)
-            c = (cx, cy)
-
-            if not _collinear(ax, ay, bx, by, cx, cy):
+            if not _collinear(*a, *b, *c):
                 bezier_sdf = bezier(a, b, c)
             else:
                 bezier_sdf = line(a, c)
 
-            if y == 0 and x == 0:
+            if iy == 0 and ix == 0:
                 union_sdf = bezier_sdf
             else:
                 union_sdf = union_sdf.union(bezier_sdf)
@@ -694,6 +707,27 @@ def film_grain() -> ColorTexture:
     logger().debug(f"Running {Shaders.FILM_GRAIN} shader...")
 
     return ColorTexture(tex)
+
+
+def interpolate(tex0: SDFTexture, tex1: SDFTexture, t=0.5) -> SDFTexture:
+    ctx = get_context()
+    tex = ctx.rgba8()
+
+    shader = ctx.get_shader(Shaders.INTERPOLATION)
+    shader['destTex'] = 0
+    shader['sdf0'] = 0
+    shader['sdf1'] = 0
+    shader['t'] = t
+
+    tex.bind_to_image(0, read=False, write=True)
+    tex0.tex.bind_to_image(1, read=True, write=False)
+    tex1.tex.bind_to_image(1, read=True, write=False)
+
+    shader.run(*ctx.local_size)
+
+    logger().debug(f"Running {Shaders.INTERPOLATION} shader...")
+
+    return SDFTexture(tex)
 
 
 if __name__ == '__main__':

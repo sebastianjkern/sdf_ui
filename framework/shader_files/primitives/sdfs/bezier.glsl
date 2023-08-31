@@ -16,7 +16,7 @@ float testCross(vec2 a, vec2 b, vec2 p) {
     return sign((b.y-a.y) * (p.x-a.x) - (b.x-a.x) * (p.y-a.y));
 }
 
-
+// Set all point nearest to endpoint to positive sign
 // Determine which side we're on (using barycentric parameterization)
 float signBezier(vec2 A, vec2 B, vec2 C, vec2 p)
 {
