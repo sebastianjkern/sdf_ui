@@ -1,5 +1,9 @@
 # SDF UI
 
+### Target Specs: 
+Unclear what the target for this library is. Somwhere along the line of a educational library for graphics programming, with some esoteric rendering pipeline, but also high fidelity graphics. Maybe usable for high fidelity graphics of mathematical topics? Maybe as plug in replacement for matplotlib rendering backend?
+
+### Examples:
 ___
 
 <img src="./image1.png" width="500" >
@@ -22,10 +26,11 @@ Freeform Gradient:
 - [ ] Vector Fields
 - [ ] Voronoi sdf (Basically many overlayed circle sdfs)
 - [ ] Text rendering (Stroke rendering of single letters already possible)
+- [ ] Rendering of text with custom sdf font
 - [x] Freeform Gradients (Overlay of Different gradients, possible trough half transparent fills of sdfs)
 - [ ] Ortographic Projection of 3D SDFs
 - [ ] Fill with images (trough moderngl texture api)
-- [ ] YAML based render script
+- [ ] YAML based render script, or node based editor, unsure about the alignment with the target specs
 
 ## Example
 

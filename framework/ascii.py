@@ -1,6 +1,8 @@
 import PIL
 import numpy as np
 
+from PIL import Image
+
 from console import fg, fx, bg
 
 
@@ -135,3 +137,13 @@ def convert_image_to_ascii(image, cols, scale, more_levels, invert, enhance):
 
     for row in ascii_image:
         print(row)
+
+
+def print(texture, colored=True):
+    image = Image.frombytes("RGBA", texture.tex.size, texture.tex.read(), "raw")
+    image = image.transpose(Image.FLIP_TOP_BOTTOM)
+    if not colored:
+        convert_image_to_ascii(image, 150, 0.43, True, True, True)
+    else:
+        convert_image_to_ascii_colored(image, 150, 0.43, more_levels=False, invert=False, enhance=True,
+                                       as_background=True)

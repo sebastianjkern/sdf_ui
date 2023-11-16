@@ -2,12 +2,10 @@ import logging
 import random
 import sys
 import time
+import math
 
-from framework.context import Context
-from framework.log import logger
-from framework.main import set_context, clear_color, radial_gradient, bezier, film_grain, percent_of_min, grid, disc, \
-    linear_gradient, rounded_rect, glyph_sdf
-from framework.util import hex_col
+from framework import Context, set_context, clear_color, logger, radial_gradient, hex_col, bezier, linear_gradient, \
+    grid, rounded_rect, disc, film_grain
 
 size = (1920, 1080)
 
@@ -71,7 +69,7 @@ start = time.time_ns()
 
 backdrop = radial_gradient((size[0] / 2, size[1] / 2), hex_col("#004C81", alpha=255),
                            hex_col("#062A4A", alpha=255), inner=0,
-                           outer=percent_of_min(75)).alpha_overlay(
+                           outer=context.percent_of_min(75)).alpha_overlay(
     grid((10, 10), (50, 50)).fill(hex_col("#5EC6E2", 255), hex_col("#5EC6E2", 0), inflate=.5)) \
     .alpha_overlay(grid((10, 10), (150, 150)).fill(hex_col("#5EC6E2", 255), hex_col("#5EC6E2", 0), inflate=1.5))
 
@@ -81,7 +79,8 @@ blur = backdrop.blur(n=15, base=13)
 
 mask_sdf = rounded_rect((int(size[0] / 2), int(size[1] / 2)),
                         (int(size[1] / 3), int(size[1] / 3)),
-                        (percent_of_min(10), percent_of_min(10), percent_of_min(10), percent_of_min(10)))
+                        (context.percent_of_min(10), context.percent_of_min(10), context.percent_of_min(10),
+                         context.percent_of_min(10)))
 
 mask = mask_sdf.generate_mask()
 outline = mask_sdf.outline((1.0, 1.0, 1.0, .25), (1.0, 1.0, 1.0, 0.0), inflate=-1.5)
@@ -153,7 +152,9 @@ images = []
 for i in range(1000):
     name_of_frame = f"out/anim/{str(i).zfill(5)}.png"
 
-    disc2 = disc((percent_x(35) + percent_x(25 * math.sin(i / (math.pi * 2 * 15))), percent_y(50)), percent_of_min(15))
+    disc2 = disc(
+        (context.percent_x(35) + context.percent_x(25 * math.sin(i / (math.pi * 2 * 15))), context.percent_y(50)),
+        context.percent_of_min(15))
 
     col = hex_col("#62bb47")[:3]
     col1 = (*col, 1.0)

@@ -1,8 +1,9 @@
-import os
-
+# Rudimentary video export support. 
+# images need to be exported beforehand, 
+# and are combined using the function down below
 import cv2
 
-from framework.log import logger
+from framework.core.log import logger
 
 
 def convert_to_video(name, image_paths):
@@ -17,4 +18,3 @@ def convert_to_video(name, image_paths):
     cv2.destroyAllWindows()
     video.release()
     logger().info("Finished writing video")
-
