@@ -256,9 +256,15 @@ class SDFTexture:
             raise TypeError(f"{obj} of type {type(obj)} should be {type(self)}")
 
     def show(self):
-        image = Image.frombytes("RGBA", self.tex.size, self.tex.read(), "raw")
+        image = Image.frombytes("F", self.tex.size, self.tex.read(), "raw")
         image = image.transpose(Image.FLIP_TOP_BOTTOM)
         image.show()
+
+    def save(self, name="./image.png"):
+        image = Image.frombytes("F", self.tex.size, self.tex.read(), "raw")
+        image = image.transpose(Image.FLIP_TOP_BOTTOM)
+        image = image.convert("L")
+        image.save(name)
 
     # Boolean operators
     def smooth_union(self, other, k=0.025):

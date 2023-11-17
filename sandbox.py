@@ -5,7 +5,7 @@ import time
 import math
 
 from framework import Context, set_context, clear_color, logger, radial_gradient, hex_col, bezier, linear_gradient, \
-    grid, rounded_rect, disc, film_grain
+    grid, rounded_rect, disc, film_grain, glyph_sdf
 
 size = (1920, 1080)
 
@@ -39,28 +39,8 @@ context = Context(size)
 set_context(context)
 
 # Example 1
-col0 = random.choice(COLORS)
-col1 = random.choice(COLORS)
-col2 = random.choice(COLORS)
-col3 = random.choice(COLORS)
 
-image = clear_color(hex_col(random.choice(COLORS))) \
-    .alpha_overlay(
-    radial_gradient((100, 100), hex_col(col0, alpha=150), hex_col(col0, alpha=0.0), inner=50, outer=750)) \
-    .alpha_overlay(
-    radial_gradient((750, 500), hex_col(col1, alpha=255), hex_col(col1, alpha=0.0), inner=50, outer=750)) \
-    .alpha_overlay(
-    radial_gradient((100, 750), hex_col(col2, alpha=180), hex_col(col2, alpha=0.0), inner=50, outer=750)) \
-    .alpha_overlay(
-    bezier(rand_point(), rand_point(), rand_point()).fill(hex_col(col3, alpha=150), hex_col(col3, alpha=0),
-                                                          inflate=0, inner=0, outer=250)) \
-    .alpha_overlay(film_grain().transparency(10 / 255))
-
-del image
-
-# Example 2
-
-size = (1080, 1080)
+size = (1920, 1080)
 
 context = Context(size)
 set_context(context)
@@ -115,9 +95,7 @@ for index in range(10):
     print((end - start) / 1e9)
     start = end
 
-sys.exit()
-
-# Example 3
+# Example 2
 context = Context((1080, 1080))
 set_context(context)
 
@@ -129,13 +107,17 @@ inflation = 7.5
 
 sdf = glyph_sdf("i", scale, offset_x, offset_y, path="fonts/SFUIDisplay-Bold.ttf")
 
+sdf.save()
+
 bg = clear_color(hex_col("#2C2D35"))
 shadow = sdf.shadow(distance=10, inflate=inflation, transparency=1.0)
 colored_glyph = sdf.fill(hex_col("#e9c46a"), (0.0, 0.0, 0.0, 0.0), inflation)
 
 bg.alpha_overlay(shadow).alpha_overlay(colored_glyph).to_rgb().show()
 
-# Example 4
+sys.exit()
+
+# Example 3
 
 # Animation example
 #
