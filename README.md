@@ -1,5 +1,11 @@
 # SDF UI
 
+What started [here](https://github.com/sebastianjkern/metaballs), has become a not yet fully featured but relatively complex 2d graphics rendering engine with gpu support.
+
+SDF UI is the result of the experiment if you can extend the idea of MSDF text rendering and SDF based circle rendering to all standard 2D rendering stuff. Why don't draw rectangles, bezier curves, lines etc. with SDFs aswell. While in theory this is quiet slow, it offers great features like morphing between figures pretty much out of the box. And the determining factor of rendering cost is the size of the canvas and not the complexity of the object. For example the grid in the picture down below has pretty much the same cost as the rounded rectangle. And pretty much everything can be drawn with antialiasing without additional cost. And depending on what you're drawing, the rendered textures can be used again. 
+
+Many SDFs used by this project were originally created by [Inigo Quilez](https://iquilezles.org/articles/distfunctions2d/).
+
 ### Target Specs: 
 Unclear what the target for this library is. Somwhere along the line of a educational library for graphics programming, with some esoteric rendering pipeline, but also high fidelity graphics. Maybe usable for high fidelity graphics of mathematical topics? Maybe as plug in replacement for matplotlib rendering backend?
 
@@ -31,68 +37,3 @@ Freeform Gradient:
 - [ ] Ortographic Projection of 3D SDFs
 - [ ] Fill with images (trough moderngl texture api)
 - [ ] YAML based render script, or node based editor, unsure about the alignment with the target specs
-
-## Example
-
-```python
-import logging
-import random
-
-from framework.context import Context
-from framework.log import logger
-from framework.main import set_context, clear_color, radial_gradient, bezier, film_grain, percent_of_min, grid, disc,
-    linear_gradient, rounded_rect, glyph_sdf
-from framework.util import hex_col
-
-size = (1920, 1080)
-
-logger().setLevel(logging.INFO)
-
-
-def rand_color():
-    red = random.randint(0, 255) / 255
-    green = random.randint(0, 255) / 255
-    blue = random.randint(0, 255) / 255
-    return red, green, blue
-
-
-def rand_point():
-    x = random.randint(0, size[0])
-    y = random.randint(0, size[1])
-
-    return x, y
-
-
-COLORS = [
-    "#62bb47",
-    "#fcb827",
-    "#f6821f",
-    "#e03a3c",
-    "#963d97",
-    "#009ddc"
-]
-
-context = Context(size)
-set_context(context)
-
-# Example 1
-col0 = random.choice(COLORS)
-col1 = random.choice(COLORS)
-col2 = random.choice(COLORS)
-col3 = random.choice(COLORS)
-
-image = clear_color(hex_col(random.choice(COLORS)))
-    .alpha_overlay(
-    radial_gradient((100, 100), hex_col(col0, alpha=150), hex_col(col0, alpha=0.0), inner=50, outer=750))
-    .alpha_overlay(
-    radial_gradient((750, 500), hex_col(col1, alpha=255), hex_col(col1, alpha=0.0), inner=50, outer=750))
-    .alpha_overlay(
-    radial_gradient((100, 750), hex_col(col2, alpha=180), hex_col(col2, alpha=0.0), inner=50, outer=750))
-    .alpha_overlay(
-    bezier(rand_point(), rand_point(), rand_point()).fill(hex_col(col3, alpha=150), hex_col(col3, alpha=0),
-                                                          inflate=0, inner=0, outer=250))
-    .alpha_overlay(film_grain().transparency(10 / 255))
-
-image.to_rgb().show()
-
-```
