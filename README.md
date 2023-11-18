@@ -9,6 +9,10 @@ Many SDFs used by this project were originally created by [Inigo Quilez](https:/
 ### Target Specs: 
 Unclear what the target for this library is. Somwhere along the line of a educational library for graphics programming, with some esoteric rendering pipeline, but also high fidelity graphics. Maybe usable for high fidelity graphics of mathematical topics? Maybe as plug in replacement for matplotlib rendering backend?
 
+### How it works:
+
+<img src="./sdf_ui_diagram.png" width="500">
+
 ### Examples:
 ___
 
