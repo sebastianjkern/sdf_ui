@@ -6,6 +6,10 @@ SDF UI is the result of the experiment if you can extend the idea of MSDF text r
 
 Many SDFs used by this project were originally created by [Inigo Quilez](https://iquilezles.org/articles/distfunctions2d/).
 
+### Use Case:
+
+None, absolutely none...
+
 ### Target Specs: 
 Unclear what the target for this library is. Somwhere along the line of a educational library for graphics programming, with some esoteric rendering pipeline, but also high fidelity graphics. Maybe usable for high fidelity graphics of mathematical topics? Maybe as plug in replacement for matplotlib rendering backend?
 
@@ -16,22 +20,29 @@ Unclear what the target for this library is. Somwhere along the line of a educat
 ### Examples:
 ___
 
-<img src="./image1.png" width="500" >
+<table>
+    <tr>
+        <th></th>    
+        <th>Text Letter Rendering</th>
+        <th>Print Images to console</th>
+        <th>Freeform Gradient</th>
+    </tr>
+    <tr>
+        <td><img src="./image1.png" width="150"></td>
+        <td><img src="./image2.png" width="150"></td>
+        <td><img src="./console.png" width="150"></td>
+        <td><img src="./image3.png" width="150"></td>
+    </tr>
+</table>
 
-Text/Letter rendering:
+### Performance Improvements
 
-<img src="./image2.png" width="500" >
+- [ ] Subframe rendering (Smaller feature set but far better performance in most tasks)
+- [ ] Changing Local Size can (in theory) improve performance
 
-Print images to console:
+### Ideas for further development
 
-<img src="./console.png" width="500" > 
-
-Freeform Gradient:
-
-<img src="./image3.png" width="500" >
-
-## Ideas for further development
-
+- [ ] Black and white to sdf conversion using go
 - [ ] Native Support for animation
 - [ ] Vector Fields
 - [ ] Voronoi sdf (Basically many overlayed circle sdfs)
