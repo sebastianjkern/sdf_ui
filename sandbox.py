@@ -2,14 +2,13 @@ import logging
 import random
 import sys
 import time
-import math
 
-from framework import Context, set_context, clear_color, logger, radial_gradient, hex_col, bezier, linear_gradient, \
+from framework import Context, set_context, clear_color, logger, radial_gradient, hex_col, linear_gradient, \
     grid, rounded_rect, disc, film_grain, glyph_sdf
 
 size = (1920, 1080)
 
-logger().setLevel(logging.INFO)
+logger().setLevel(logging.DEBUG)
 
 
 def rand_color():
@@ -55,7 +54,7 @@ backdrop = radial_gradient((size[0] / 2, size[1] / 2), hex_col("#004C81", alpha=
 
 gradient = linear_gradient((100, 100), (900, 100), (*rand_color(), 1.0), (*rand_color(), 1.0)).transparency(0.45)
 
-blur = backdrop.blur(n=15, base=13)
+blur = backdrop.blur(n=1, base=13)
 
 mask_sdf = rounded_rect((int(size[0] / 2), int(size[1] / 2)),
                         (int(size[1] / 3), int(size[1] / 3)),
@@ -72,8 +71,14 @@ glass_shadow = mask_sdf.shadow(25, 0, 0.75)
 
 mask_sdf.fill_from_texture(gradient)
 
+end = time.time_ns()
+print(f"Start up stuff took: {(end - start) / 1e9}s")
+start = end
+
+times = []
+
 for index in range(10):
-    for i in range(index + 1):
+    for i in range(10):
         x, y = random.randint(50, size[0] - 50), random.randint(50, size[1] - 50)
         r = random.randint(50, 100)
 
@@ -89,11 +94,18 @@ for index in range(10):
     image = backdrop1.alpha_overlay(glass_shadow).mask(blur, mask).alpha_overlay(glass).alpha_overlay(
         outline).alpha_overlay(film_grain().to_lab().transparency(5 / 255)).to_rgb()
 
-    image.save(f"{str(index).zfill(3)}_img.png")
+    image = image.dithering()
 
     end = time.time_ns()
-    print((end - start) / 1e9)
+    # image.save(f"{str(index).zfill(3)}_img.png")
+    times.append((end - start) / 1e9)
+    # print(f"Frame took: {(end - start) / 1e9}s")
     start = end
+
+
+print(f"Average frame time is {sum(times)/len(times)}s")
+
+sys.exit()
 
 # Example 2
 context = Context((1080, 1080))

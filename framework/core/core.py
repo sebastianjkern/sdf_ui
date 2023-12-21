@@ -5,7 +5,6 @@ from PIL import Image
 from framework.core.context import get_context, Shaders, decrease_tex_registry
 from framework.core.log import logger
 
-
 class ColorTexture:
     def __init__(self, tex):
         self.tex = tex

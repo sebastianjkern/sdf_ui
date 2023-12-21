@@ -2,3 +2,13 @@
 .vs/
 out/
 example_images/
+/scratch/
+/sandbox/
+/fonts/
+/editor/
+*.ttf
+*.otf
+*.png
+
+framework/__pycache__/
+framework/core/__pycache__/

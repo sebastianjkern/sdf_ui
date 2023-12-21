@@ -2,6 +2,10 @@ from pathlib import Path
 
 import moderngl as mgl
 
+import cv2
+
+import numpy as np
+
 from framework.core.log import logger
 
 
@@ -46,16 +50,56 @@ class Shaders:
     TRANSPARENCY = "transparency"
 
 
+class Counter:
+    def __init__(self, value, name="TEX_REGISTRY") -> None:
+        self.value = value
+        self.name = name
+
+        self.max = 0
+
+    def __del__(self):
+        logger().debug(f"Maximum of {self.name} is {self.max}")
+
+    def __add__(self, other):
+        if type(other) != int:
+            logger().critical("TypeError")
+
+        self.value += other
+
+        self.max = max(self.max, self.value)
+
+        logger().debug(f"Value of {self.name} is {self.value}")
+
+        return self
+
+    def __sub__(self, other):
+        if type(other) != int:
+            logger().critical("TypeError")
+
+        self.value -= other
+        
+        logger().debug(f"Value of {self.name} is {self.value}")
+
+        return self
+
+    def __int__(self):
+        return self.value
+
+    def __str__(self) -> str:
+        return str(self.value)
+
+
 class ShaderFileDescriptor:
     def __init__(self, name, path):
         self.name = name
         self.path = path
 
 
-tex_registry = 0
+tex_registry = Counter(0)
 
 
 def decrease_tex_registry():
+    logger().debug("Deleted texture...")
     global tex_registry
     tex_registry -= 1
 
@@ -128,6 +172,12 @@ class Context:
     def __exit__(self, exc_type, exc_val, exc_tb):
         pass
 
+    def texture_from_image(self, path):
+        img = cv2.imread("test6.png")
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB) # optional
+        img = np.flip(img, 0).copy(order='C')      # optional
+        return self._mgl_ctx.texture(img.shape[1::-1], img.shape[2], img)
+
     def get_shader(self, shader: str):
         if shader not in self._shader_cache.keys():
             path = Path(__file__).parent / self._shader_lut[shader]
@@ -153,6 +203,7 @@ class Context:
 
     # Generate textures
     def r32f(self):
+        logger().info("Created r32f texture...")
         tex = self._mgl_ctx.texture(self.size, 1, dtype='f4')
         tex.filter = mgl.LINEAR, mgl.LINEAR
 
@@ -162,6 +213,7 @@ class Context:
         return tex
 
     def rgba8(self):
+        logger().info("Created rgba8 texture...")
         tex = self._mgl_ctx.texture(self.size, 4)
         tex.filter = mgl.LINEAR, mgl.LINEAR
 
