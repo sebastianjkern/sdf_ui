@@ -22,7 +22,7 @@ ___
 
 <table>
     <tr>
-        <th></th>    
+        <th>Transparency</th>    
         <th>Text Letter Rendering</th>
         <th>Print Images to console</th>
         <th>Freeform Gradient</th>
@@ -32,6 +32,18 @@ ___
         <td><img src="./image2.png" width="150"></td>
         <td><img src="./console.png" width="150"></td>
         <td><img src="./image3.png" width="150"></td>
+    </tr>
+    <tr>
+        <th>BW Voronoi Texture</th>    
+        <th></th>
+        <th></th>
+        <th></th>
+    </tr>
+    <tr>
+        <td><img src="./voronoi.png" width="150"></td>
+        <td></td>
+        <td></td>
+        <td></td>
     </tr>
 </table>
 
