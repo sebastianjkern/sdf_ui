@@ -1,14 +1,7 @@
 import logging
-
-import sys
-
-import random
-
 import math
 
-from functools import reduce
-
-from framework import disc, Context, logger, rounded_rect
+from framework import Context, logger, rounded_rect
 
 logger().setLevel(logging.INFO)
 

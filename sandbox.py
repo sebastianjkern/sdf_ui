@@ -8,7 +8,7 @@ from framework import Context, set_context, clear_color, logger, radial_gradient
 
 size = (1920, 1080)
 
-logger().setLevel(logging.DEBUG)
+logger().setLevel(logging.CRITICAL)
 
 
 def rand_color():
@@ -77,7 +77,7 @@ start = end
 
 times = []
 
-for index in range(10):
+for index in range(5):
     for i in range(10):
         x, y = random.randint(50, size[0] - 50), random.randint(50, size[1] - 50)
         r = random.randint(50, 100)
@@ -97,11 +97,10 @@ for index in range(10):
     image = image.dithering()
 
     end = time.time_ns()
-    # image.save(f"{str(index).zfill(3)}_img.png")
+    image.save(f"{str(index).zfill(3)}_img.png")
     times.append((end - start) / 1e9)
     # print(f"Frame took: {(end - start) / 1e9}s")
     start = end
-
 
 print(f"Average frame time is {sum(times)/len(times)}s")
 
