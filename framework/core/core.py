@@ -204,6 +204,28 @@ class ColorTexture:
         logger().debug(f"Running {Shaders.LAYER_MASK} shader...")
 
         return ColorTexture(tex)
+    
+    def multiply(self, other):
+        self._check_type(other)
+
+        ctx = get_context()
+
+        shader = ctx.get_shader(Shaders.MULTIPLY)
+        shader['destTex'] = 0
+        shader['mask1'] = 1
+        shader['mask2'] = 2
+
+        tex = ctx.rgba8()
+        tex.bind_to_image(0, read=False, write=True)
+
+        self.tex.bind_to_image(1, read=True, write=False)
+        other.tex.bind_to_image(2, read=True, write=False)
+
+        shader.run(*ctx.local_size)
+
+        logger().debug(f"Running {Shaders.MULTIPLY} shader...")
+
+        return ColorTexture(tex)
 
     def alpha_overlay(self, other):
         self._check_type(other)
@@ -239,6 +261,22 @@ class ColorTexture:
         shader.run(*ctx.local_size)
 
         logger().debug(f"Running {Shaders.TRANSPARENCY} shader...")
+
+        return ColorTexture(tex)
+    
+    def invert(self):
+        ctx = get_context()
+
+        shader = ctx.get_shader(Shaders.INVERT)
+        shader["destTex"] = 0
+        shader["origTex"] = 1
+
+        tex = ctx.rgba8()
+        tex.bind_to_image(0, read=False, write=True)
+        self.tex.bind_to_image(1, read=False, write=True)
+        shader.run(*ctx.local_size)
+
+        logger().debug(f"Running {Shaders.INVERT} shader...")
 
         return ColorTexture(tex)
 

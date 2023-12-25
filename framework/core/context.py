@@ -36,6 +36,7 @@ class Shaders:
     TO_RGB = "to_rgb"
     DITHERING = "dithering"
     DITHER_1BIT = "dither_1bit"
+    INVERT = "invert"
 
     # Shading
     FILL = "fill"
@@ -49,6 +50,7 @@ class Shaders:
     LAYER_MASK = "layer_mask"
     OVERLAY = "overlay"
     TRANSPARENCY = "transparency"
+    MULTIPLY = "multiply"
 
 
 class Counter:
@@ -144,6 +146,7 @@ class Context:
             ShaderFileDescriptor(Shaders.TO_RGB, "shader_files/postprocessing/to_rgb.glsl"),
             ShaderFileDescriptor(Shaders.DITHERING, "shader_files/postprocessing/dithering.glsl"),
             ShaderFileDescriptor(Shaders.DITHER_1BIT, "shader_files/postprocessing/dither_1bit.glsl"),
+            ShaderFileDescriptor(Shaders.INVERT, "shader_files/postprocessing/invert.glsl"),
 
             # Shading
             ShaderFileDescriptor(Shaders.FILL, "shader_files/shading/fill.glsl"),
@@ -156,7 +159,8 @@ class Context:
             # Layer
             ShaderFileDescriptor(Shaders.LAYER_MASK, "shader_files/layer/layer_mask.glsl"),
             ShaderFileDescriptor(Shaders.OVERLAY, "shader_files/layer/overlay.glsl"),
-            ShaderFileDescriptor(Shaders.TRANSPARENCY, "shader_files/layer/transparency.glsl")
+            ShaderFileDescriptor(Shaders.TRANSPARENCY, "shader_files/layer/transparency.glsl"),
+            ShaderFileDescriptor(Shaders.MULTIPLY, "shader_files/layer/multiply.glsl")
         ]
 
         for s in self.shader:
