@@ -1,13 +1,14 @@
 import math
 
 from PIL import Image
+from moderngl import Texture
 
 from framework.core.context import get_context, Shaders, decrease_tex_registry
 from framework.core.log import logger
 
 class ColorTexture:
     def __init__(self, tex):
-        self.tex = tex
+        self.tex: Texture = tex
 
     def __del__(self):
         self.tex.release()
@@ -244,7 +245,7 @@ class ColorTexture:
 
 class SDFTexture:
     def __init__(self, tex):
-        self.tex = tex
+        self.tex: Texture = tex
 
     def __del__(self):
         self.tex.release()
@@ -304,6 +305,31 @@ class SDFTexture:
         logger().debug(f"Running {Shaders.UNION} shader...")
 
         return SDFTexture(tex)
+    
+    def masked_union(self, other):
+        self._check_type(other)
+        ctx = get_context()
+
+        shader = ctx.get_shader(Shaders.MASKED_UNION)
+        shader['destTex'] = 0
+        shader['maskTex'] = 1
+        shader['sdf0'] = 2
+        shader['sdf1'] = 3
+
+        tex = ctx.r32f()
+        tex.bind_to_image(0, read=False, write=True)
+
+        mask = ctx.rgba8()
+        mask.bind_to_image(1, read=False, write=True)
+
+        self.tex.bind_to_image(2, read=True, write=False)
+        other.tex.bind_to_image(3, read=True, write=False)
+
+        shader.run(*ctx.local_size)
+
+        logger().debug(f"Running {Shaders.MASKED_UNION} shader...")
+
+        return SDFTexture(tex), ColorTexture(mask)
 
     def subtract(self, other):
         self._check_type(other)

@@ -22,6 +22,7 @@ class Shaders:
     INTERSECTION = "intersection"
     INTERPOLATION = "interpolation"
     SUBTRACT = "subtract"
+    MASKED_UNION = "masked_union"
 
     # SDF Transform
     ABS = "abs"
@@ -129,6 +130,7 @@ class Context:
             ShaderFileDescriptor(Shaders.INTERSECTION, "shader_files/primitives/booleans/intersection.glsl"),
             ShaderFileDescriptor(Shaders.INTERPOLATION, "shader_files/primitives/booleans/interpolate.glsl"),
             ShaderFileDescriptor(Shaders.SUBTRACT, "shader_files/primitives/booleans/subtract.glsl"),
+            ShaderFileDescriptor(Shaders.MASKED_UNION, "shader_files/primitives/booleans/masked_union.glsl"),
 
             # SDF Transform
             ShaderFileDescriptor(Shaders.ABS, "shader_files/primitives/transforms/abs.glsl"),
