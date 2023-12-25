@@ -518,7 +518,7 @@ def interpolate(tex0: SDFTexture, tex1: SDFTexture, t=0.5) -> SDFTexture:
 
 
 # Primitives
-def rounded_rect(center, size, corner_radius) -> SDFTexture:
+def rounded_rect(center, size, corner_radius, angle=0/360*math.pi) -> SDFTexture:
     ctx = get_context()
 
     shader = ctx.get_shader(Shaders.RECT)
@@ -526,6 +526,7 @@ def rounded_rect(center, size, corner_radius) -> SDFTexture:
     shader['offset'] = center
     shader['size'] = size
     shader['corner_radius'] = corner_radius
+    shader['angle'] = angle
 
     tex = ctx.r32f()
     tex.bind_to_image(0, read=False, write=True)
@@ -587,13 +588,14 @@ def line(a, b) -> SDFTexture:
     return SDFTexture(tex)
 
 
-def grid(offset, size) -> SDFTexture:
+def grid(offset, size, angle=0/360*math.pi) -> SDFTexture:
     ctx = get_context()
 
     shader = ctx.get_shader(Shaders.GRID)
     shader['destTex'] = 0
     shader['grid_size'] = size
     shader['offset'] = offset
+    shader['angle'] = angle
 
     tex = ctx.r32f()
     tex.bind_to_image(0, read=False, write=True)
