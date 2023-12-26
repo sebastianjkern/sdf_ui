@@ -11,7 +11,6 @@ size = (1920, 1080)
 
 logger().setLevel(logging.INFO)
 
-
 def rand_color():
     red = random.randint(0, 255) / 255
     green = random.randint(0, 255) / 255
@@ -35,12 +34,20 @@ COLORS = [
     "#009ddc"
 ]
 
-context = Context(size)
-set_context(context)
+# Example for rendering complex shapes using sdfs
+with Context((500, 500)):
+    d1 = disc((175, 250), 80)
+    d2 = disc((325, 250), 80)
+    union = d1.smooth_union(d2)
+    c0 = union.outline(hex_col(COLORS[0]), (0.0, 0.0, 0.0, 0.0), -50)
+    c1 = union.outline(hex_col(COLORS[0]), (0.0, 0.0, 0.0, 0.0), 0)
+    c2 = union.outline(hex_col(COLORS[0]), (0.0, 0.0, 0.0, 0.0), 50)
+    c = c0.alpha_overlay(c1).alpha_overlay(c2)
+    c.to_rgb().show()
 
 # Example 1
 
-size = (1920, 1080)
+size = (1280, 720)
 
 context = Context(size)
 set_context(context)
@@ -72,8 +79,15 @@ glass_shadow = mask_sdf.shadow(25, 0, 0.75)
 
 mask_sdf.fill_from_texture(gradient)
 
-for index in range(10):
-    for i in range(index + 1):
+end = time.time_ns()
+print(f"Startup stuff takes: {(end - start) / 1e9}s")
+
+times = []
+
+for index in range(100):
+    start = time.time_ns()
+
+    for i in range(1):
         x, y = random.randint(50, size[0] - 50), random.randint(50, size[1] - 50)
         r = random.randint(50, 100)
 
@@ -89,11 +103,17 @@ for index in range(10):
     image = backdrop1.alpha_overlay(glass_shadow).mask(blur, mask).alpha_overlay(glass).alpha_overlay(
         outline).alpha_overlay(film_grain().to_lab().transparency(5 / 255)).to_rgb()
 
-    image.save(f"{str(index).zfill(3)}_img.png")
+    dither = image.dithering()
 
     end = time.time_ns()
-    print((end - start) / 1e9)
-    start = end
+    print(f"Frame takes: {(end - start) / 1e9}s")
+    times.append((end - start) / 1e9)
+
+    # dither.save(f"{str(index).zfill(3)}_img.png")
+
+print(sum(times) / len(times))
+
+sys.exit()
 
 # Example 2
 context = Context((1080, 1080))
@@ -105,7 +125,7 @@ offset_y = 25
 
 inflation = 7.5
 
-sdf = glyph_sdf("i", scale, offset_x, offset_y, path="fonts/SFUIDisplay-Bold.ttf")
+sdf = glyph_sdf("i", scale, offset_x, offset_y, path="fonts/georgia_regular.ttf")
 
 sdf.save()
 
@@ -127,7 +147,7 @@ set_context(context)
 
 background = clear_color((1.0, 1.0, 1.0, 1.0))
 
-disc1 = disc((percent_x(10), percent_y(50)), percent_of_min(35))
+disc1 = disc((context.percent_x(10), context.percent_y(50)), context.percent_of_min(35))
 
 images = []
 
