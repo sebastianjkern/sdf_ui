@@ -19,3 +19,4 @@ data = np.array([0.0, 1.0, 2.0])
 print("Python says", data)
 
 numpy2go.Test(data, len(data))
+numpy2go.PrintHelloWorld()

@@ -21,7 +21,12 @@ func Test(data *C.double, length C.int) {
 	}
 	slice := *(*[]float64)(unsafe.Pointer(&header))
 	fmt.Printf("Go says %v\n", slice)
+	PrintHelloWorld()
+}
 
+//export PrintHelloWorld
+func PrintHelloWorld() {
+	println("Hello World!")
 }
 
 func main() {}
