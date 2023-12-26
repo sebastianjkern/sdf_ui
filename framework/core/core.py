@@ -118,6 +118,9 @@ class ColorTexture:
 
         return temp.to_lab()
 
+    # Basically the whole color processing stage is performed 
+    # in LAB Color Space, because of the superior color
+    # interpolation capabilities of LAB in comparison to RGB
     def to_lab(self):
         ctx = get_context()
 
@@ -150,6 +153,7 @@ class ColorTexture:
 
         return ColorTexture(tex)
 
+    # Some fun with image processing stuff
     def dithering(self):
         ctx = get_context()
 
@@ -166,6 +170,7 @@ class ColorTexture:
 
         return ColorTexture(tex)
 
+    # Black white dithering
     def dither_1bit(self):
         ctx = get_context()
 
