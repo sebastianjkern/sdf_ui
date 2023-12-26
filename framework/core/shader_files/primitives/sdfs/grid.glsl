@@ -7,6 +7,15 @@ layout (r32f, location = 0) writeonly uniform image2D destTex;
 uniform vec2 grid_size;
 uniform vec2 offset;
 
+uniform float angle;
+
+mat2 rotation() {
+    return mat2(
+        cos(angle), -sin(angle),
+        sin(angle), cos(angle)
+    );
+}
+
 float sdf_grid(vec2 uv) {
     return min(abs(mod(uv.x - offset.x, grid_size.x) - grid_size.x / 2), abs(mod(uv.y - offset.y, grid_size.y) - grid_size.y / 2));
 }
@@ -14,7 +23,7 @@ float sdf_grid(vec2 uv) {
 void main() {
     ivec2 texelPos = ivec2(gl_GlobalInvocationID.xy);
 
-    float distance = sdf_grid(texelPos);
+    float distance = sdf_grid(texelPos * rotation());
 
     imageStore(destTex, texelPos, vec4(distance, .0, .0, .0));
 }

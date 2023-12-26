@@ -2,6 +2,10 @@ from pathlib import Path
 
 import moderngl as mgl
 
+import cv2
+
+import numpy as np
+
 from framework.core.log import logger
 
 
@@ -18,6 +22,7 @@ class Shaders:
     INTERSECTION = "intersection"
     INTERPOLATION = "interpolation"
     SUBTRACT = "subtract"
+    MASKED_UNION = "masked_union"
 
     # SDF Transform
     ABS = "abs"
@@ -31,6 +36,7 @@ class Shaders:
     TO_RGB = "to_rgb"
     DITHERING = "dithering"
     DITHER_1BIT = "dither_1bit"
+    INVERT = "invert"
 
     # Shading
     FILL = "fill"
@@ -44,6 +50,46 @@ class Shaders:
     LAYER_MASK = "layer_mask"
     OVERLAY = "overlay"
     TRANSPARENCY = "transparency"
+    MULTIPLY = "multiply"
+
+
+class Counter:
+    def __init__(self, value, name="TEX_REGISTRY") -> None:
+        self.value = value
+        self.name = name
+
+        self.max = 0
+
+    def __del__(self):
+        logger().debug(f"Maximum of {self.name} is {self.max}")
+
+    def __add__(self, other):
+        if type(other) != int:
+            logger().critical("TypeError")
+
+        self.value += other
+
+        self.max = max(self.max, self.value)
+
+        logger().debug(f"Value of {self.name} is {self.value}")
+
+        return self
+
+    def __sub__(self, other):
+        if type(other) != int:
+            logger().critical("TypeError")
+
+        self.value -= other
+        
+        logger().debug(f"Value of {self.name} is {self.value}")
+
+        return self
+
+    def __int__(self):
+        return self.value
+
+    def __str__(self) -> str:
+        return str(self.value)
 
 
 class ShaderFileDescriptor:
@@ -52,10 +98,11 @@ class ShaderFileDescriptor:
         self.path = path
 
 
-tex_registry = 0
+tex_registry = Counter(0)
 
 
 def decrease_tex_registry():
+    logger().debug("Deleted texture...")
     global tex_registry
     tex_registry -= 1
 
@@ -85,6 +132,7 @@ class Context:
             ShaderFileDescriptor(Shaders.INTERSECTION, "shader_files/primitives/booleans/intersection.glsl"),
             ShaderFileDescriptor(Shaders.INTERPOLATION, "shader_files/primitives/booleans/interpolate.glsl"),
             ShaderFileDescriptor(Shaders.SUBTRACT, "shader_files/primitives/booleans/subtract.glsl"),
+            ShaderFileDescriptor(Shaders.MASKED_UNION, "shader_files/primitives/booleans/masked_union.glsl"),
 
             # SDF Transform
             ShaderFileDescriptor(Shaders.ABS, "shader_files/primitives/transforms/abs.glsl"),
@@ -98,6 +146,7 @@ class Context:
             ShaderFileDescriptor(Shaders.TO_RGB, "shader_files/postprocessing/to_rgb.glsl"),
             ShaderFileDescriptor(Shaders.DITHERING, "shader_files/postprocessing/dithering.glsl"),
             ShaderFileDescriptor(Shaders.DITHER_1BIT, "shader_files/postprocessing/dither_1bit.glsl"),
+            ShaderFileDescriptor(Shaders.INVERT, "shader_files/postprocessing/invert.glsl"),
 
             # Shading
             ShaderFileDescriptor(Shaders.FILL, "shader_files/shading/fill.glsl"),
@@ -110,7 +159,8 @@ class Context:
             # Layer
             ShaderFileDescriptor(Shaders.LAYER_MASK, "shader_files/layer/layer_mask.glsl"),
             ShaderFileDescriptor(Shaders.OVERLAY, "shader_files/layer/overlay.glsl"),
-            ShaderFileDescriptor(Shaders.TRANSPARENCY, "shader_files/layer/transparency.glsl")
+            ShaderFileDescriptor(Shaders.TRANSPARENCY, "shader_files/layer/transparency.glsl"),
+            ShaderFileDescriptor(Shaders.MULTIPLY, "shader_files/layer/multiply.glsl")
         ]
 
         for s in self.shader:
@@ -128,6 +178,12 @@ class Context:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         pass
+
+    def texture_from_image(self, path):
+        img = cv2.imread("test6.png")
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB) # optional
+        img = np.flip(img, 0).copy(order='C')      # optional
+        return self._mgl_ctx.texture(img.shape[1::-1], img.shape[2], img)
 
     def get_shader(self, shader: str):
         if shader not in self._shader_cache.keys():
@@ -154,6 +210,7 @@ class Context:
 
     # Generate textures
     def r32f(self):
+        logger().info("Created r32f texture...")
         tex = self._mgl_ctx.texture(self.size, 1, dtype='f4')
         tex.filter = mgl.LINEAR, mgl.LINEAR
 
@@ -163,6 +220,7 @@ class Context:
         return tex
 
     def rgba8(self):
+        logger().info("Created rgba8 texture...")
         tex = self._mgl_ctx.texture(self.size, 4)
         tex.filter = mgl.LINEAR, mgl.LINEAR
 

@@ -8,6 +8,14 @@ layout (r32f, location = 0) writeonly uniform image2D destTex;
 uniform vec2 size;
 uniform vec2 offset;
 uniform vec4 corner_radius;
+uniform float angle;
+
+mat2 rotation() {
+    return mat2(
+        cos(angle), -sin(angle),
+        sin(angle), cos(angle)
+    );
+}
 
 float sdf_roundbox(in vec2 uv, in vec2 size, in vec4 corner_radius)
 {
@@ -20,7 +28,7 @@ float sdf_roundbox(in vec2 uv, in vec2 size, in vec4 corner_radius)
 void main() {
     ivec2 texelPos = ivec2(gl_GlobalInvocationID.xy);
 
-    float distance = sdf_roundbox(texelPos - offset, size, corner_radius);
+    float distance = sdf_roundbox((texelPos - offset) * rotation(), size, corner_radius);
 
     imageStore(destTex, texelPos, vec4(distance, .0, .0, .0));
 }

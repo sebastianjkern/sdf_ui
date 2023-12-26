@@ -2,14 +2,14 @@ import logging
 import random
 import sys
 import time
-import math
 
-from framework import Context, set_context, clear_color, logger, radial_gradient, hex_col, bezier, linear_gradient, \
+from framework import Context, set_context, clear_color, logger, radial_gradient, hex_col, linear_gradient, \
     grid, rounded_rect, disc, film_grain, glyph_sdf
 
 size = (1920, 1080)
 
-logger().setLevel(logging.INFO)
+logger().setLevel(logging.CRITICAL)
+
 
 def rand_color():
     red = random.randint(0, 255) / 255
@@ -62,7 +62,7 @@ backdrop = radial_gradient((size[0] / 2, size[1] / 2), hex_col("#004C81", alpha=
 
 gradient = linear_gradient((100, 100), (900, 100), (*rand_color(), 1.0), (*rand_color(), 1.0)).transparency(0.45)
 
-blur = backdrop.blur(n=15, base=13)
+blur = backdrop.blur(n=1, base=13)
 
 mask_sdf = rounded_rect((int(size[0] / 2), int(size[1] / 2)),
                         (int(size[1] / 3), int(size[1] / 3)),
@@ -103,15 +103,20 @@ for index in range(100):
     image = backdrop1.alpha_overlay(glass_shadow).mask(blur, mask).alpha_overlay(glass).alpha_overlay(
         outline).alpha_overlay(film_grain().to_lab().transparency(5 / 255)).to_rgb()
 
-    dither = image.dithering()
+    image.save(f"{str(index).zfill(3)}_img.png")
 
     end = time.time_ns()
-    print(f"Frame takes: {(end - start) / 1e9}s")
+    image.save(f"{str(index).zfill(3)}_img.png")
     times.append((end - start) / 1e9)
+    # print(f"Frame took: {(end - start) / 1e9}s")
 
     # dither.save(f"{str(index).zfill(3)}_img.png")
 
 print(sum(times) / len(times))
+
+sys.exit()
+
+print(f"Average frame time is {sum(times)/len(times)}s")
 
 sys.exit()
 

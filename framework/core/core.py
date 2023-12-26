@@ -1,14 +1,14 @@
 import math
 
 from PIL import Image
+from moderngl import Texture
 
 from framework.core.context import get_context, Shaders, decrease_tex_registry
 from framework.core.log import logger
 
-
 class ColorTexture:
     def __init__(self, tex):
-        self.tex = tex
+        self.tex: Texture = tex
 
     def __del__(self):
         self.tex.release()
@@ -209,6 +209,28 @@ class ColorTexture:
         logger().debug(f"Running {Shaders.LAYER_MASK} shader...")
 
         return ColorTexture(tex)
+    
+    def multiply(self, other):
+        self._check_type(other)
+
+        ctx = get_context()
+
+        shader = ctx.get_shader(Shaders.MULTIPLY)
+        shader['destTex'] = 0
+        shader['mask1'] = 1
+        shader['mask2'] = 2
+
+        tex = ctx.rgba8()
+        tex.bind_to_image(0, read=False, write=True)
+
+        self.tex.bind_to_image(1, read=True, write=False)
+        other.tex.bind_to_image(2, read=True, write=False)
+
+        shader.run(*ctx.local_size)
+
+        logger().debug(f"Running {Shaders.MULTIPLY} shader...")
+
+        return ColorTexture(tex)
 
     def alpha_overlay(self, other):
         self._check_type(other)
@@ -246,11 +268,27 @@ class ColorTexture:
         logger().debug(f"Running {Shaders.TRANSPARENCY} shader...")
 
         return ColorTexture(tex)
+    
+    def invert(self):
+        ctx = get_context()
+
+        shader = ctx.get_shader(Shaders.INVERT)
+        shader["destTex"] = 0
+        shader["origTex"] = 1
+
+        tex = ctx.rgba8()
+        tex.bind_to_image(0, read=False, write=True)
+        self.tex.bind_to_image(1, read=False, write=True)
+        shader.run(*ctx.local_size)
+
+        logger().debug(f"Running {Shaders.INVERT} shader...")
+
+        return ColorTexture(tex)
 
 
 class SDFTexture:
     def __init__(self, tex):
-        self.tex = tex
+        self.tex: Texture = tex
 
     def __del__(self):
         self.tex.release()
@@ -310,6 +348,31 @@ class SDFTexture:
         logger().debug(f"Running {Shaders.UNION} shader...")
 
         return SDFTexture(tex)
+    
+    def masked_union(self, other):
+        self._check_type(other)
+        ctx = get_context()
+
+        shader = ctx.get_shader(Shaders.MASKED_UNION)
+        shader['destTex'] = 0
+        shader['maskTex'] = 1
+        shader['sdf0'] = 2
+        shader['sdf1'] = 3
+
+        tex = ctx.r32f()
+        tex.bind_to_image(0, read=False, write=True)
+
+        mask = ctx.rgba8()
+        mask.bind_to_image(1, read=False, write=True)
+
+        self.tex.bind_to_image(2, read=True, write=False)
+        other.tex.bind_to_image(3, read=True, write=False)
+
+        shader.run(*ctx.local_size)
+
+        logger().debug(f"Running {Shaders.MASKED_UNION} shader...")
+
+        return SDFTexture(tex), ColorTexture(mask)
 
     def subtract(self, other):
         self._check_type(other)
@@ -460,7 +523,7 @@ def interpolate(tex0: SDFTexture, tex1: SDFTexture, t=0.5) -> SDFTexture:
 
 
 # Primitives
-def rounded_rect(center, size, corner_radius) -> SDFTexture:
+def rounded_rect(center, size, corner_radius, angle=0/360*math.pi) -> SDFTexture:
     ctx = get_context()
 
     shader = ctx.get_shader(Shaders.RECT)
@@ -468,6 +531,7 @@ def rounded_rect(center, size, corner_radius) -> SDFTexture:
     shader['offset'] = center
     shader['size'] = size
     shader['corner_radius'] = corner_radius
+    shader['angle'] = angle
 
     tex = ctx.r32f()
     tex.bind_to_image(0, read=False, write=True)
@@ -529,13 +593,14 @@ def line(a, b) -> SDFTexture:
     return SDFTexture(tex)
 
 
-def grid(offset, size) -> SDFTexture:
+def grid(offset, size, angle=0/360*math.pi) -> SDFTexture:
     ctx = get_context()
 
     shader = ctx.get_shader(Shaders.GRID)
     shader['destTex'] = 0
     shader['grid_size'] = size
     shader['offset'] = offset
+    shader['angle'] = angle
 
     tex = ctx.r32f()
     tex.bind_to_image(0, read=False, write=True)
