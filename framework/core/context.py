@@ -123,6 +123,7 @@ class Context:
         self.local_size = int(w / gw + 0.5), int(h / gh + 0.5), 1
 
     def __enter__(self):
+        set_context(self)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
