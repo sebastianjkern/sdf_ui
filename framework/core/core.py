@@ -295,13 +295,13 @@ class SDFTexture:
         decrease_tex_registry()
 
     def __or__(self, other):
-        self.union(other)
+        return self.union(other)
 
     def __and__(self, other):
-        self.intersection(other)
+        return self.intersection(other)
 
     def __sub__(self, other):
-        self.subtract(other)
+        return self.subtract(other)
 
     def _check_type(self, obj):
         if not type(self) == type(obj):
