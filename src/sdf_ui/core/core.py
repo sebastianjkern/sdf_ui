@@ -3,8 +3,8 @@ import math
 from PIL import Image
 from moderngl import Texture
 
-from framework.core.context import get_context, Shaders, decrease_tex_registry
-from framework.core.log import logger
+from sdf_ui.core.context import get_context, Shaders, decrease_tex_registry
+from sdf_ui.core.log import logger
 
 class ColorTexture:
     def __init__(self, tex):

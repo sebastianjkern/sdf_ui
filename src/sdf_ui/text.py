@@ -1,8 +1,8 @@
 import ttfquery
 from ttfquery import describe, glyph
 
-from framework.core.core import line, bezier
-from framework.core.util import collinear
+from sdf_ui.core.core import line, bezier
+from sdf_ui.core.util import collinear
 
 
 def get_glyph(font_file_path, char):

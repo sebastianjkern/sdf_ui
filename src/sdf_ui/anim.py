@@ -3,7 +3,7 @@
 # and are combined using the function down below
 import cv2
 
-from framework.core.log import logger
+from sdf_ui.core.log import logger
 
 
 def convert_to_video(name, image_paths):

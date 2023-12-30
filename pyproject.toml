@@ -1,0 +1,26 @@
+[build-system]
+requires = [
+    "setuptools>=61.0", 
+    "TTFQuery>=1.0.0", 
+    "numpy", 
+    "opencv-python", 
+    "Pillow", 
+    "moderngl",
+    "logging"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sdf_ui"
+version = "0.1.0"
+description = "2D Rendering engine based on Signed Distance Functions"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/sebastianjkern/sdf_ui"
+Issues = "https://github.com/sebastianjkern/sdf_ui/issues"

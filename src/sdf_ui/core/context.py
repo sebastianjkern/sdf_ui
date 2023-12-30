@@ -6,7 +6,7 @@ import cv2
 
 import numpy as np
 
-from framework.core.log import logger
+from sdf_ui.core.log import logger
 
 
 class Shaders:
@@ -210,7 +210,7 @@ class Context:
 
     # Generate textures
     def r32f(self):
-        logger().info("Created r32f texture...")
+        logger().debug("Created r32f texture...")
         tex = self._mgl_ctx.texture(self.size, 1, dtype='f4')
         tex.filter = mgl.LINEAR, mgl.LINEAR
 
@@ -220,7 +220,7 @@ class Context:
         return tex
 
     def rgba8(self):
-        logger().info("Created rgba8 texture...")
+        logger().debug("Created rgba8 texture...")
         tex = self._mgl_ctx.texture(self.size, 4)
         tex.filter = mgl.LINEAR, mgl.LINEAR
 

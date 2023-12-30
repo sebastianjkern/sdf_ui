@@ -10,5 +10,5 @@ example_images/
 *.otf
 *.png
 
-framework/__pycache__/
-framework/core/__pycache__/
+src/sdf_ui/__pycache__/
+src/sdf_ui/core/__pycache__/
