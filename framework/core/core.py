@@ -294,6 +294,15 @@ class SDFTexture:
         self.tex.release()
         decrease_tex_registry()
 
+    def __or__(self, other):
+        self.union(other)
+
+    def __and__(self, other):
+        self.intersection(other)
+
+    def __sub__(self, other):
+        self.subtract(other)
+
     def _check_type(self, obj):
         if not type(self) == type(obj):
             raise TypeError(f"{obj} of type {type(obj)} should be {type(self)}")
