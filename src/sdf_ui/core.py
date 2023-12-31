@@ -5,8 +5,8 @@ import math
 from PIL import Image
 from moderngl import Texture
 
-from sdf_ui.core.context import get_context, Shaders, decrease_tex_registry
-from sdf_ui.core.log import logger
+from .context import get_context, Shaders, decrease_tex_registry
+from .log import logger
 
 class ColorTexture:
     """

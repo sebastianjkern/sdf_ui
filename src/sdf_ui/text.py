@@ -3,8 +3,8 @@ __docformat__ = "google"
 import ttfquery
 from ttfquery import describe, glyph
 
-from sdf_ui.core.core import line, bezier
-from sdf_ui.core.util import collinear
+from .core import line, bezier
+from .util import collinear
 
 def middle(x1, y1, x2, y2):
     """

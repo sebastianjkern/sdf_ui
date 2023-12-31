@@ -6,11 +6,9 @@ import moderngl as mgl
 
 import cv2
 
-import numpy as np
-
 from PIL import Image
 
-from sdf_ui.core.log import logger
+from .log import logger
 
 
 class Shaders:
@@ -284,6 +282,9 @@ class Context:
         >>> texture = context.texture_from_image("path/to/image.png")
         """
         img = cv2.imread(path)
+        cv2.imshow('image window', img)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
         # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB) # optional
         # img = np.flip(img, 0).copy(order='C')      # optional
         return self._mgl_ctx.texture(img.shape[1::-1], img.shape[2], img)

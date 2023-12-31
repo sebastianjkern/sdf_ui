@@ -4,7 +4,7 @@ __docformat__ = "google"
 
 import cv2
 
-from sdf_ui.core.log import logger
+from .log import logger
 
 
 def convert_to_video(name, image_paths):
