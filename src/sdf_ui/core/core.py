@@ -7,28 +7,95 @@ from sdf_ui.core.context import get_context, Shaders, decrease_tex_registry
 from sdf_ui.core.log import logger
 
 class ColorTexture:
+    """
+    Represents a color texture with associated methods for image processing and blending operations.
+
+    Parameters:
+    - tex (Texture): The texture object associated with the color data.
+
+    Raises:
+    - ValueError: If the context is not set when creating ColorTextures.
+
+    Example:
+    >>> color_texture = ColorTexture(tex)
+    """
+
     def __init__(self, tex):
         self.tex: Texture = tex
 
+        if get_context() is None:
+            raise ValueError("context needs to be set in order to create ColorTextures")
+
     def __del__(self):
+        """
+        Destructor method that releases the associated texture and decreases the texture registry count.
+
+        Example:
+        >>> color_texture = ColorTexture(...)
+        >>> del color_texture
+        """
         self.tex.release()
         decrease_tex_registry()
 
     def _check_type(self, obj):
+        """
+        Checks if the type of the given object matches the type of the current instance.
+
+        Parameters:
+        - obj: Object to check against the current instance type.
+
+        Raises:
+        - TypeError: If the types do not match.
+
+        Example:
+        >>> color_texture = ColorTexture(...)
+        >>> other_texture = ColorTexture(...)
+        >>> color_texture._check_type(other_texture)
+        """
         if not type(self) == type(obj):
             raise TypeError(f"{obj} of type {type(obj)} should be {type(self)}")
 
     def show(self):
+        """
+        Displays the ColorTexture using an image viewer.
+
+        Example:
+        >>> color_texture = ColorTexture(...)
+        >>> color_texture.show()
+        """
         image = Image.frombytes("RGBA", self.tex.size, self.tex.read(), "raw")
         image = image.transpose(Image.FLIP_TOP_BOTTOM)
         image.show()
 
     def save(self, name):
+        """
+        Saves the ColorTexture to an image file.
+
+        Parameters:
+        - name (str): The file name, including the file extension.
+
+        Example:
+        >>> color_texture = ColorTexture(...)
+        >>> color_texture.save("output.png")
+        """
         image = Image.frombytes("RGBA", self.tex.size, self.tex.read(), "raw")
         image = image.transpose(Image.FLIP_TOP_BOTTOM)
         image.save(name)
 
-    def blur_9(self, n=0):
+    def blur_9(self, n: int=0):
+        """
+        Applies a blur effect to the color texture using a 9x9 kernel.
+
+        Parameters:
+        - n (int): Number of iterations for the blur effect.
+
+        Returns:
+        A new ColorTexture with the applied blur effect.
+
+        Example:
+        >>> color_texture = ColorTexture(...)
+        >>> blurred_texture = color_texture.blur_9(n=3)
+        """
         ctx = get_context()
 
         vert = ctx.get_shader(Shaders.BLUR_VER_9)
@@ -66,7 +133,20 @@ class ColorTexture:
 
         return ColorTexture(tex1)
 
-    def blur_13(self, n=0):
+    def blur_13(self, n: int=0):
+        """
+        Applies a blur effect to the color texture using a 13x13 kernel.
+
+        Parameters:
+        - n (int): Number of iterations for the blur effect.
+
+        Returns:
+        A new ColorTexture with the applied blur effect.
+
+        Example:
+        >>> color_texture = ColorTexture(...)
+        >>> blurred_texture = color_texture.blur_13(n=3)
+        """
         ctx = get_context()
 
         vert = ctx.get_shader(Shaders.BLUR_VER_13)
@@ -105,7 +185,21 @@ class ColorTexture:
         return ColorTexture(tex1)
 
     # Needs some special treatment because of the two separate components
-    def blur(self, n=0, base=9):
+    def blur(self, n: int=0, base: int=9):
+        """
+        Applies a blur effect to the color texture.
+
+        Parameters:
+        - n (int): Number of iterations for the blur effect.
+        - base (int): Size of the blur kernel. It can be either 9 or 13.
+
+        Returns:
+        A new ColorTexture with the applied blur effect.
+
+        Example:
+        >>> color_texture = ColorTexture(...)
+        >>> blurred_texture = color_texture.blur(n=3, base=13)
+        """
         t = self.to_rgb()
 
         if base == 9:
@@ -122,6 +216,16 @@ class ColorTexture:
     # in LAB Color Space, because of the superior color
     # interpolation capabilities of LAB in comparison to RGB
     def to_lab(self):
+        """
+        Converts the color texture to LAB color space.
+
+        Returns:
+        A new ColorTexture in LAB color space.
+
+        Example:
+        >>> color_texture = ColorTexture(...)
+        >>> lab_texture = color_texture.to_lab()
+        """
         ctx = get_context()
 
         shader = ctx.get_shader(Shaders.TO_LAB)
@@ -138,6 +242,16 @@ class ColorTexture:
         return ColorTexture(tex)
 
     def to_rgb(self):
+        """
+        Converts the color texture to RGB format.
+
+        Returns:
+        A new ColorTexture in RGB format.
+
+        Example:
+        >>> color_texture = ColorTexture(...)
+        >>> rgb_texture = color_texture.to_rgb()
+        """
         ctx = get_context()
 
         shader = ctx.get_shader(Shaders.TO_RGB)
@@ -155,6 +269,16 @@ class ColorTexture:
 
     # Some fun with image processing stuff
     def dithering(self):
+        """
+        Applies dithering to the color texture.
+
+        Returns:
+        A new ColorTexture with dithering applied.
+
+        Example:
+        >>> color_texture = ColorTexture(...)
+        >>> dithered_texture = color_texture.dithering()
+        """
         ctx = get_context()
 
         shader = ctx.get_shader(Shaders.DITHERING)
@@ -172,6 +296,16 @@ class ColorTexture:
 
     # Black white dithering
     def dither_1bit(self):
+        """
+        Applies 1-bit dithering to the color texture.
+
+        Returns:
+        A new ColorTexture with 1-bit dithering applied.
+
+        Example:
+        >>> color_texture = ColorTexture(...)
+        >>> dithered_texture = color_texture.dither_1bit()
+        """
         ctx = get_context()
 
         shader = ctx.get_shader(Shaders.DITHER_1BIT)
@@ -188,6 +322,22 @@ class ColorTexture:
         return ColorTexture(tex)
 
     def mask(self, top, mask):
+        """
+        Applies a mask to blend two color textures.
+
+        Parameters:
+        - top: The ColorTexture to blend on top.
+        - mask: The ColorTexture serving as the mask.
+
+        Returns:
+        A new ColorTexture resulting from the masked blending operation.
+
+        Example:
+        >>> color_texture_base = ColorTexture(...)
+        >>> color_texture_top = ColorTexture(...)
+        >>> mask_texture = ColorTexture(...)
+        >>> masked_texture = color_texture_base.mask(top=color_texture_top, mask=mask_texture)
+        """
         self._check_type(top)
         self._check_type(mask)
 
@@ -211,6 +361,20 @@ class ColorTexture:
         return ColorTexture(tex)
     
     def multiply(self, other):
+        """
+        Performs color multiplication with another color texture.
+
+        Parameters:
+        - other: The ColorTexture to multiply.
+
+        Returns:
+        A new ColorTexture resulting from the color multiplication operation.
+
+        Example:
+        >>> color_texture_1 = ColorTexture(...)
+        >>> color_texture_2 = ColorTexture(...)
+        >>> multiplied_texture = color_texture_1.multiply(color_texture_2)
+        """
         self._check_type(other)
 
         ctx = get_context()
@@ -233,6 +397,20 @@ class ColorTexture:
         return ColorTexture(tex)
 
     def alpha_overlay(self, other):
+        """
+        Performs alpha overlay blending with another color texture.
+
+        Parameters:
+        - other: The ColorTexture to overlay.
+
+        Returns:
+        A new ColorTexture resulting from the alpha overlay operation.
+
+        Example:
+        >>> color_texture_1 = ColorTexture(...)
+        >>> color_texture_2 = ColorTexture(...)
+        >>> overlay_texture = color_texture_1.alpha_overlay(color_texture_2)
+        """
         self._check_type(other)
 
         ctx = get_context()
@@ -253,6 +431,19 @@ class ColorTexture:
         return ColorTexture(tex)
 
     def transparency(self, alpha):
+        """
+        Adjusts the transparency of the color texture.
+
+        Parameters:
+        - alpha (float): The transparency value to apply.
+
+        Returns:
+        A new ColorTexture with adjusted transparency.
+
+        Example:
+        >>> color_texture = ColorTexture(...)
+        >>> transparent_texture = color_texture.transparency(alpha=0.5)
+        """
         ctx = get_context()
 
         shader = ctx.get_shader(Shaders.TRANSPARENCY)
@@ -270,6 +461,16 @@ class ColorTexture:
         return ColorTexture(tex)
     
     def invert(self):
+        """
+        Inverts the colors of the color texture.
+
+        Returns:
+        A new ColorTexture with inverted colors.
+
+        Example:
+        >>> color_texture = ColorTexture(...)
+        >>> inverted_texture = color_texture.invert()
+        """    
         ctx = get_context()
 
         shader = ctx.get_shader(Shaders.INVERT)
@@ -287,32 +488,106 @@ class ColorTexture:
 
 
 class SDFTexture:
+    """
+    Base class for everything in the sdf stage of the rendering pipeline.
+
+    Wrapper class around a 32 bit float texture in the dimension of the rendering size.
+
+    Contains the functions that can be executed on one or more SDF textures.
+    """
+
     def __init__(self, tex):
         self.tex: Texture = tex
 
+        if get_context() is None:
+            raise ValueError("context needs to be set in order to create ColorTextures")
+
     def __del__(self):
+        """
+        Destructor for cleaning up resources. Releases the associated texture and decreases the texture registry count.
+        """
         self.tex.release()
         decrease_tex_registry()
 
     def __or__(self, other):
+        """
+        Perform a union operation with another instance.
+
+        Parameters:
+        - other: Another instance of YourClassName
+
+        Returns:
+        A new instance representing the union of the current instance and 'other'.
+        """
         return self.union(other)
 
     def __and__(self, other):
+        """
+        Perform an intersection operation with another instance.
+
+        Parameters:
+        - other: Another instance of YourClassName
+
+        Returns:
+        A new instance representing the intersection of the current instance and 'other'.
+        """
         return self.intersection(other)
 
     def __sub__(self, other):
+        """
+        Perform a set difference operation with another instance.
+
+        Parameters:
+        - other: Another instance of YourClassName
+
+        Returns:
+        A new instance representing the set difference (subtraction) of 'other' from the current instance.
+        """
         return self.subtract(other)
 
     def _check_type(self, obj):
+        """
+        Check if the given object has the same type as the current instance.
+
+        Parameters:
+        - obj: An object to be checked for type compatibility.
+
+        Raises:
+        - TypeError: If the type of 'obj' does not match the type of the current instance.
+
+        Example:
+        >>> instance = SDFTexture()
+        >>> other_instance = SDFTexture()
+        >>> instance._check_type(other_instance)  # This will pass without raising an error.
+        >>> some_object = SomeOtherClass()
+        >>> instance._check_type(some_object)  # This will raise a TypeError.
+        """
         if not type(self) == type(obj):
             raise TypeError(f"{obj} of type {type(obj)} should be {type(self)}")
 
     def show(self):
+        """
+        Displays the signed distance field (SDF) texture using an image viewer.
+
+        Example:
+        >>> sdf_texture = SDFTexture(...)
+        >>> sdf_texture.show()
+        """
         image = Image.frombytes("F", self.tex.size, self.tex.read(), "raw")
         image = image.transpose(Image.FLIP_TOP_BOTTOM)
         image.show()
 
     def save(self, name="./image.png"):
+        """
+        Saves the signed distance field (SDF) texture to an image file.
+
+        Parameters:
+        - name (str): The name of the image file to save. Default is "./image.png".
+
+        Example:
+        >>> sdf_texture = SDFTexture(...)
+        >>> sdf_texture.save(name="output_image.png")
+        """
         image = Image.frombytes("F", self.tex.size, self.tex.read(), "raw")
         image = image.transpose(Image.FLIP_TOP_BOTTOM)
         image = image.convert("L")
@@ -320,6 +595,21 @@ class SDFTexture:
 
     # Boolean operators
     def smooth_union(self, other, k=0.025):
+        """
+        Performs a smooth union operation with another signed distance field (SDF) texture.
+
+        Parameters:
+        - other: The SDF texture to perform the smooth union with.
+        - k (float): The smoothness parameter. Default is 0.025.
+
+        Returns:
+        A new SDFTexture resulting from the smooth union operation.
+
+        Example:
+        >>> sdf_texture_1 = SDFTexture(...)
+        >>> sdf_texture_2 = SDFTexture(...)
+        >>> smooth_union_texture = sdf_texture_1.smooth_union(sdf_texture_2, k=0.05)
+        """
         self._check_type(other)
         ctx = get_context()
 
@@ -340,6 +630,20 @@ class SDFTexture:
         return SDFTexture(tex)
 
     def union(self, other):
+        """
+        Performs a union operation with another signed distance field (SDF) texture.
+
+        Parameters:
+        - other: The SDF texture to union with.
+
+        Returns:
+        A new SDFTexture resulting from the union operation.
+
+        Example:
+        >>> sdf_texture_1 = SDFTexture(...)
+        >>> sdf_texture_2 = SDFTexture(...)
+        >>> union_texture = sdf_texture_1.union(sdf_texture_2)
+        """
         self._check_type(other)
         ctx = get_context()
 
@@ -359,6 +663,21 @@ class SDFTexture:
         return SDFTexture(tex)
     
     def masked_union(self, other):
+        """
+        Performs a masked union operation with another signed distance field (SDF) texture.
+        Returns both the resulting SDF texture and a color mask.
+
+        Parameters:
+        - other: The SDF texture to perform the masked union with.
+
+        Returns:
+        A tuple containing the resulting SDFTexture and ColorTexture representing the masked union.
+
+        Example:
+        >>> sdf_texture_1 = SDFTexture(...)
+        >>> sdf_texture_2 = SDFTexture(...)
+        >>> sdf_result, mask_result = sdf_texture_1.masked_union(sdf_texture_2)
+        """
         self._check_type(other)
         ctx = get_context()
 
@@ -384,6 +703,20 @@ class SDFTexture:
         return SDFTexture(tex), ColorTexture(mask)
 
     def subtract(self, other):
+        """
+        Performs a set subtraction operation with another signed distance field (SDF) texture.
+
+        Parameters:
+        - other: The SDF texture to subtract.
+
+        Returns:
+        A new SDFTexture resulting from the set subtraction operation.
+
+        Example:
+        >>> sdf_texture_1 = SDFTexture(...)
+        >>> sdf_texture_2 = SDFTexture(...)
+        >>> subtracted_texture = sdf_texture_1.subtract(sdf_texture_2)
+        """
         self._check_type(other)
         ctx = get_context()
 
@@ -403,6 +736,20 @@ class SDFTexture:
         return SDFTexture(tex)
 
     def intersection(self, other):
+        """
+        Performs an intersection operation with another signed distance field (SDF) texture.
+
+        Parameters:
+        - other: The SDF texture to intersect with.
+
+        Returns:
+        A new SDFTexture resulting from the intersection operation.
+
+        Example:
+        >>> sdf_texture_1 = SDFTexture(...)
+        >>> sdf_texture_2 = SDFTexture(...)
+        >>> intersection_texture = sdf_texture_1.intersection(sdf_texture_2)
+        """
         self._check_type(other)
         ctx = get_context()
 
@@ -423,6 +770,16 @@ class SDFTexture:
 
     # Postprocessing
     def abs(self):
+        """
+        Applies the absolute function to the signed distance field (SDF) texture.
+
+        Returns:
+        A new SDFTexture resulting from the absolute function applied to the original SDF texture.
+
+        Example:
+        >>> sdf_texture = SDFTexture(...)
+        >>> abs_texture = sdf_texture.abs()
+        """
         ctx = get_context()
 
         shader = ctx.get_shader(Shaders.ABS)
@@ -440,6 +797,26 @@ class SDFTexture:
 
     # SDF -> Color Texture
     def fill(self, fg_color, bg_color, inflate=0.0, inner=-1.5, outer=0.0) -> ColorTexture:
+        """
+        Converts the signed distance field (SDF) texture to a color texture with specified foreground and background colors.
+        The inner and outer parameters control color interpolation.
+
+        Parameters:
+        - fg_color: The foreground color of the filled texture.
+        - bg_color: The background color of the filled texture.
+        - inflate (float): The amount by which to inflate the filled texture. Default is 0.0.
+        - inner (float): The color interpolation value for the inner part of the texture. Default is -1.5.
+        - outer (float): The color interpolation value for the outer part of the texture. Default is 0.0.
+
+        Returns:
+        A ColorTexture representing the filled texture.
+
+        Example:
+        >>> sdf_texture = SDFTexture(...)
+        >>> foreground_color = (1.0, 0.0, 0.0, 1.0)  # Red
+        >>> background_color = (0.0, 0.0, 1.0, 1.0)  # Blue
+        >>> filled_texture = sdf_texture.fill(foreground_color, background_color, inflate=0.2, inner=-1.0, outer=0.5)
+        """
         ctx = get_context()
 
         shader = ctx.get_shader(Shaders.FILL)
@@ -461,6 +838,22 @@ class SDFTexture:
         return ColorTexture(tex)
 
     def fill_from_texture(self, layer: ColorTexture, background=(0.0, 0.0, 0.0, 0.0), inflate=0) -> ColorTexture:
+        """
+        Fills the signed distance field (SDF) texture based on another color texture, with optional background color and inflation.
+
+        Parameters:
+        - layer: The color texture to use for filling.
+        - background: The background color. Default is (0.0, 0.0, 0.0, 0.0).
+        - inflate (float): The amount by which to inflate the filled texture. Default is 0.
+
+        Returns:
+        A ColorTexture representing the filled texture.
+
+        Example:
+        >>> sdf_texture = SDFTexture(...)
+        >>> color_texture = ColorTexture(...)
+        >>> filled_texture = sdf_texture.fill_from_texture(color_texture, background=(1.0, 1.0, 1.0, 1.0), inflate=0.2)
+        """
         ctx = get_context()
 
         shader = ctx.get_shader(Shaders.FILL_FROM_TEXTURE)
@@ -482,6 +875,23 @@ class SDFTexture:
         return ColorTexture(tex)
 
     def outline(self, fg_color, bg_color, inflate=0.0) -> ColorTexture:
+        """
+        Generates a ColorTexture with the outline of the signed distance field (SDF) with specified colors.
+
+        Parameters:
+        - fg_color: The foreground color of the outline.
+        - bg_color: The background color surrounding the outline.
+        - inflate (float): The amount by which to inflate the outline. Default is 0.0.
+
+        Returns:
+        A ColorTexture representing the outline of the SDF with the specified colors.
+
+        Example:
+        >>> sdf_texture = SDFTexture(...)
+        >>> foreground_color = (1.0, 0.0, 0.0, 1.0)  # Red
+        >>> background_color = (0.0, 0.0, 1.0, 1.0)  # Blue
+        >>> inflated_outline_texture = sdf_texture.outline(foreground_color, background_color, inflate=0.1)
+        """
         ctx = get_context()
 
         shader = ctx.get_shader(Shaders.OUTLINE)
@@ -503,14 +913,63 @@ class SDFTexture:
     # Convenience functions (not necessary, build on top of functions above)
 
     def generate_mask(self, inflate=0.0, color0=(.0, .0, .0, 1.0), color1=(1.0, 1.0, 1.0, 1.0)) -> ColorTexture:
+        """
+        Generates a mask based on the signed distance field (SDF) texture, allowing customization of colors and inflation.
+
+        Parameters:
+        - inflate (float): The amount by which to inflate the mask. Default is 0.0.
+        - color0: The color of the mask where the SDF is negative or zero.
+        - color1: The color of the mask where the SDF is positive.
+
+        Returns:
+        A ColorTexture representing the generated mask.
+
+        Example:
+        >>> sdf_texture = SDFTexture(...)
+        >>> mask_texture = sdf_texture.generate_mask(inflate=0.1, color0=(0.0, 0.0, 0.0, 1.0), color1=(1.0, 1.0, 1.0, 1.0))
+        """
         return self.fill(color0, color1, inflate)
 
     def shadow(self, distance=10, inflate=0, transparency=0.75):
+        """
+        Generates a shadow effect based on the signed distance field (SDF) texture.
+
+        Parameters:
+        - distance (float): The distance of the shadow. Default is 10.
+        - inflate (float): The amount by which to inflate the shadow. Default is 0.
+        - transparency (float): The transparency of the shadow. Default is 0.75.
+
+        Returns:
+        A ColorTexture representing the shadow effect.
+
+        Example:
+        >>> sdf_texture = SDFTexture(...)
+        >>> shadow_texture = sdf_texture.shadow(distance=15, inflate=0.2, transparency=0.8)
+        """
         return self.generate_mask(inflate=inflate, color1=(0.0, 0.0, 0.0, 0.0)) \
             .blur(base=9, n=distance).transparency(transparency)
 
 
 def interpolate(tex0: SDFTexture, tex1: SDFTexture, t=0.5) -> SDFTexture:
+    """
+    Interpolates between two signed distance field (SDF) textures.
+
+    Parameters:
+    - tex0: The first SDFTexture to interpolate from.
+    - tex1: The second SDFTexture to interpolate to.
+    - t (float): The interpolation factor. It should be in the range [0, 1],
+                 where 0 corresponds to tex0, and 1 corresponds to tex1.
+                 Default is 0.5, resulting in a mid-point interpolation.
+
+    Returns:
+    A new SDFTexture representing the interpolation between tex0 and tex1.
+
+    Example:
+    >>> sdf_texture_0 = SDFTexture(...)
+    >>> sdf_texture_1 = SDFTexture(...)
+    >>> interpolated_texture = interpolate(sdf_texture_0, sdf_texture_1, t=0.3)
+    """
+
     ctx = get_context()
     tex = ctx.rgba8()
 
@@ -533,6 +992,26 @@ def interpolate(tex0: SDFTexture, tex1: SDFTexture, t=0.5) -> SDFTexture:
 
 # Primitives
 def rounded_rect(center, size, corner_radius, angle=0/360*math.pi) -> SDFTexture:
+    """
+    Creates a signed distance field (SDF) texture representing a rounded rectangle.
+
+    Parameters:
+    - center: The center coordinates of the rectangle.
+    - size: The size of the rectangle (width, height).
+    - corner_radius: The radius of the rounded corners.
+    - angle (float): The rotation angle of the rectangle in radians. Default is 0.
+
+    Returns:
+    A new SDFTexture representing a rounded rectangle.
+
+    Example:
+    >>> center = (0.0, 0.0)
+    >>> size = (2.0, 1.0)
+    >>> corner_radius = 0.3
+    >>> angle = 45/360*math.pi
+    >>> rounded_rect_texture = rounded_rect(center, size, corner_radius, angle)
+    """
+
     ctx = get_context()
 
     shader = ctx.get_shader(Shaders.RECT)
@@ -552,6 +1031,22 @@ def rounded_rect(center, size, corner_radius, angle=0/360*math.pi) -> SDFTexture
 
 
 def disc(center, radius) -> SDFTexture:
+    """
+    Creates a signed distance field (SDF) texture representing a filled disc (circle).
+
+    Parameters:
+    - center: The center coordinates of the disc.
+    - radius: The radius of the disc.
+
+    Returns:
+    A new SDFTexture representing a filled disc.
+
+    Example:
+    >>> center = (0.0, 0.0)
+    >>> radius = 1.5
+    >>> disc_texture = disc(center, radius)
+    """
+
     ctx = get_context()
     shader = ctx.get_shader(Shaders.CIRCLE)
     shader["destTex"] = 0
@@ -568,6 +1063,24 @@ def disc(center, radius) -> SDFTexture:
 
 
 def bezier(a, b, c) -> SDFTexture:
+    """
+    Creates a signed distance field (SDF) texture representing a quadratic Bezier curve.
+
+    Parameters:
+    - a: The starting point of the Bezier curve.
+    - b: The control point influencing the curvature of the curve.
+    - c: The ending point of the Bezier curve.
+
+    Returns:
+    A new SDFTexture representing a quadratic Bezier curve.
+
+    Example:
+    >>> a = (0.0, 0.0)
+    >>> b = (1.0, 2.0)
+    >>> c = (2.0, 0.0)
+    >>> bezier_texture = bezier(a, b, c)
+    """
+
     ctx = get_context()
 
     shader = ctx.get_shader(Shaders.BEZIER)
@@ -586,6 +1099,22 @@ def bezier(a, b, c) -> SDFTexture:
 
 
 def line(a, b) -> SDFTexture:
+    """
+    Creates a signed distance field (SDF) texture representing a straight line segment.
+
+    Parameters:
+    - a: The starting point of the line segment.
+    - b: The ending point of the line segment.
+
+    Returns:
+    A new SDFTexture representing a straight line.
+
+    Example:
+    >>> a = (0.0, 0.0)
+    >>> b = (2.0, 1.0)
+    >>> line_texture = line(a, b)
+    """
+
     ctx = get_context()
 
     shader = ctx.get_shader(Shaders.LINE)
@@ -603,6 +1132,24 @@ def line(a, b) -> SDFTexture:
 
 
 def grid(offset, size, angle=0/360*math.pi) -> SDFTexture:
+    """
+    Creates a signed distance field (SDF) texture representing a grid.
+
+    Parameters:
+    - offset: The center coordinates of the grid.
+    - size: The size of each cell in the grid (width, height).
+    - angle (float): The rotation angle of the grid in radians. Default is 0.
+
+    Returns:
+    A new SDFTexture representing a grid.
+
+    Example:
+    >>> offset = (0.0, 0.0)
+    >>> size = (1.0, 1.0)
+    >>> angle = 45/360*math.pi
+    >>> grid_texture = grid(offset, size, angle)
+    """
+
     ctx = get_context()
 
     shader = ctx.get_shader(Shaders.GRID)
@@ -621,6 +1168,20 @@ def grid(offset, size, angle=0/360*math.pi) -> SDFTexture:
 
 
 def clear_color(color) -> ColorTexture:
+    """
+    Creates a color texture filled with a specified color.
+
+    Parameters:
+    - color: The color to fill the texture with. Should be in RGBA format.
+
+    Returns:
+    A new ColorTexture filled with the specified color.
+
+    Example:
+    >>> color = (1.0, 0.0, 0.0, 1.0)  # Red color
+    >>> clear_color_texture = clear_color(color)
+    """
+
     ctx = get_context()
 
     shader = ctx.get_shader(Shaders.CLEAR_COLOR)
@@ -637,6 +1198,16 @@ def clear_color(color) -> ColorTexture:
 
 
 def perlin_noise() -> ColorTexture:
+    """
+    Generates Perlin noise and returns it as a color texture.
+
+    Returns:
+    A new ColorTexture representing Perlin noise.
+
+    Example:
+    >>> perlin_texture = perlin_noise()
+    """
+
     ctx = get_context()
 
     shader = ctx.get_shader(Shaders.PERLIN_NOISE)
@@ -652,6 +1223,16 @@ def perlin_noise() -> ColorTexture:
 
 
 def film_grain() -> ColorTexture:
+    """
+    Generates a film grain effect and returns it as a color texture.
+
+    Returns:
+    A new ColorTexture representing a film grain effect.
+
+    Example:
+    >>> film_grain_texture = film_grain()
+    """
+
     ctx = get_context()
     tex = ctx.rgba8()
 
@@ -667,6 +1248,26 @@ def film_grain() -> ColorTexture:
 
 
 def linear_gradient(a, b, color1, color2):
+    """
+    Generates a linear gradient between two points and returns it as a ColorTexture.
+
+    Parameters:
+    - a: The starting point of the gradient.
+    - b: The ending point of the gradient.
+    - color1: The color at the starting point of the gradient.
+    - color2: The color at the ending point of the gradient.
+
+    Returns:
+    A ColorTexture representing a linear gradient between color1 and color2.
+
+    Example:
+    >>> start_point = (0.0, 0.0)
+    >>> end_point = (1.0, 1.0)
+    >>> color_at_start = (1.0, 0.0, 0.0, 1.0)  # Red
+    >>> color_at_end = (0.0, 0.0, 1.0, 1.0)    # Blue
+    >>> gradient_texture = linear_gradient(start_point, end_point, color_at_start, color_at_end)
+    """
+
     ax, ay = a
     bx, by = b
 
@@ -684,4 +1285,23 @@ def linear_gradient(a, b, color1, color2):
 
 
 def radial_gradient(a, color1, color2, inner=0, outer=100):
+    """
+    Generates a radial gradient centered at a point and returns it as a ColorTexture.
+
+    Parameters:
+    - a: The center point of the radial gradient.
+    - color1: The color at the center of the gradient.
+    - color2: The color at the outer edge of the gradient.
+    - inner (float): The inner radius of the gradient. Default is 0.
+    - outer (float): The outer radius of the gradient. Default is 100.
+
+    Returns:
+    A ColorTexture representing a radial gradient between color1 and color2.
+
+    Example:
+    >>> center_point = (0.0, 0.0)
+    >>> color_at_center = (1.0, 0.0, 0.0, 1.0)  # Red
+    >>> color_at_outer = (0.0, 0.0, 1.0, 1.0)    # Blue
+    >>> gradient_texture = radial_gradient(center_point, color_at_center, color_at_outer)
+    """
     return disc(a, 0).fill(color1, color2, 0, inner=inner, outer=outer)
