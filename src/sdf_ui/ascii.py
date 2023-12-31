@@ -1,3 +1,5 @@
+__docformat__ = "google"
+
 import PIL
 import numpy as np
 
@@ -7,21 +9,76 @@ from console import fg, fx, bg
 
 
 def get_average_l(image):
+    """
+    Get the average luminance value of an image.
+
+    Parameters:
+    - image (Image): The input image.
+
+    Returns:
+    - float: The average luminance value.
+
+    Example:
+    >>> input_image = Image.open("example.jpg")
+    >>> average_luminance = get_average_l(input_image)
+    """
     im = np.array(image)
     w, h = im.shape
     return np.average(im.reshape(w * h))
 
 
 def get_average_c(image):
+    """
+    Get the average color value of an image.
+
+    Parameters:
+    - image (Image): The input image.
+
+    Returns:
+    - tuple: The average color value as a tuple (R, G, B).
+
+    Example:
+    >>> input_image = Image.open("example.jpg")
+    >>> average_color = get_average_c(input_image)
+    """
     im = np.array(image)
     return tuple(np.array(np.mean(im, axis=(0, 1)).astype(int)))
 
 
 def rgb_to_hex(rgb):
+    """
+    Convert an RGB tuple to a hexadecimal color code.
+
+    Parameters:
+    - rgb (tuple): RGB values as a tuple (R, G, B).
+
+    Returns:
+    - str: Hexadecimal color code.
+
+    Example:
+    >>> color_tuple = (255, 0, 128)
+    >>> hex_color = rgb_to_hex(color_tuple)
+    """
     return '%02x%02x%02x' % rgb[:3]
 
 
 def convert_image_to_ascii_colored(image, cols, scale, more_levels, invert, enhance, as_background):
+    """
+    Convert a colored image to colored ASCII art and print it.
+
+    Parameters:
+    - image (Image): The input image.
+    - cols (int): Number of columns in the ASCII output.
+    - scale (float): Scaling factor for the ASCII art.
+    - more_levels (bool): If True, use a higher level of ASCII characters for better detail.
+    - invert (bool): If True, invert the colors of the image.
+    - enhance (bool): If True, enhance the contrast and brightness of the image.
+    - as_background (bool): If True, use the color as the background.
+
+    Example:
+    >>> input_image = Image.open("example.jpg")
+    >>> convert_image_to_ascii_colored(input_image, 80, 0.43, True, False, True, True)
+    """
     hr_ascii_table = "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\|()1{}[]?-_+~<>i!lI;:,\"^`'. "
     lr_ascii_table = '@%#*+=-:. '
 
@@ -88,6 +145,22 @@ def convert_image_to_ascii_colored(image, cols, scale, more_levels, invert, enha
 
 
 def convert_image_to_ascii(image, cols, scale, more_levels, invert, enhance):
+    """
+    Convert an image to ASCII art and print it.
+
+    Parameters:
+    - image (Image): The input image.
+    - cols (int): Number of columns in the ASCII output.
+    - scale (float): Scaling factor for the ASCII art.
+    - more_levels (bool): If True, use a higher level of ASCII characters for better detail.
+    - invert (bool): If True, invert the colors of the image.
+    - enhance (bool): If True, enhance the contrast and brightness of the image.
+
+    Example:
+    >>> input_image = Image.open("example.jpg")
+    >>> convert_image_to_ascii(input_image, 80, 0.43, True, False, True)
+    """
+
     hr_ascii_table = "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\|()1{}[]?-_+~<>i!lI;:,\"^`'. "
     lr_ascii_table = '@%#*+=-:. '
 
@@ -139,7 +212,18 @@ def convert_image_to_ascii(image, cols, scale, more_levels, invert, enhance):
         print(row)
 
 
-def print(texture, colored=True):
+def print_texture(texture, colored=True):
+    """
+    Print the content of a texture using ASCII art.
+
+    Parameters:
+    - texture (ColorTexture): The ColorTexture to print.
+    - colored (bool): If True, print in colored ASCII art. If False, print in grayscale.
+
+    Example:
+    >>> color_texture = ColorTexture(...)
+    >>> print_texture(color_texture)
+    """
     image = Image.frombytes("RGBA", texture.tex.size, texture.tex.read(), "raw")
     image = image.transpose(Image.FLIP_TOP_BOTTOM)
     if not colored:

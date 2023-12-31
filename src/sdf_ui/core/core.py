@@ -1,3 +1,5 @@
+__docformat__ = "google"
+
 import math
 
 from PIL import Image
@@ -10,7 +12,7 @@ class ColorTexture:
     """
     Represents a color texture with associated methods for image processing and blending operations.
 
-    Parameters:
+    Args:
     - tex (Texture): The texture object associated with the color data.
 
     Raises:
@@ -41,7 +43,7 @@ class ColorTexture:
         """
         Checks if the type of the given object matches the type of the current instance.
 
-        Parameters:
+        Args:
         - obj: Object to check against the current instance type.
 
         Raises:
@@ -71,7 +73,7 @@ class ColorTexture:
         """
         Saves the ColorTexture to an image file.
 
-        Parameters:
+        Args:
         - name (str): The file name, including the file extension.
 
         Example:
@@ -86,7 +88,7 @@ class ColorTexture:
         """
         Applies a blur effect to the color texture using a 9x9 kernel.
 
-        Parameters:
+        Args:
         - n (int): Number of iterations for the blur effect.
 
         Returns:
@@ -137,7 +139,7 @@ class ColorTexture:
         """
         Applies a blur effect to the color texture using a 13x13 kernel.
 
-        Parameters:
+        Args:
         - n (int): Number of iterations for the blur effect.
 
         Returns:
@@ -189,7 +191,7 @@ class ColorTexture:
         """
         Applies a blur effect to the color texture.
 
-        Parameters:
+        Args:
         - n (int): Number of iterations for the blur effect.
         - base (int): Size of the blur kernel. It can be either 9 or 13.
 
@@ -325,7 +327,7 @@ class ColorTexture:
         """
         Applies a mask to blend two color textures.
 
-        Parameters:
+        Args:
         - top: The ColorTexture to blend on top.
         - mask: The ColorTexture serving as the mask.
 
@@ -364,7 +366,7 @@ class ColorTexture:
         """
         Performs color multiplication with another color texture.
 
-        Parameters:
+        Args:
         - other: The ColorTexture to multiply.
 
         Returns:
@@ -400,7 +402,7 @@ class ColorTexture:
         """
         Performs alpha overlay blending with another color texture.
 
-        Parameters:
+        Args:
         - other: The ColorTexture to overlay.
 
         Returns:
@@ -434,7 +436,7 @@ class ColorTexture:
         """
         Adjusts the transparency of the color texture.
 
-        Parameters:
+        Args:
         - alpha (float): The transparency value to apply.
 
         Returns:
@@ -513,7 +515,7 @@ class SDFTexture:
         """
         Perform a union operation with another instance.
 
-        Parameters:
+        Args:
         - other: Another instance of YourClassName
 
         Returns:
@@ -525,7 +527,7 @@ class SDFTexture:
         """
         Perform an intersection operation with another instance.
 
-        Parameters:
+        Args:
         - other: Another instance of YourClassName
 
         Returns:
@@ -537,7 +539,7 @@ class SDFTexture:
         """
         Perform a set difference operation with another instance.
 
-        Parameters:
+        Args:
         - other: Another instance of YourClassName
 
         Returns:
@@ -549,7 +551,7 @@ class SDFTexture:
         """
         Check if the given object has the same type as the current instance.
 
-        Parameters:
+        Args:
         - obj: An object to be checked for type compatibility.
 
         Raises:
@@ -581,7 +583,7 @@ class SDFTexture:
         """
         Saves the signed distance field (SDF) texture to an image file.
 
-        Parameters:
+        Args:
         - name (str): The name of the image file to save. Default is "./image.png".
 
         Example:
@@ -598,7 +600,7 @@ class SDFTexture:
         """
         Performs a smooth union operation with another signed distance field (SDF) texture.
 
-        Parameters:
+        Args:
         - other: The SDF texture to perform the smooth union with.
         - k (float): The smoothness parameter. Default is 0.025.
 
@@ -633,7 +635,7 @@ class SDFTexture:
         """
         Performs a union operation with another signed distance field (SDF) texture.
 
-        Parameters:
+        Args:
         - other: The SDF texture to union with.
 
         Returns:
@@ -667,7 +669,7 @@ class SDFTexture:
         Performs a masked union operation with another signed distance field (SDF) texture.
         Returns both the resulting SDF texture and a color mask.
 
-        Parameters:
+        Args:
         - other: The SDF texture to perform the masked union with.
 
         Returns:
@@ -706,7 +708,7 @@ class SDFTexture:
         """
         Performs a set subtraction operation with another signed distance field (SDF) texture.
 
-        Parameters:
+        Args:
         - other: The SDF texture to subtract.
 
         Returns:
@@ -739,7 +741,7 @@ class SDFTexture:
         """
         Performs an intersection operation with another signed distance field (SDF) texture.
 
-        Parameters:
+        Args:
         - other: The SDF texture to intersect with.
 
         Returns:
@@ -801,7 +803,7 @@ class SDFTexture:
         Converts the signed distance field (SDF) texture to a color texture with specified foreground and background colors.
         The inner and outer parameters control color interpolation.
 
-        Parameters:
+        Args:
         - fg_color: The foreground color of the filled texture.
         - bg_color: The background color of the filled texture.
         - inflate (float): The amount by which to inflate the filled texture. Default is 0.0.
@@ -841,7 +843,7 @@ class SDFTexture:
         """
         Fills the signed distance field (SDF) texture based on another color texture, with optional background color and inflation.
 
-        Parameters:
+        Args:
         - layer: The color texture to use for filling.
         - background: The background color. Default is (0.0, 0.0, 0.0, 0.0).
         - inflate (float): The amount by which to inflate the filled texture. Default is 0.
@@ -878,7 +880,7 @@ class SDFTexture:
         """
         Generates a ColorTexture with the outline of the signed distance field (SDF) with specified colors.
 
-        Parameters:
+        Args:
         - fg_color: The foreground color of the outline.
         - bg_color: The background color surrounding the outline.
         - inflate (float): The amount by which to inflate the outline. Default is 0.0.
@@ -916,7 +918,7 @@ class SDFTexture:
         """
         Generates a mask based on the signed distance field (SDF) texture, allowing customization of colors and inflation.
 
-        Parameters:
+        Args:
         - inflate (float): The amount by which to inflate the mask. Default is 0.0.
         - color0: The color of the mask where the SDF is negative or zero.
         - color1: The color of the mask where the SDF is positive.
@@ -934,7 +936,7 @@ class SDFTexture:
         """
         Generates a shadow effect based on the signed distance field (SDF) texture.
 
-        Parameters:
+        Args:
         - distance (float): The distance of the shadow. Default is 10.
         - inflate (float): The amount by which to inflate the shadow. Default is 0.
         - transparency (float): The transparency of the shadow. Default is 0.75.
@@ -954,7 +956,7 @@ def interpolate(tex0: SDFTexture, tex1: SDFTexture, t=0.5) -> SDFTexture:
     """
     Interpolates between two signed distance field (SDF) textures.
 
-    Parameters:
+    Args:
     - tex0: The first SDFTexture to interpolate from.
     - tex1: The second SDFTexture to interpolate to.
     - t (float): The interpolation factor. It should be in the range [0, 1],
@@ -995,7 +997,7 @@ def rounded_rect(center, size, corner_radius, angle=0/360*math.pi) -> SDFTexture
     """
     Creates a signed distance field (SDF) texture representing a rounded rectangle.
 
-    Parameters:
+    Args:
     - center: The center coordinates of the rectangle.
     - size: The size of the rectangle (width, height).
     - corner_radius: The radius of the rounded corners.
@@ -1034,7 +1036,7 @@ def disc(center, radius) -> SDFTexture:
     """
     Creates a signed distance field (SDF) texture representing a filled disc (circle).
 
-    Parameters:
+    Args:
     - center: The center coordinates of the disc.
     - radius: The radius of the disc.
 
@@ -1066,7 +1068,7 @@ def bezier(a, b, c) -> SDFTexture:
     """
     Creates a signed distance field (SDF) texture representing a quadratic Bezier curve.
 
-    Parameters:
+    Args:
     - a: The starting point of the Bezier curve.
     - b: The control point influencing the curvature of the curve.
     - c: The ending point of the Bezier curve.
@@ -1102,7 +1104,7 @@ def line(a, b) -> SDFTexture:
     """
     Creates a signed distance field (SDF) texture representing a straight line segment.
 
-    Parameters:
+    Args:
     - a: The starting point of the line segment.
     - b: The ending point of the line segment.
 
@@ -1135,7 +1137,7 @@ def grid(offset, size, angle=0/360*math.pi) -> SDFTexture:
     """
     Creates a signed distance field (SDF) texture representing a grid.
 
-    Parameters:
+    Args:
     - offset: The center coordinates of the grid.
     - size: The size of each cell in the grid (width, height).
     - angle (float): The rotation angle of the grid in radians. Default is 0.
@@ -1171,7 +1173,7 @@ def clear_color(color) -> ColorTexture:
     """
     Creates a color texture filled with a specified color.
 
-    Parameters:
+    Args:
     - color: The color to fill the texture with. Should be in RGBA format.
 
     Returns:
@@ -1251,7 +1253,7 @@ def linear_gradient(a, b, color1, color2):
     """
     Generates a linear gradient between two points and returns it as a ColorTexture.
 
-    Parameters:
+    Args:
     - a: The starting point of the gradient.
     - b: The ending point of the gradient.
     - color1: The color at the starting point of the gradient.
@@ -1288,7 +1290,7 @@ def radial_gradient(a, color1, color2, inner=0, outer=100):
     """
     Generates a radial gradient centered at a point and returns it as a ColorTexture.
 
-    Parameters:
+    Args:
     - a: The center point of the radial gradient.
     - color1: The color at the center of the gradient.
     - color2: The color at the outer edge of the gradient.

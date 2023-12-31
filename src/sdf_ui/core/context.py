@@ -1,3 +1,5 @@
+__docformat__ = "google"
+
 from pathlib import Path
 
 import moderngl as mgl
@@ -61,11 +63,11 @@ class Counter:
     """
     Simple counter class with logging capabilities.
     """
-    def __init__(self, value, name="TEX_REGISTRY") -> None:
+    def __init__(self, value=0, name="TEX_REGISTRY") -> None:
         """
         Initializes the counter.
 
-        Parameters:
+        Args:
         - value (int): Initial value of the counter.
         - name (str, optional): Name of the counter. Defaults to "TEX_REGISTRY".
         """
@@ -84,7 +86,7 @@ class Counter:
         """
         Adds a value to the counter.
 
-        Parameters:
+        Args:
         - other (int): Value to add.
 
         Returns:
@@ -105,7 +107,7 @@ class Counter:
         """
         Subtracts a value from the counter.
 
-        Parameters:
+        Args:
         - other (int): Value to subtract.
 
         Returns:
@@ -422,7 +424,7 @@ def init_sdf_ui(size):
     """
     Initializes the SDF UI with the specified size.
 
-    Parameters:
+    Args:
     - size (tuple): The size of the context.
 
     Example:
@@ -436,7 +438,7 @@ def set_context(context: Context):
     """
     Sets the context for the SDF UI.
 
-    Parameters:
+    Args:
     - context (Context): The context to set.
 
     Example:

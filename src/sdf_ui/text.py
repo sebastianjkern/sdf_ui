@@ -1,17 +1,40 @@
+__docformat__ = "google"
+
 import ttfquery
 from ttfquery import describe, glyph
 
 from sdf_ui.core.core import line, bezier
 from sdf_ui.core.util import collinear
 
+def middle(x1, y1, x2, y2):
+    """
+    Calculate the midpoint between two points.
+
+    Args:
+    - x1, y1: Coordinates of the first point.
+    - x2, y2: Coordinates of the second point.
+
+    Returns:
+    Tuple: Midpoint coordinates (x, y).
+    """
+    return x1 + 0.5 * (x2 - x1), y1 + 0.5 * (y2 - y1)
+
 
 def get_glyph(font_file_path, char):
+    """
+    Extract the Bezier control points of a glyph from a font file.
+
+    Args:
+    - font_file_path (str): Path to the font file.
+    - char (str): Character for which to extract the glyph.
+
+    Returns:
+    List: List of Bezier control points for the glyph.
+    """
     font = describe.openFont(font_file_path)
     g = glyph.Glyph(ttfquery.glyphquery.glyphName(font, char))
     ttf_contours = g.calculateContours(font)
 
-    def middle(x1, y1, x2, y2):
-        return x1 + 0.5 * (x2 - x1), y1 + 0.5 * (y2 - y1)
 
     interpolated_contours = []
 
@@ -44,6 +67,18 @@ def get_glyph(font_file_path, char):
 
 
 def glyph_sdf(glyph, scale, ox, oy, path="fonts/SFUIDisplay-Bold.ttf"):
+    """
+    Generate the signed distance field (SDF) for a glyph.
+
+    Parameters:
+    - glyph (str): The character for which to generate the SDF.
+    - scale (float): Scaling factor for the glyph.
+    - ox, oy (float): Offset of the glyph.
+    - path (str): Path to the font file.
+
+    Returns:
+    SDFTexture: The union of Bezier curves representing the SDF.
+    """
     control_points = get_glyph(path, glyph)
 
     union_sdf = None

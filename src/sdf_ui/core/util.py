@@ -1,3 +1,5 @@
+__docformat__ = "google"
+
 import numpy as np
 
 def rgb_col(r: int, g: int, b: int, *a):
