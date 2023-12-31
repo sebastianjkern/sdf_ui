@@ -13,6 +13,14 @@ None, absolutely none...
 ### Target Specs: 
 Unclear what the target for this library is. Somwhere along the line of a educational library for graphics programming, with some esoteric rendering pipeline, but also high fidelity graphics. Maybe usable for high fidelity graphics of mathematical topics? Maybe as plug in replacement for matplotlib rendering backend?
 
+### Installation:
+
+The project is structured to allow for pip installation:
+
+```bash
+pip install git+https://github.com/sebastianjkern/sdf_ui
+```
+
 ### How it works:
 
 <img src="./sdf_ui_diagram.png" width="500">
