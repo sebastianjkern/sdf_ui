@@ -23,3 +23,9 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/sebastianjkern/sdf_ui"
 Issues = "https://github.com/sebastianjkern/sdf_ui/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+mypkg = ["*.glsl"]
