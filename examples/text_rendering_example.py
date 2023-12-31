@@ -9,5 +9,4 @@ def text_rendering_example():
         l1.union(l2) \
             .union(l3) \
             .fill(inflate=5, fg_color=(1, 1, 1, 1), bg_color=(0, 0, 0, 1)) \
-            .to_rgb() \
             .show()

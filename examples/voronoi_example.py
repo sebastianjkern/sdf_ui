@@ -14,4 +14,4 @@ def voronoi_example():
         combined_discs.show()
 
         filled = combined_discs.fill((1, 1, 1, 1), (0.1, 0.1, 0.1, 1.0), inflate=25, inner=0, outer=50)
-        filled.to_rgb().show()
+        filled.show()

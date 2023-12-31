@@ -8,6 +8,10 @@ from moderngl import Texture
 from .context import get_context, Shaders, decrease_tex_registry
 from .log import logger
 
+class ColorSpaceMode:
+    LAB = "LAB"
+    RGB = "RGB"
+
 class ColorTexture:
     """
     Represents a color texture with associated methods for image processing and blending operations.
@@ -22,8 +26,11 @@ class ColorTexture:
     >>> color_texture = ColorTexture(tex)
     """
 
-    def __init__(self, tex):
+    def __init__(self, tex, mode=ColorSpaceMode.LAB):
         self.tex: Texture = tex
+        self.mode = mode
+
+        logger().debug(f"ColorTexture with mode {self.mode} is generated")
 
         if get_context() is None:
             raise ValueError("context needs to be set in order to create ColorTextures")
@@ -57,30 +64,38 @@ class ColorTexture:
         if not type(self) == type(obj):
             raise TypeError(f"{obj} of type {type(obj)} should be {type(self)}")
 
-    def show(self):
+    def show(self, conversion=True):
         """
         Displays the ColorTexture using an image viewer.
+
+        Args:
+        - conversion (bool): Enable the automatic conversion to RGB Color Space if true
 
         Example:
         >>> color_texture = ColorTexture(...)
         >>> color_texture.show()
         """
-        image = Image.frombytes("RGBA", self.tex.size, self.tex.read(), "raw")
+        temp = self.to_rgb() if self.mode == ColorSpaceMode.LAB and conversion else self
+
+        image = Image.frombytes("RGBA", temp.tex.size, temp.tex.read(), "raw")
         image = image.transpose(Image.FLIP_TOP_BOTTOM)
         image.show()
 
-    def save(self, name):
+    def save(self, name, conversion=True):
         """
         Saves the ColorTexture to an image file.
 
         Args:
         - name (str): The file name, including the file extension.
+        - conversion (bool): Enable the automatic conversion to RGB Color Space if true
 
         Example:
         >>> color_texture = ColorTexture(...)
         >>> color_texture.save("output.png")
         """
-        image = Image.frombytes("RGBA", self.tex.size, self.tex.read(), "raw")
+        temp = self.to_rgb() if self.mode == ColorSpaceMode.LAB and conversion else self
+
+        image = Image.frombytes("RGBA", temp.tex.size, temp.tex.read(), "raw")
         image = image.transpose(Image.FLIP_TOP_BOTTOM)
         image.save(name)
 
@@ -133,7 +148,7 @@ class ColorTexture:
         decrease_tex_registry()
         tex0.release()
 
-        return ColorTexture(tex1)
+        return ColorTexture(tex1, mode=self.mode)
 
     def blur_13(self, n: int=0):
         """
@@ -184,7 +199,7 @@ class ColorTexture:
         decrease_tex_registry()
         tex0.release()
 
-        return ColorTexture(tex1)
+        return ColorTexture(tex1, mode=self.mode)
 
     # Needs some special treatment because of the two separate components
     def blur(self, n: int=0, base: int=9):
@@ -241,7 +256,7 @@ class ColorTexture:
 
         logger().debug(f"Running {Shaders.TO_LAB} shader...")
 
-        return ColorTexture(tex)
+        return ColorTexture(tex, mode=ColorSpaceMode.LAB)
 
     def to_rgb(self):
         """
@@ -267,7 +282,7 @@ class ColorTexture:
 
         logger().debug(f"Running {Shaders.TO_RGB} shader...")
 
-        return ColorTexture(tex)
+        return ColorTexture(tex, mode=ColorSpaceMode.RGB)
 
     # Some fun with image processing stuff
     def dithering(self):
@@ -294,7 +309,7 @@ class ColorTexture:
 
         logger().debug(f"Running {Shaders.DITHERING} shader...")
 
-        return ColorTexture(tex)
+        return ColorTexture(tex, mode=self.mode)
 
     # Black white dithering
     def dither_1bit(self):
@@ -321,7 +336,7 @@ class ColorTexture:
 
         logger().debug(f"Running {Shaders.DITHERING} shader...")
 
-        return ColorTexture(tex)
+        return ColorTexture(tex, mode=self.mode)
 
     def mask(self, top, mask):
         """
@@ -360,7 +375,7 @@ class ColorTexture:
 
         logger().debug(f"Running {Shaders.LAYER_MASK} shader...")
 
-        return ColorTexture(tex)
+        return ColorTexture(tex, mode=self.mode)
     
     def multiply(self, other):
         """
@@ -396,7 +411,7 @@ class ColorTexture:
 
         logger().debug(f"Running {Shaders.MULTIPLY} shader...")
 
-        return ColorTexture(tex)
+        return ColorTexture(tex, mode=self.mode)
 
     def alpha_overlay(self, other):
         """
@@ -430,7 +445,7 @@ class ColorTexture:
 
         logger().debug(f"Running {Shaders.OVERLAY} shader...")
 
-        return ColorTexture(tex)
+        return ColorTexture(tex, mode=self.mode)
 
     def transparency(self, alpha):
         """
@@ -460,7 +475,7 @@ class ColorTexture:
 
         logger().debug(f"Running {Shaders.TRANSPARENCY} shader...")
 
-        return ColorTexture(tex)
+        return ColorTexture(tex, mode=self.mode)
     
     def invert(self):
         """
@@ -486,7 +501,7 @@ class ColorTexture:
 
         logger().debug(f"Running {Shaders.INVERT} shader...")
 
-        return ColorTexture(tex)
+        return ColorTexture(tex, mode=self.mode)
 
 
 class SDFTexture:
