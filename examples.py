@@ -3,7 +3,7 @@ from examples.rotation_example import rotation_example
 from examples.voronoi_example import voronoi_example
 from examples.text_rendering_example import text_rendering_example
 
-from src.sdf_ui.core.log import logger
+from src.sdf_ui import logger
 
 import logging
 
