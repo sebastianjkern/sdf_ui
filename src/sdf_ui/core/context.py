@@ -288,7 +288,7 @@ class Context:
         # img = np.flip(img, 0).copy(order='C')      # optional
         return self._mgl_ctx.texture(img.shape[1::-1], img.shape[2], img)
     
-    def show_texture(tex):
+    def show_texture(self, tex):
         image = Image.frombytes("RGBA", tex.size, tex.read(), "raw")
         image = image.transpose(Image.FLIP_TOP_BOTTOM)
         image.show()
