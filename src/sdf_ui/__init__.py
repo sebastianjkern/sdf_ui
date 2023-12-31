@@ -5,3 +5,4 @@ from .core import linear_gradient, radial_gradient, rounded_rect, \
 from .log import logger
 from .util import hex_col, collinear
 from .text import glyph_sdf
+from .anim import convert_to_video
