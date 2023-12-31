@@ -913,7 +913,6 @@ class SDFTexture:
         return ColorTexture(tex)
 
     # Convenience functions (not necessary, build on top of functions above)
-
     def generate_mask(self, inflate=0.0, color0=(.0, .0, .0, 1.0), color1=(1.0, 1.0, 1.0, 1.0)) -> ColorTexture:
         """
         Generates a mask based on the signed distance field (SDF) texture, allowing customization of colors and inflation.

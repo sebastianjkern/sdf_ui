@@ -3,7 +3,7 @@ import random
 import sys
 import time
 
-from framework import Context, set_context, clear_color, logger, radial_gradient, hex_col, linear_gradient, \
+from src.sdf_ui import Context, set_context, clear_color, logger, radial_gradient, hex_col, linear_gradient, \
     grid, rounded_rect, disc, film_grain, glyph_sdf
 
 size = (1920, 1080)

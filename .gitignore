@@ -12,3 +12,4 @@ example_images/
 
 src/sdf_ui/__pycache__/
 src/sdf_ui/core/__pycache__/
+examples/__pycache__/
