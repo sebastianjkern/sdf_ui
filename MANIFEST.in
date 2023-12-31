@@ -1,4 +1,1 @@
-include src/core/shader_files/layer/*.glsl
-include src/core/shader_files/postprocessing/*.glsl
-include src/core/shader_files/primitives/*.glsl
-include src/core/shader_files/shading/*.glsl
+graft src
