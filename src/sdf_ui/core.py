@@ -78,7 +78,7 @@ class ColorTexture:
         """
         temp = self.to_rgb() if self.mode == ColorSpaceMode.LAB and conversion else self
 
-        show_texture(temp)
+        show_texture(temp.tex)
 
     def save(self, name, conversion=True):
         """
