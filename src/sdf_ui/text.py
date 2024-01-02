@@ -66,7 +66,7 @@ def get_glyph(font_file_path, char):
     return bezier_control_points
 
 
-def glyph_sdf(glyph, scale, ox, oy, path="fonts/SFUIDisplay-Bold.ttf"):
+def glyph_sdf(ctx, glyph, scale, ox, oy, path="fonts/SFUIDisplay-Bold.ttf"):
     """
     Generate the signed distance field (SDF) for a glyph.
 
@@ -90,9 +90,9 @@ def glyph_sdf(glyph, scale, ox, oy, path="fonts/SFUIDisplay-Bold.ttf"):
             c = (stroke[2][0] * scale + ox, stroke[2][1] * scale + oy)
 
             if not collinear(*a, *b, *c):
-                bezier_sdf = bezier(a, b, c)
+                bezier_sdf = bezier(ctx, a, b, c)
             else:
-                bezier_sdf = line(a, c)
+                bezier_sdf = line(ctx, a, c)
 
             if iy == 0 and ix == 0:
                 union_sdf = bezier_sdf

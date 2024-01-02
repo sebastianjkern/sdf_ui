@@ -5,7 +5,7 @@ from src.sdf_ui import disc, Context
 def masked_union_example():
     SIZE = (512, 512)
 
-    with Context(SIZE) as _:
+    with Context(SIZE) as ctx:
         points = [(245, 301),
             (362, 485),
             (306, 292),
@@ -16,7 +16,7 @@ def masked_union_example():
             (443, 482),
             (163, 294),
             (161, 453)]
-        discs = [disc(point, 50) for point in points]
+        discs = [disc(ctx, point, 50) for point in points]
 
         combined_discs = reduce(lambda x, y: x.union(y), discs)
         combined_discs.save("voronoi.png")

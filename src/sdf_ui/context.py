@@ -6,6 +6,8 @@ import moderngl as mgl
 
 import cv2
 
+import numpy as np
+
 from PIL import Image
 
 from .log import logger
@@ -156,7 +158,8 @@ class ShaderFileDescriptor:
         self.name = name
         self.path = path
 
-
+# The tex registry is not necessary to run the program, 
+# but it helps checking for correct texture caching and deletion processes.
 tex_registry = Counter(0)
 
 
@@ -254,7 +257,6 @@ class Context:
         >>> with Context((800, 600)) as context:
         >>>     # context-related operations
         """
-        set_context(self)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -282,17 +284,10 @@ class Context:
         >>> texture = context.texture_from_image("path/to/image.png")
         """
         img = cv2.imread(path)
-        cv2.imshow('image window', img)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
-        # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB) # optional
-        # img = np.flip(img, 0).copy(order='C')      # optional
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = np.flip(img, 0).copy(order='C')
         return self._mgl_ctx.texture(img.shape[1::-1], img.shape[2], img)
     
-    def show_texture(self, tex):
-        image = Image.frombytes("RGBA", tex.size, tex.read(), "raw")
-        image = image.transpose(Image.FLIP_TOP_BOTTOM)
-        image.show()
 
     def get_shader(self, shader: str):
         """
@@ -424,10 +419,6 @@ class Context:
         return tex
 
 
-# Context management
-_context: Context
-
-
 def init_sdf_ui(size):
     """
     Initializes the SDF UI with the specified size.
@@ -442,30 +433,35 @@ def init_sdf_ui(size):
     _context = Context(size)
 
 
-def set_context(context: Context):
-    """
-    Sets the context for the SDF UI.
+def show_texture(tex: mgl.Texture):
+    """Display the content of an OpenGL texture.
 
     Args:
-    - context (Context): The context to set.
+            tex (mgl.Texture): The OpenGL texture to be displayed.
+
+    Raises:
+        ValueError: If the provided texture is not of the expected format or size.
+
+    Note:
+        This method uses the Pillow library (PIL) to convert the texture data into an image
+        and then displays the image using the default image viewer.
 
     Example:
-    >>> context = Context((800, 600))
-    >>> set_context(context)
+        Assuming `my_texture` is an instance of the mgl.Texture class:
+
+        >>> show_texture(my_texture)
+
     """
-    global _context
-    _context = context
 
+    mode = "F"
+    if tex.dtype == "f1":
+        if tex.components == 3:
+            mode = "RGB"
+        elif tex.components == 4:
+            mode = "RGBA"
+        else:
+            raise NotImplementedError("the mode for the show_texture function is not implemented")
 
-def get_context():
-    """
-    Gets the current context for the SDF UI.
-
-    Returns:
-    The current context.
-
-    Example:
-    >>> context = get_context()
-    """
-    global _context
-    return _context
+    image = Image.frombytes(mode, tex.size, tex.read(), "raw")
+    image = image.transpose(Image.FLIP_TOP_BOTTOM)
+    image.show()

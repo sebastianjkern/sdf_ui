@@ -1,10 +1,10 @@
 from src.sdf_ui import Context, line
 
 def text_rendering_example():
-    with Context((500, 500)) as _:
-        l1 = line((250, 100), (50, 450))
-        l2 = line((250, 100), (450, 450))
-        l3 = line((100, 250), (400, 250))
+    with Context((500, 500)) as ctx:
+        l1 = line(ctx, (250, 100), (50, 450))
+        l2 = line(ctx, (250, 100), (450, 450))
+        l3 = line(ctx, (100, 250), (400, 250))
 
         l1.union(l2) \
             .union(l3) \

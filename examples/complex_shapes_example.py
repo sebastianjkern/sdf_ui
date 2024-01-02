@@ -10,9 +10,9 @@ COLORS = [
 ]
 
 def complex_shapes_example():
-    with Context((500, 500)):
-        d1 = disc((175, 250), 80)
-        d2 = disc((325, 250), 80)
+    with Context((500, 500)) as ctx:
+        d1 = disc(ctx, (175, 250), 80)
+        d2 = disc(ctx, (325, 250), 80)
         union = d1.smooth_union(d2)
         c0 = union.outline(hex_col(COLORS[0]), (0.0, 0.0, 0.0, 0.0), -50)
         c1 = union.outline(hex_col(COLORS[0]), (0.0, 0.0, 0.0, 0.0), 0)

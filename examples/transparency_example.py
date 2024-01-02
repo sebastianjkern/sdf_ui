@@ -29,18 +29,18 @@ COLORS = [
 
 
 def transparency_example():
-    with Context(size) as context:
-        backdrop = radial_gradient((size[0] / 2, size[1] / 2), hex_col("#004C81", alpha=255),
-                           hex_col("#062A4A", alpha=255), inner=0, outer=context.percent_of_min(75)).alpha_overlay(grid((10, 10), (50, 50)).fill(hex_col("#5EC6E2", 255), hex_col("#5EC6E2", 0), inflate=.5)).alpha_overlay(grid((10, 10), (150, 150)).fill(hex_col("#5EC6E2", 255), hex_col("#5EC6E2", 0), inflate=1.5))
+    with Context(size) as ctx:
+        backdrop = radial_gradient(ctx, (size[0] / 2, size[1] / 2), hex_col("#004C81", alpha=255),
+                           hex_col("#062A4A", alpha=255), inner=0, outer=ctx.percent_of_min(75)).alpha_overlay(grid(ctx, (10, 10), (50, 50)).fill(hex_col("#5EC6E2", 255), hex_col("#5EC6E2", 0), inflate=.5)).alpha_overlay(grid(ctx, (10, 10), (150, 150)).fill(hex_col("#5EC6E2", 255), hex_col("#5EC6E2", 0), inflate=1.5))
 
-        gradient = linear_gradient((100, 100), (900, 100), (*rand_color(), 1.0), (*rand_color(), 1.0)).transparency(0.45)
+        gradient = linear_gradient(ctx, (100, 100), (900, 100), (*rand_color(), 1.0), (*rand_color(), 1.0)).transparency(0.45)
 
         blur = backdrop.blur(n=1, base=13)
 
-        mask_sdf = rounded_rect((int(size[0] / 2), int(size[1] / 2)),
+        mask_sdf = rounded_rect(ctx, (int(size[0] / 2), int(size[1] / 2)),
                                 (int(size[1] / 3), int(size[1] / 3)),
-                                (context.percent_of_min(10), context.percent_of_min(10), context.percent_of_min(10),
-                                context.percent_of_min(10)))
+                                (ctx.percent_of_min(10), ctx.percent_of_min(10), ctx.percent_of_min(10),
+                                ctx.percent_of_min(10)))
 
         mask = mask_sdf.generate_mask()
         outline = mask_sdf.outline((1.0, 1.0, 1.0, .25), (1.0, 1.0, 1.0, 0.0), inflate=-1.5)
@@ -60,13 +60,13 @@ def transparency_example():
             col1 = (*col0, 1.0)
             col2 = (*col0, 0.0)
 
-            distance = disc((x, y), r)
+            distance = disc(ctx, (x, y), r)
             shade = distance.shadow(7, 0, transparency=0.5)
 
             backdrop1 = (backdrop if i == 0 else backdrop1).alpha_overlay(shade).alpha_overlay(distance.fill(col1, col2, 0))
 
         image = backdrop1.alpha_overlay(glass_shadow).mask(blur, mask).alpha_overlay(glass).alpha_overlay(
-            outline).alpha_overlay(film_grain().to_lab().transparency(5 / 255)).to_rgb()
+            outline).alpha_overlay(film_grain(ctx).to_lab().transparency(5 / 255)).to_rgb()
 
         image.show()
 

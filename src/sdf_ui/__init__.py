@@ -1,5 +1,5 @@
 from .ascii import convert_image_to_ascii_colored, convert_image_to_ascii
-from .context import Context, decrease_tex_registry, Shaders, get_context, set_context
+from .context import Context, decrease_tex_registry, Shaders, show_texture
 from .core import linear_gradient, radial_gradient, rounded_rect, \
     disc, grid, bezier, line, clear_color, film_grain
 from .log import logger

@@ -5,7 +5,7 @@ import math
 from PIL import Image
 from moderngl import Texture
 
-from .context import get_context, Shaders, decrease_tex_registry
+from .context import Shaders, decrease_tex_registry, Context
 from .log import logger
 
 class ColorSpaceMode:
@@ -26,14 +26,15 @@ class ColorTexture:
     >>> color_texture = ColorTexture(tex)
     """
 
-    def __init__(self, tex, mode=ColorSpaceMode.LAB):
+    def __init__(self, tex, context: Context, mode=ColorSpaceMode.LAB):
         self.tex: Texture = tex
         self.mode = mode
+        self.context = context
+
+        if context==None:
+            raise ValueError("context can't be None")
 
         logger().debug(f"ColorTexture with mode {self.mode} is generated")
-
-        if get_context() is None:
-            raise ValueError("context needs to be set in order to create ColorTextures")
 
     def __del__(self):
         """
@@ -113,42 +114,40 @@ class ColorTexture:
         >>> color_texture = ColorTexture(...)
         >>> blurred_texture = color_texture.blur_9(n=3)
         """
-        ctx = get_context()
-
-        vert = ctx.get_shader(Shaders.BLUR_VER_9)
+        vert = self.context.get_shader(Shaders.BLUR_VER_9)
         vert['destTex'] = 0
         vert['origTex'] = 1
 
-        hor = ctx.get_shader(Shaders.BLUR_HOR_9)
+        hor = self.context.get_shader(Shaders.BLUR_HOR_9)
         hor['destTex'] = 0
         hor['origTex'] = 1
 
-        tex0 = ctx.rgba8()
-        tex1 = ctx.rgba8()
+        tex0 = self.context.rgba8()
+        tex1 = self.context.rgba8()
 
         tex0.bind_to_image(0, read=False, write=True)
         self.tex.bind_to_image(1, read=True, write=False)
-        vert.run(*ctx.local_size)
+        vert.run(*self.context.local_size)
 
         tex1.bind_to_image(0, read=False, write=True)
         tex0.bind_to_image(1, read=True, write=False)
-        hor.run(*ctx.local_size)
+        hor.run(*self.context.local_size)
 
         for _ in range(n):
             tex0.bind_to_image(0, read=False, write=True)
             tex1.bind_to_image(1, read=True, write=False)
-            vert.run(*ctx.local_size)
+            vert.run(*self.context.local_size)
 
             tex1.bind_to_image(0, read=False, write=True)
             tex0.bind_to_image(1, read=True, write=False)
-            hor.run(*ctx.local_size)
+            hor.run(*self.context.local_size)
 
         logger().debug(f"Running {Shaders.BLUR_HOR_9} and {Shaders.BLUR_VER_9} shader {n + 1} times ...")
 
         decrease_tex_registry()
         tex0.release()
 
-        return ColorTexture(tex1, mode=self.mode)
+        return ColorTexture(tex1, self.context, mode=self.mode)
 
     def blur_13(self, n: int=0):
         """
@@ -164,42 +163,40 @@ class ColorTexture:
         >>> color_texture = ColorTexture(...)
         >>> blurred_texture = color_texture.blur_13(n=3)
         """
-        ctx = get_context()
-
-        vert = ctx.get_shader(Shaders.BLUR_VER_13)
+        vert = self.context.get_shader(Shaders.BLUR_VER_13)
         vert['destTex'] = 0
         vert['origTex'] = 1
 
-        hor = ctx.get_shader(Shaders.BLUR_HOR_13)
+        hor = self.context.get_shader(Shaders.BLUR_HOR_13)
         hor['destTex'] = 0
         hor['origTex'] = 1
 
-        tex0 = ctx.rgba8()
-        tex1 = ctx.rgba8()
+        tex0 = self.context.rgba8()
+        tex1 = self.context.rgba8()
 
         tex0.bind_to_image(0, read=False, write=True)
         self.tex.bind_to_image(1, read=True, write=False)
-        vert.run(*ctx.local_size)
+        vert.run(*self.context.local_size)
 
         tex1.bind_to_image(0, read=False, write=True)
         tex0.bind_to_image(1, read=True, write=False)
-        hor.run(*ctx.local_size)
+        hor.run(*self.context.local_size)
 
         for _ in range(n):
             tex0.bind_to_image(0, read=False, write=True)
             tex1.bind_to_image(1, read=True, write=False)
-            vert.run(*ctx.local_size)
+            vert.run(*self.context.local_size)
 
             tex1.bind_to_image(0, read=False, write=True)
             tex0.bind_to_image(1, read=True, write=False)
-            hor.run(*ctx.local_size)
+            hor.run(*self.context.local_size)
 
         logger().debug(f"Running {Shaders.BLUR_HOR_13} and {Shaders.BLUR_VER_13} shader {n + 1} times ...")
 
         decrease_tex_registry()
         tex0.release()
 
-        return ColorTexture(tex1, mode=self.mode)
+        return ColorTexture(tex1, context=self.context, mode=self.mode)
 
     # Needs some special treatment because of the two separate components
     def blur(self, n: int=0, base: int=9):
@@ -243,20 +240,18 @@ class ColorTexture:
         >>> color_texture = ColorTexture(...)
         >>> lab_texture = color_texture.to_lab()
         """
-        ctx = get_context()
-
-        shader = ctx.get_shader(Shaders.TO_LAB)
+        shader = self.context.get_shader(Shaders.TO_LAB)
         shader['destTex'] = 0
         shader['origTex'] = 1
 
-        tex = ctx.rgba8()
+        tex = self.context.rgba8()
         tex.bind_to_image(0, read=False, write=True)
         self.tex.bind_to_image(1, read=True, write=False)
-        shader.run(*ctx.local_size)
+        shader.run(*self.context.local_size)
 
         logger().debug(f"Running {Shaders.TO_LAB} shader...")
 
-        return ColorTexture(tex, mode=ColorSpaceMode.LAB)
+        return ColorTexture(tex, context=self.context, mode=ColorSpaceMode.LAB)
 
     def to_rgb(self):
         """
@@ -269,20 +264,18 @@ class ColorTexture:
         >>> color_texture = ColorTexture(...)
         >>> rgb_texture = color_texture.to_rgb()
         """
-        ctx = get_context()
-
-        shader = ctx.get_shader(Shaders.TO_RGB)
+        shader = self.context.get_shader(Shaders.TO_RGB)
         shader['destTex'] = 0
         shader['origTex'] = 1
 
-        tex = ctx.rgba8()
+        tex = self.context.rgba8()
         tex.bind_to_image(0, read=False, write=True)
         self.tex.bind_to_image(1, read=True, write=False)
-        shader.run(*ctx.local_size)
+        shader.run(*self.context.local_size)
 
         logger().debug(f"Running {Shaders.TO_RGB} shader...")
 
-        return ColorTexture(tex, mode=ColorSpaceMode.RGB)
+        return ColorTexture(tex, context=self.context, mode=ColorSpaceMode.RGB)
 
     # Some fun with image processing stuff
     def dithering(self):
@@ -296,20 +289,19 @@ class ColorTexture:
         >>> color_texture = ColorTexture(...)
         >>> dithered_texture = color_texture.dithering()
         """
-        ctx = get_context()
 
-        shader = ctx.get_shader(Shaders.DITHERING)
+        shader = self.context.get_shader(Shaders.DITHERING)
         shader['destTex'] = 0
         shader['origTex'] = 1
 
-        tex = ctx.rgba8()
+        tex = self.context.rgba8()
         tex.bind_to_image(0, read=False, write=True)
         self.tex.bind_to_image(1, read=True, write=False)
-        shader.run(*ctx.local_size)
+        shader.run(*self.context.local_size)
 
         logger().debug(f"Running {Shaders.DITHERING} shader...")
 
-        return ColorTexture(tex, mode=self.mode)
+        return ColorTexture(tex, context=self.context, mode=self.mode)
 
     # Black white dithering
     def dither_1bit(self):
@@ -323,20 +315,19 @@ class ColorTexture:
         >>> color_texture = ColorTexture(...)
         >>> dithered_texture = color_texture.dither_1bit()
         """
-        ctx = get_context()
 
-        shader = ctx.get_shader(Shaders.DITHER_1BIT)
+        shader = self.context.get_shader(Shaders.DITHER_1BIT)
         shader['destTex'] = 0
         shader['origTex'] = 1
 
-        tex = ctx.rgba8()
+        tex = self.context.rgba8()
         tex.bind_to_image(0, read=False, write=True)
         self.tex.bind_to_image(1, read=True, write=False)
-        shader.run(*ctx.local_size)
+        shader.run(*self.context.local_size)
 
         logger().debug(f"Running {Shaders.DITHERING} shader...")
 
-        return ColorTexture(tex, mode=self.mode)
+        return ColorTexture(tex, context=self.context, mode=self.mode)
 
     def mask(self, top, mask):
         """
@@ -358,24 +349,22 @@ class ColorTexture:
         self._check_type(top)
         self._check_type(mask)
 
-        ctx = get_context()
-
-        shader = ctx.get_shader(Shaders.LAYER_MASK)
+        shader = self.context.get_shader(Shaders.LAYER_MASK)
         shader['destTex'] = 0
         shader['tex0'] = 1
         shader['tex1'] = 2
         shader['mask'] = 3
 
-        tex = ctx.rgba8()
+        tex = self.context.rgba8()
         tex.bind_to_image(0, read=False, write=True)
         self.tex.bind_to_image(1, read=True, write=False)
         top.tex.bind_to_image(2, read=True, write=False)
         mask.tex.bind_to_image(3, read=True, write=False)
-        shader.run(*ctx.local_size)
+        shader.run(*self.context.local_size)
 
         logger().debug(f"Running {Shaders.LAYER_MASK} shader...")
 
-        return ColorTexture(tex, mode=self.mode)
+        return ColorTexture(tex, context=self.context, mode=self.mode)
     
     def multiply(self, other):
         """
@@ -394,24 +383,22 @@ class ColorTexture:
         """
         self._check_type(other)
 
-        ctx = get_context()
-
-        shader = ctx.get_shader(Shaders.MULTIPLY)
+        shader = self.context.get_shader(Shaders.MULTIPLY)
         shader['destTex'] = 0
         shader['mask1'] = 1
         shader['mask2'] = 2
 
-        tex = ctx.rgba8()
+        tex = self.context.rgba8()
         tex.bind_to_image(0, read=False, write=True)
 
         self.tex.bind_to_image(1, read=True, write=False)
         other.tex.bind_to_image(2, read=True, write=False)
 
-        shader.run(*ctx.local_size)
+        shader.run(*self.context.local_size)
 
         logger().debug(f"Running {Shaders.MULTIPLY} shader...")
 
-        return ColorTexture(tex, mode=self.mode)
+        return ColorTexture(tex, context=self.context, mode=self.mode)
 
     def alpha_overlay(self, other):
         """
@@ -430,22 +417,20 @@ class ColorTexture:
         """
         self._check_type(other)
 
-        ctx = get_context()
-
-        shader = ctx.get_shader(Shaders.OVERLAY)
+        shader = self.context.get_shader(Shaders.OVERLAY)
         shader['destTex'] = 0
         shader['tex0'] = 1
         shader['tex1'] = 2
 
-        tex = ctx.rgba8()
+        tex = self.context.rgba8()
         tex.bind_to_image(0, read=False, write=True)
         other.tex.bind_to_image(1, read=True, write=False)
         self.tex.bind_to_image(2, read=True, write=False)
-        shader.run(*ctx.local_size)
+        shader.run(*self.context.local_size)
 
         logger().debug(f"Running {Shaders.OVERLAY} shader...")
 
-        return ColorTexture(tex, mode=self.mode)
+        return ColorTexture(tex, context=self.context, mode=self.mode)
 
     def transparency(self, alpha):
         """
@@ -461,21 +446,20 @@ class ColorTexture:
         >>> color_texture = ColorTexture(...)
         >>> transparent_texture = color_texture.transparency(alpha=0.5)
         """
-        ctx = get_context()
 
-        shader = ctx.get_shader(Shaders.TRANSPARENCY)
+        shader = self.context.get_shader(Shaders.TRANSPARENCY)
         shader['destTex'] = 0
         shader['tex0'] = 1
         shader['alpha'] = alpha
 
-        tex = ctx.rgba8()
+        tex = self.context.rgba8()
         tex.bind_to_image(0, read=False, write=True)
         self.tex.bind_to_image(1, read=True, write=False)
-        shader.run(*ctx.local_size)
+        shader.run(*self.context.local_size)
 
         logger().debug(f"Running {Shaders.TRANSPARENCY} shader...")
 
-        return ColorTexture(tex, mode=self.mode)
+        return ColorTexture(tex, context=self.context, mode=self.mode)
     
     def invert(self):
         """
@@ -488,20 +472,19 @@ class ColorTexture:
         >>> color_texture = ColorTexture(...)
         >>> inverted_texture = color_texture.invert()
         """    
-        ctx = get_context()
 
-        shader = ctx.get_shader(Shaders.INVERT)
+        shader = self.context.get_shader(Shaders.INVERT)
         shader["destTex"] = 0
         shader["origTex"] = 1
 
-        tex = ctx.rgba8()
+        tex = self.context.rgba8()
         tex.bind_to_image(0, read=False, write=True)
         self.tex.bind_to_image(1, read=False, write=True)
-        shader.run(*ctx.local_size)
+        shader.run(*self.context.local_size)
 
         logger().debug(f"Running {Shaders.INVERT} shader...")
 
-        return ColorTexture(tex, mode=self.mode)
+        return ColorTexture(tex, context=self.context, mode=self.mode)
 
 
 class SDFTexture:
@@ -513,11 +496,13 @@ class SDFTexture:
     Contains the functions that can be executed on one or more SDF textures.
     """
 
-    def __init__(self, tex):
+    def __init__(self, tex, context: Context):
         self.tex: Texture = tex
+        self.context = context
 
-        if get_context() is None:
-            raise ValueError("context needs to be set in order to create ColorTextures")
+        if context==None:
+            raise ValueError("context can't be None")
+
 
     def __del__(self):
         """
@@ -628,23 +613,22 @@ class SDFTexture:
         >>> smooth_union_texture = sdf_texture_1.smooth_union(sdf_texture_2, k=0.05)
         """
         self._check_type(other)
-        ctx = get_context()
 
-        shader = ctx.get_shader(Shaders.SMOOTH_MIN)
+        shader = self.context.get_shader(Shaders.SMOOTH_MIN)
         shader['destTex'] = 0
         shader['sdf0'] = 1
         shader['sdf1'] = 2
         shader['smoothness'] = k
 
-        tex = ctx.r32f()
+        tex = self.context.r32f()
         tex.bind_to_image(0, read=False, write=True)
         self.tex.bind_to_image(1, read=True, write=False)
         other.tex.bind_to_image(2, read=True, write=False)
-        shader.run(*ctx.local_size)
+        shader.run(*self.context.local_size)
 
         logger().debug(f"Running {Shaders.SMOOTH_MIN} shader...")
 
-        return SDFTexture(tex)
+        return SDFTexture(tex, context=self.context)
 
     def union(self, other):
         """
@@ -662,22 +646,21 @@ class SDFTexture:
         >>> union_texture = sdf_texture_1.union(sdf_texture_2)
         """
         self._check_type(other)
-        ctx = get_context()
 
-        shader = ctx.get_shader(Shaders.UNION)
+        shader = self.context.get_shader(Shaders.UNION)
         shader['destTex'] = 0
         shader['sdf0'] = 1
         shader['sdf1'] = 2
 
-        tex = ctx.r32f()
+        tex = self.context.r32f()
         tex.bind_to_image(0, read=False, write=True)
         self.tex.bind_to_image(1, read=True, write=False)
         other.tex.bind_to_image(2, read=True, write=False)
-        shader.run(*ctx.local_size)
+        shader.run(*self.context.local_size)
 
         logger().debug(f"Running {Shaders.UNION} shader...")
 
-        return SDFTexture(tex)
+        return SDFTexture(tex, context=self.context)
     
     def masked_union(self, other):
         """
@@ -696,28 +679,27 @@ class SDFTexture:
         >>> sdf_result, mask_result = sdf_texture_1.masked_union(sdf_texture_2)
         """
         self._check_type(other)
-        ctx = get_context()
 
-        shader = ctx.get_shader(Shaders.MASKED_UNION)
+        shader = self.context.get_shader(Shaders.MASKED_UNION)
         shader['destTex'] = 0
         shader['maskTex'] = 1
         shader['sdf0'] = 2
         shader['sdf1'] = 3
 
-        tex = ctx.r32f()
+        tex = self.context.r32f()
         tex.bind_to_image(0, read=False, write=True)
 
-        mask = ctx.rgba8()
+        mask = self.context.rgba8()
         mask.bind_to_image(1, read=False, write=True)
 
         self.tex.bind_to_image(2, read=True, write=False)
         other.tex.bind_to_image(3, read=True, write=False)
 
-        shader.run(*ctx.local_size)
+        shader.run(*self.context.local_size)
 
         logger().debug(f"Running {Shaders.MASKED_UNION} shader...")
 
-        return SDFTexture(tex), ColorTexture(mask)
+        return SDFTexture(tex, context=self.context), ColorTexture(mask, context=self.context, mode=ColorSpaceMode.RGB)
 
     def subtract(self, other):
         """
@@ -735,22 +717,21 @@ class SDFTexture:
         >>> subtracted_texture = sdf_texture_1.subtract(sdf_texture_2)
         """
         self._check_type(other)
-        ctx = get_context()
 
-        shader = ctx.get_shader(Shaders.SUBTRACT)
+        shader = self.context.get_shader(Shaders.SUBTRACT)
         shader['destTex'] = 0
         shader['sdf0'] = 1
         shader['sdf1'] = 2
 
-        tex = ctx.r32f()
+        tex = self.context.r32f()
         tex.bind_to_image(0, read=False, write=True)
         self.tex.bind_to_image(1, read=True, write=False)
         other.tex.bind_to_image(2, read=True, write=False)
-        shader.run(*ctx.local_size)
+        shader.run(*self.context.local_size)
 
         logger().debug(f"Running {Shaders.SUBTRACT} shader...")
 
-        return SDFTexture(tex)
+        return SDFTexture(tex, context=self.context)
 
     def intersection(self, other):
         """
@@ -768,22 +749,21 @@ class SDFTexture:
         >>> intersection_texture = sdf_texture_1.intersection(sdf_texture_2)
         """
         self._check_type(other)
-        ctx = get_context()
 
-        shader = ctx.get_shader(Shaders.INTERSECTION)
+        shader = self.context.get_shader(Shaders.INTERSECTION)
         shader['destTex'] = 0
         shader['sdf0'] = 1
         shader['sdf1'] = 2
 
-        tex = ctx.r32f()
+        tex = self.context.r32f()
         tex.bind_to_image(0, read=False, write=True)
         self.tex.bind_to_image(1, read=True, write=False)
         other.tex.bind_to_image(2, read=True, write=False)
-        shader.run(*ctx.local_size)
+        shader.run(*self.context.local_size)
 
         logger().debug(f"Running {Shaders.INTERSECTION} shader...")
 
-        return SDFTexture(tex)
+        return SDFTexture(tex, context=self.context)
 
     # Postprocessing
     def abs(self):
@@ -797,20 +777,18 @@ class SDFTexture:
         >>> sdf_texture = SDFTexture(...)
         >>> abs_texture = sdf_texture.abs()
         """
-        ctx = get_context()
-
-        shader = ctx.get_shader(Shaders.ABS)
+        shader = self.context.get_shader(Shaders.ABS)
         shader['destTex'] = 0
         shader['sdf0'] = 0
 
-        tex = ctx.r32f()
+        tex = self.context.r32f()
         tex.bind_to_image(0, read=False, write=True)
         self.tex.bind_to_image(1, read=True, write=False)
-        shader.run(*ctx.local_size)
+        shader.run(*self.context.local_size)
 
         logger().debug(f"Running {Shaders.ABS} shader...")
 
-        return SDFTexture(tex)
+        return SDFTexture(tex, context=self.context)
 
     # SDF -> Color Texture
     def fill(self, fg_color, bg_color, inflate=0.0, inner=-1.5, outer=0.0) -> ColorTexture:
@@ -834,9 +812,8 @@ class SDFTexture:
         >>> background_color = (0.0, 0.0, 1.0, 1.0)  # Blue
         >>> filled_texture = sdf_texture.fill(foreground_color, background_color, inflate=0.2, inner=-1.0, outer=0.5)
         """
-        ctx = get_context()
 
-        shader = ctx.get_shader(Shaders.FILL)
+        shader = self.context.get_shader(Shaders.FILL)
         shader['destTex'] = 0
         shader['sdf'] = 1
         shader['inflate'] = inflate
@@ -845,14 +822,14 @@ class SDFTexture:
         shader['first'] = inner
         shader['second'] = outer
 
-        tex = ctx.rgba8()
+        tex = self.context.rgba8()
         tex.bind_to_image(0, read=False, write=True)
         self.tex.bind_to_image(1, read=True, write=False)
-        shader.run(*ctx.local_size)
+        shader.run(*self.context.local_size)
 
         logger().debug(f"Running {Shaders.FILL} shader...")
 
-        return ColorTexture(tex)
+        return ColorTexture(tex, context=self.context, mode=ColorSpaceMode.LAB)
 
     def fill_from_texture(self, layer: ColorTexture, background=(0.0, 0.0, 0.0, 0.0), inflate=0) -> ColorTexture:
         """
@@ -871,9 +848,7 @@ class SDFTexture:
         >>> color_texture = ColorTexture(...)
         >>> filled_texture = sdf_texture.fill_from_texture(color_texture, background=(1.0, 1.0, 1.0, 1.0), inflate=0.2)
         """
-        ctx = get_context()
-
-        shader = ctx.get_shader(Shaders.FILL_FROM_TEXTURE)
+        shader = self.context.get_shader(Shaders.FILL_FROM_TEXTURE)
         shader['destTex'] = 0
         shader['origTex'] = 1
         shader['sdf'] = 2
@@ -881,15 +856,15 @@ class SDFTexture:
         shader['background'] = background
         shader['inflate'] = inflate
 
-        tex = ctx.rgba8()
+        tex = self.context.rgba8()
         tex.bind_to_image(0, write=True, read=False)
         layer.tex.bind_to_image(1, write=False, read=True)
         self.tex.bind_to_image(2, write=False, read=True)
-        shader.run(*ctx.local_size)
+        shader.run(*self.context.local_size)
 
         logger().debug(f"Running {Shaders.FILL_FROM_TEXTURE} shader...")
 
-        return ColorTexture(tex)
+        return ColorTexture(tex, context=self.context, mode=layer.mode)
 
     def outline(self, fg_color, bg_color, inflate=0.0) -> ColorTexture:
         """
@@ -909,23 +884,22 @@ class SDFTexture:
         >>> background_color = (0.0, 0.0, 1.0, 1.0)  # Blue
         >>> inflated_outline_texture = sdf_texture.outline(foreground_color, background_color, inflate=0.1)
         """
-        ctx = get_context()
 
-        shader = ctx.get_shader(Shaders.OUTLINE)
+        shader = self.context.get_shader(Shaders.OUTLINE)
         shader['destTex'] = 0
         shader['sdf'] = 1
         shader['background'] = bg_color
         shader['outline'] = fg_color
         shader['inflate'] = inflate
 
-        tex = ctx.rgba8()
+        tex = self.context.rgba8()
         tex.bind_to_image(0, read=False, write=True)
         self.tex.bind_to_image(1, read=True, write=False)
-        shader.run(*ctx.local_size)
+        shader.run(*self.context.local_size)
 
         logger().debug(f"Running {Shaders.OUTLINE} shader...")
 
-        return ColorTexture(tex)
+        return ColorTexture(tex, context=self.context, mode=ColorSpaceMode.LAB)
 
     # Convenience functions (not necessary, build on top of functions above)
     def generate_mask(self, inflate=0.0, color0=(.0, .0, .0, 1.0), color1=(1.0, 1.0, 1.0, 1.0)) -> ColorTexture:
@@ -966,7 +940,7 @@ class SDFTexture:
             .blur(base=9, n=distance).transparency(transparency)
 
 
-def interpolate(tex0: SDFTexture, tex1: SDFTexture, t=0.5) -> SDFTexture:
+def interpolate(ctx: Context, tex0: SDFTexture, tex1: SDFTexture, t=0.5) -> SDFTexture:
     """
     Interpolates between two signed distance field (SDF) textures.
 
@@ -985,8 +959,6 @@ def interpolate(tex0: SDFTexture, tex1: SDFTexture, t=0.5) -> SDFTexture:
     >>> sdf_texture_1 = SDFTexture(...)
     >>> interpolated_texture = interpolate(sdf_texture_0, sdf_texture_1, t=0.3)
     """
-
-    ctx = get_context()
     tex = ctx.rgba8()
 
     shader = ctx.get_shader(Shaders.INTERPOLATION)
@@ -1007,7 +979,7 @@ def interpolate(tex0: SDFTexture, tex1: SDFTexture, t=0.5) -> SDFTexture:
 
 
 # Primitives
-def rounded_rect(center, size, corner_radius, angle=0/360*math.pi) -> SDFTexture:
+def rounded_rect(ctx, center, size, corner_radius, angle=0/360*math.pi) -> SDFTexture:
     """
     Creates a signed distance field (SDF) texture representing a rounded rectangle.
 
@@ -1028,8 +1000,6 @@ def rounded_rect(center, size, corner_radius, angle=0/360*math.pi) -> SDFTexture
     >>> rounded_rect_texture = rounded_rect(center, size, corner_radius, angle)
     """
 
-    ctx = get_context()
-
     shader = ctx.get_shader(Shaders.RECT)
     shader['destTex'] = 0
     shader['offset'] = center
@@ -1043,10 +1013,10 @@ def rounded_rect(center, size, corner_radius, angle=0/360*math.pi) -> SDFTexture
 
     logger().debug(f"Running {Shaders.RECT} shader...")
 
-    return SDFTexture(tex)
+    return SDFTexture(tex, context=ctx)
 
 
-def disc(center, radius) -> SDFTexture:
+def disc(ctx, center, radius) -> SDFTexture:
     """
     Creates a signed distance field (SDF) texture representing a filled disc (circle).
 
@@ -1063,7 +1033,6 @@ def disc(center, radius) -> SDFTexture:
     >>> disc_texture = disc(center, radius)
     """
 
-    ctx = get_context()
     shader = ctx.get_shader(Shaders.CIRCLE)
     shader["destTex"] = 0
     shader["offset"] = center
@@ -1075,10 +1044,10 @@ def disc(center, radius) -> SDFTexture:
 
     logger().debug(f"Running {Shaders.CIRCLE} shader...")
 
-    return SDFTexture(tex)
+    return SDFTexture(tex, context=ctx)
 
 
-def bezier(a, b, c) -> SDFTexture:
+def bezier(ctx, a, b, c) -> SDFTexture:
     """
     Creates a signed distance field (SDF) texture representing a quadratic Bezier curve.
 
@@ -1097,8 +1066,6 @@ def bezier(a, b, c) -> SDFTexture:
     >>> bezier_texture = bezier(a, b, c)
     """
 
-    ctx = get_context()
-
     shader = ctx.get_shader(Shaders.BEZIER)
     shader['destTex'] = 0
     shader['a'] = a
@@ -1111,10 +1078,10 @@ def bezier(a, b, c) -> SDFTexture:
 
     logger().debug(f"Running {Shaders.BEZIER} shader...")
 
-    return SDFTexture(tex)
+    return SDFTexture(tex, context=ctx)
 
 
-def line(a, b) -> SDFTexture:
+def line(ctx, a, b) -> SDFTexture:
     """
     Creates a signed distance field (SDF) texture representing a straight line segment.
 
@@ -1131,8 +1098,6 @@ def line(a, b) -> SDFTexture:
     >>> line_texture = line(a, b)
     """
 
-    ctx = get_context()
-
     shader = ctx.get_shader(Shaders.LINE)
     shader['destTex'] = 0
     shader['a'] = a
@@ -1144,10 +1109,10 @@ def line(a, b) -> SDFTexture:
 
     logger().debug(f"Running {Shaders.LINE} shader...")
 
-    return SDFTexture(tex)
+    return SDFTexture(tex, context=ctx)
 
 
-def grid(offset, size, angle=0/360*math.pi) -> SDFTexture:
+def grid(ctx, offset, size, angle=0/360*math.pi) -> SDFTexture:
     """
     Creates a signed distance field (SDF) texture representing a grid.
 
@@ -1166,8 +1131,6 @@ def grid(offset, size, angle=0/360*math.pi) -> SDFTexture:
     >>> grid_texture = grid(offset, size, angle)
     """
 
-    ctx = get_context()
-
     shader = ctx.get_shader(Shaders.GRID)
     shader['destTex'] = 0
     shader['grid_size'] = size
@@ -1180,10 +1143,10 @@ def grid(offset, size, angle=0/360*math.pi) -> SDFTexture:
 
     logger().debug(f"Running {Shaders.GRID} shader...")
 
-    return SDFTexture(tex)
+    return SDFTexture(tex, context=ctx)
 
 
-def clear_color(color) -> ColorTexture:
+def clear_color(ctx: Context, color) -> ColorTexture:
     """
     Creates a color texture filled with a specified color.
 
@@ -1197,9 +1160,6 @@ def clear_color(color) -> ColorTexture:
     >>> color = (1.0, 0.0, 0.0, 1.0)  # Red color
     >>> clear_color_texture = clear_color(color)
     """
-
-    ctx = get_context()
-
     shader = ctx.get_shader(Shaders.CLEAR_COLOR)
     shader['destTex'] = 0
     shader['color'] = color
@@ -1210,10 +1170,10 @@ def clear_color(color) -> ColorTexture:
 
     logger().debug(f"Running {Shaders.CLEAR_COLOR} shader...")
 
-    return ColorTexture(tex)
+    return ColorTexture(tex, context=ctx, mode=ColorSpaceMode.LAB)
 
 
-def perlin_noise() -> ColorTexture:
+def perlin_noise(ctx: Context) -> ColorTexture:
     """
     Generates Perlin noise and returns it as a color texture.
 
@@ -1223,9 +1183,6 @@ def perlin_noise() -> ColorTexture:
     Example:
     >>> perlin_texture = perlin_noise()
     """
-
-    ctx = get_context()
-
     shader = ctx.get_shader(Shaders.PERLIN_NOISE)
     shader['destTex'] = 0
 
@@ -1235,10 +1192,10 @@ def perlin_noise() -> ColorTexture:
 
     logger().debug(f"Running {Shaders.PERLIN_NOISE} shader...")
 
-    return ColorTexture(tex)
+    return ColorTexture(tex, context=ctx, mode=ColorSpaceMode.RGB)
 
 
-def film_grain() -> ColorTexture:
+def film_grain(ctx: Context) -> ColorTexture:
     """
     Generates a film grain effect and returns it as a color texture.
 
@@ -1248,8 +1205,6 @@ def film_grain() -> ColorTexture:
     Example:
     >>> film_grain_texture = film_grain()
     """
-
-    ctx = get_context()
     tex = ctx.rgba8()
 
     shader = ctx.get_shader(Shaders.FILM_GRAIN)
@@ -1260,10 +1215,10 @@ def film_grain() -> ColorTexture:
 
     logger().debug(f"Running {Shaders.FILM_GRAIN} shader...")
 
-    return ColorTexture(tex)
+    return ColorTexture(tex, context=ctx, mode=ColorSpaceMode.RGB)
 
 
-def linear_gradient(a, b, color1, color2):
+def linear_gradient(context: Context, a, b, color1, color2):
     """
     Generates a linear gradient between two points and returns it as a ColorTexture.
 
@@ -1296,15 +1251,16 @@ def linear_gradient(a, b, color1, color2):
     ex = ax - dx
     ey = ay + dy
 
-    return line((cx, cy), (ex, ey)) \
+    return line(context, (cx, cy), (ex, ey)) \
         .fill(color1, color2, 0, inner=0, outer=math.sqrt(dx * dx + dy * dy))
 
 
-def radial_gradient(a, color1, color2, inner=0, outer=100):
+def radial_gradient(context: Context, a, color1, color2, inner=0, outer=100):
     """
     Generates a radial gradient centered at a point and returns it as a ColorTexture.
 
     Args:
+    - context: The sdf_ui rendering context
     - a: The center point of the radial gradient.
     - color1: The color at the center of the gradient.
     - color2: The color at the outer edge of the gradient.
@@ -1320,4 +1276,4 @@ def radial_gradient(a, color1, color2, inner=0, outer=100):
     >>> color_at_outer = (0.0, 0.0, 1.0, 1.0)    # Blue
     >>> gradient_texture = radial_gradient(center_point, color_at_center, color_at_outer)
     """
-    return disc(a, 0).fill(color1, color2, 0, inner=inner, outer=outer)
+    return disc(context, a, 0).fill(color1, color2, 0, inner=inner, outer=outer)
