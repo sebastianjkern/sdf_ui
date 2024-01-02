@@ -5,7 +5,7 @@ import math
 from PIL import Image
 from moderngl import Texture
 
-from .context import Shaders, decrease_tex_registry, Context
+from .context import Shaders, decrease_tex_registry, Context, show_texture
 from .log import logger
 
 class ColorSpaceMode:
@@ -78,9 +78,7 @@ class ColorTexture:
         """
         temp = self.to_rgb() if self.mode == ColorSpaceMode.LAB and conversion else self
 
-        image = Image.frombytes("RGBA", temp.tex.size, temp.tex.read(), "raw")
-        image = image.transpose(Image.FLIP_TOP_BOTTOM)
-        image.show()
+        show_texture(temp)
 
     def save(self, name, conversion=True):
         """
@@ -575,9 +573,7 @@ class SDFTexture:
         >>> sdf_texture = SDFTexture(...)
         >>> sdf_texture.show()
         """
-        image = Image.frombytes("F", self.tex.size, self.tex.read(), "raw")
-        image = image.transpose(Image.FLIP_TOP_BOTTOM)
-        image.show()
+        show_texture(self.tex)
 
     def save(self, name="./image.png"):
         """
