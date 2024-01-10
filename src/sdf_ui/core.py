@@ -1043,6 +1043,45 @@ def disc(ctx, center, radius) -> SDFTexture:
     return SDFTexture(tex, context=ctx)
 
 
+def triangle(ctx, point_1, point_2, point_3) -> SDFTexture:
+    """
+
+    Renders a triangle using a signed distance field (SDF) approach.
+
+    Args:
+        ctx (SDFContext): The context object for the signed distance field rendering.
+        point_1 (tuple): Coordinates of the first vertex of the triangle (x, y).
+        point_2 (tuple): Coordinates of the second vertex of the triangle (x, y).
+        point_3 (tuple): Coordinates of the third vertex of the triangle (x, y).
+
+    Returns:
+        SDFTexture: An SDFTexture object representing the rendered triangle.
+
+    Note:
+        The triangle is rendered using the specified vertices and the shader associated with
+        Shaders.TRIANGLE. The resulting SDFTexture is returned for further use or analysis.
+
+    Example:
+        >>> point1 = (0.0, 0.0)
+        >>> point2 = (1.0, 0.0)
+        >>> point3 = (0.5, 1.0)
+        >>> sdf_texture = triangle(ctx, point1, point2, point3)
+    """
+
+    shader = ctx.get_shader(Shaders.TRIANGLE)
+    shader["destTex"] = 0
+    shader["point0"] = point_1
+    shader["point1"] = point_2
+    shader["point2"] = point_3
+
+    tex = ctx.r32f()
+    tex.bind_to_image(0, read=False, write=True)
+    shader.run(*ctx.local_size)
+
+    logger().debug(f"Running {Shaders.TRIANGLE} shader...")
+
+    return SDFTexture(tex=tex, context=ctx)
+
 def bezier(ctx, a, b, c) -> SDFTexture:
     """
     Creates a signed distance field (SDF) texture representing a quadratic Bezier curve.

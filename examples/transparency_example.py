@@ -2,7 +2,7 @@ from src.sdf_ui import *
 
 import random
 
-size = (1080, 1080)
+size = (1920, 1080)
 
 def rand_color():
     red = random.randint(0, 255) / 255
@@ -52,7 +52,7 @@ def transparency_example():
 
         mask_sdf.fill_from_texture(gradient)
 
-        for i in range(5):
+        for i in range(10):
             x, y = random.randint(50, size[0] - 50), random.randint(50, size[1] - 50)
             r = random.randint(50, 100)
 
@@ -66,7 +66,7 @@ def transparency_example():
             backdrop1 = (backdrop if i == 0 else backdrop1).alpha_overlay(shade).alpha_overlay(distance.fill(col1, col2, 0))
 
         image = backdrop1.alpha_overlay(glass_shadow).mask(blur, mask).alpha_overlay(glass).alpha_overlay(
-            outline).alpha_overlay(film_grain(ctx).to_lab().transparency(5 / 255)).to_rgb()
+            outline) #.alpha_overlay(film_grain(ctx).to_lab().transparency(5 / 255)).to_rgb()
 
         image.show()
 

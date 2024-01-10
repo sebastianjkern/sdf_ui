@@ -23,6 +23,7 @@ class Shaders:
     CIRCLE = "circle"
     BEZIER = "bezier"
     LINE = "line"
+    TRIANGLE = "triangle"
 
     # Booleans
     SMOOTH_MIN = "smooth_min"
@@ -202,6 +203,7 @@ class Context:
             ShaderFileDescriptor(Shaders.BEZIER, "shader_files/primitives/sdfs/bezier.glsl"),
             ShaderFileDescriptor(Shaders.LINE, "shader_files/primitives/sdfs/line.glsl"),
             ShaderFileDescriptor(Shaders.GRID, "shader_files/primitives/sdfs/grid.glsl"),
+            ShaderFileDescriptor(Shaders.TRIANGLE, "shader_files/primitives/sdfs/triangle.glsl"),
 
             # Booleans
             ShaderFileDescriptor(Shaders.SMOOTH_MIN, "shader_files/primitives/booleans/smin.glsl"),
