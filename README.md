@@ -6,12 +6,12 @@ SDF UI is the result of the experiment if you can extend the idea of MSDF text r
 
 Many SDFs used by this project were originally created by [Inigo Quilez](https://iquilezles.org/articles/distfunctions2d/).
 
-### Use Case:
 
-None, absolutely none...
+### Why are basic Features not available?
 
-### Target Specs: 
-Unclear what the target for this library is. Somwhere along the line of a educational library for graphics programming, with some esoteric rendering pipeline, but also high fidelity graphics. Maybe usable for high fidelity graphics of mathematical topics? Maybe as plug in replacement for matplotlib rendering backend?
+All roads lead to Rome. Many basic sdf shapes can be expressed trough boolean operations of other basic shapes. For example convex polygons can be expressed as the intersection of halfplanes. Non-convex polygons are not as simple, but can be expressed trough this technique aswell. The trick is to render the union of convex polygons that make up the non-convex polygon.
+
+Arcs can be represented as sdfs aswell. Subtract a small circle from a bigger circle and join the intersection of the remaining circle outline with two halfplanes. Even though halfplane sdfs don't exist yet, they can be expressed trough rotated rect. 
 
 ### Installation:
 
@@ -20,6 +20,8 @@ The project is structured to allow for pip installation:
 ```bash
 pip install git+https://github.com/sebastianjkern/sdf_ui
 ```
+
+For whatever reason, running the engine in an interactive python shell, the .show() function doesn't really work
 
 ### How it works:
 

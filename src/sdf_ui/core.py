@@ -76,6 +76,7 @@ class ColorTexture:
         >>> color_texture = ColorTexture(...)
         >>> color_texture.show()
         """
+
         temp = self.to_rgb() if self.mode == ColorSpaceMode.LAB and conversion else self
 
         show_texture(temp.tex)
@@ -914,7 +915,7 @@ class SDFTexture:
         >>> sdf_texture = SDFTexture(...)
         >>> mask_texture = sdf_texture.generate_mask(inflate=0.1, color0=(0.0, 0.0, 0.0, 1.0), color1=(1.0, 1.0, 1.0, 1.0))
         """
-        return self.fill(color0, color1, inflate)
+        return self.fill(color0, color1, inflate).to_rgb()
 
     def shadow(self, distance=10, inflate=0, transparency=0.75):
         """

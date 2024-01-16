@@ -8,14 +8,15 @@
 
 Maybe also:
 
-- [ ] SDF differentiation (test for usefulness)
+- [ ] SDF differentiation (useful?)
 
 ## Layer operations
 
-## Utils
-- [ ] Strong coloring API
-- [ ] Animation framework
+- [ ] XOR [here](https://iquilezles.org/articles/sdfxor/)
 
+## Utils
+- [ ] Coloring API
+- [ ] Animation framework
 
 _____
 

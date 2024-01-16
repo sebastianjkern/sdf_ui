@@ -454,7 +454,7 @@ def show_texture(tex: mgl.Texture):
         >>> show_texture(my_texture)
 
     """
-
+    
     mode = "F"
     if tex.dtype == "f1":
         if tex.components == 3:
