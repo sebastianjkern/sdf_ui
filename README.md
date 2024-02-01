@@ -13,6 +13,10 @@ All roads lead to Rome. Many basic sdf shapes can be expressed trough boolean op
 
 Arcs can be represented as sdfs aswell. Subtract a small circle from a bigger circle and join the intersection of the remaining circle outline with two halfplanes. Even though halfplane sdfs don't exist yet, they can be expressed trough rotated rect. 
 
+### But why should i use the sdf-ui library?
+
+While some functionality is not yet available or quiet expensive, many features are cost effective in comparison. While traditional render pipelines (atleast if they don't copy memory) have problems with repetition (Drawing 1000 circles is more expensive than 1 circle), sdf-ui can flex its muscles, because drawing equally spaced objects multiple times comes at a fixed cost. Drawing 1000 circles in a grid is not more expansive than drawing 100 circles in a grid.
+
 ### Installation:
 
 The project is structured to allow for pip installation:
@@ -72,5 +76,5 @@ ___
 - [ ] Rendering of text with custom sdf font
 - [x] Freeform Gradients (Overlay of Different gradients, possible trough half transparent fills of sdfs)
 - [ ] Ortographic Projection of 3D SDFs
-- [ ] Fill with images (trough moderngl texture api)
+- [x] Fill with images (trough moderngl texture api)
 - [ ] YAML based render script, or node based editor, unsure about the alignment with the target specs
