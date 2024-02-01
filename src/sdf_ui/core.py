@@ -776,7 +776,7 @@ class SDFTexture:
         """
         shader = self.context.get_shader(Shaders.ABS)
         shader['destTex'] = 0
-        shader['sdf0'] = 0
+        shader['sdf0'] = 1
 
         tex = self.context.r32f()
         tex.bind_to_image(0, read=False, write=True)
@@ -784,6 +784,31 @@ class SDFTexture:
         shader.run(*self.context.local_size)
 
         logger().debug(f"Running {Shaders.ABS} shader...")
+
+        return SDFTexture(tex, context=self.context)
+
+    def repeat(self, s=15.0):
+        """
+        Repeats the given sdf_texture
+
+        Returns:
+        A new texture that is a repetition of 
+
+        Example:
+        >>> sdf_texture = SDFTexture(...)
+        >>> repeat_texture = sdf_texture.repeat()
+        """
+        shader = self.context.get_shader(Shaders.REPEAT)
+        shader['destTex'] = 0
+        shader['sdf0'] = 1
+        shader['repeat'] = s
+
+        tex = self.context.r32f()
+        tex.bind_to_image(0, read=False, write=True)
+        self.tex.bind_to_image(1, read=True, write=False)
+        shader.run(*self.context.local_size)
+
+        logger().debug(f"Running {Shaders.REPEAT} shader...")
 
         return SDFTexture(tex, context=self.context)
 

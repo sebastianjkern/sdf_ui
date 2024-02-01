@@ -35,6 +35,7 @@ class Shaders:
 
     # SDF Transform
     ABS = "abs"
+    REPEAT = "repeat"
 
     # Postprocessing
     BLUR_HOR_9 = "blur_hor_9"
@@ -215,6 +216,7 @@ class Context:
 
             # SDF Transform
             ShaderFileDescriptor(Shaders.ABS, "shader_files/primitives/transforms/abs.glsl"),
+            ShaderFileDescriptor(Shaders.REPEAT, "shader_files/primitives/transforms/repeat.glsl"),
 
             # Postprocessing
             ShaderFileDescriptor(Shaders.BLUR_HOR_9, "shader_files/postprocessing/blur9_hor.glsl"),
