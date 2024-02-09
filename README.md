@@ -70,6 +70,7 @@ ___
 
 - [ ] Black and white to sdf conversion using go
 - [ ] Native Support for animation
+    - Maybe with some form of state machine (user defines states of the ui and defines functions that morph between them)
 - [ ] Vector Fields
 - [ ] Voronoi sdf (Basically many overlayed circle sdfs)
 - [ ] Text rendering (Stroke rendering of single letters already possible)
@@ -77,4 +78,5 @@ ___
 - [x] Freeform Gradients (Overlay of Different gradients, possible trough half transparent fills of sdfs)
 - [ ] Ortographic Projection of 3D SDFs
 - [x] Fill with images (trough moderngl texture api)
+    - Check resolution and upscale in that case
 - [ ] YAML based render script, or node based editor, unsure about the alignment with the target specs

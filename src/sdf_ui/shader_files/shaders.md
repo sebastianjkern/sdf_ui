@@ -1,0 +1,42 @@
+## Shader file organization
+
+- layer
+    - layer_mask
+    - multiply
+    - overlay
+    - transparency
+- postprocessing
+    - blur9_hor
+    - blur9_vert
+    - blur13_hor
+    - blur13_vert
+    - dither_1bit
+    - dithering
+    - invert
+    - to_lab
+    - to_rgb
+- primitives
+    - booleans
+        - interpolate
+        - intersection
+        - masked_union
+        - smin
+        - subtract
+        - union
+    - sdfs
+        - bezier
+        - circle
+        - grid
+        - line
+        - perlin_noise
+        - rect
+        - triangle
+    - transforms
+        - abs
+        - repeat
+- shading
+    - clear_color
+    - fill_from_texture
+    - fill
+    - film_grain
+    - outline

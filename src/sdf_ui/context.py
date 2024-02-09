@@ -380,6 +380,15 @@ class Context:
         >>> absolute_value = context.percent_y(30)
         """
         return alpha / 100 * self.size[1]
+    
+    @property
+    def pt(self):
+        """
+        Example:
+        >>> context = Context((800, 600))
+        >>> width = context.pt * 20
+        """
+        return max(self.size) * 0.01
 
     # Generate textures
     def r32f(self):

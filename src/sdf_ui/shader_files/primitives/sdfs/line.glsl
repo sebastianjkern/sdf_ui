@@ -12,7 +12,8 @@ float sdf_linesegment(vec2 uv, vec2 a, vec2 b)
     vec2 ba = b - a;
     vec2 pa = uv - a;
     float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
-    return length(pa - h * ba);
+    float position = sign((b.x - a.x) * (uv.y - a.y) - (b.y - a.y) * (uv.x - a.x));
+    return length(pa - h * ba) * position;
 }
 
 void main() {
