@@ -55,6 +55,7 @@ class Shaders:
     CLEAR_COLOR = "clear_color"
     PERLIN_NOISE = "perlin_noise"
     FILM_GRAIN = "film_grain"
+    PARTIAL_DERIVATIVE = "partial_derivative"
 
     # Layer
     LAYER_MASK = "layer_mask"
@@ -236,6 +237,7 @@ class Context:
             ShaderFileDescriptor(Shaders.PERLIN_NOISE, "shader_files/primitives/sdfs/perlin_noise.glsl"),
             ShaderFileDescriptor(Shaders.FILM_GRAIN, "shader_files/shading/film_grain.glsl"),
             ShaderFileDescriptor(Shaders.FILL_FROM_TEXTURE, "shader_files/shading/fill_from_texture.glsl"),
+            ShaderFileDescriptor(Shaders.PARTIAL_DERIVATIVE, "shader_files/shading/partial_derivative.glsl"),
 
             # Layer
             ShaderFileDescriptor(Shaders.LAYER_MASK, "shader_files/layer/layer_mask.glsl"),

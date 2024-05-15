@@ -853,6 +853,42 @@ class SDFTexture:
 
         return ColorTexture(tex, context=self.context, mode=ColorSpaceMode.LAB)
 
+    def partial_derivative(self) -> ColorTexture:
+        """
+        Converts the signed distance field (SDF) texture to a color texture with specified foreground and background colors.
+        The inner and outer parameters control color interpolation.
+
+        Args:
+        - fg_color: The foreground color of the filled texture.
+        - bg_color: The background color of the filled texture.
+        - inflate (float): The amount by which to inflate the filled texture. Default is 0.0.
+        - inner (float): The color interpolation value for the inner part of the texture. Default is -1.5.
+        - outer (float): The color interpolation value for the outer part of the texture. Default is 0.0.
+
+        Returns:
+        A ColorTexture representing the filled texture.
+
+        Example:
+        >>> sdf_texture = SDFTexture(...)
+        >>> foreground_color = (1.0, 0.0, 0.0, 1.0)  # Red
+        >>> background_color = (0.0, 0.0, 1.0, 1.0)  # Blue
+        >>> filled_texture = sdf_texture.fill(foreground_color, background_color, inflate=0.2, inner=-1.0, outer=0.5)
+        """
+
+        shader = self.context.get_shader(Shaders.PARTIAL_DERIVATIVE)
+        shader['destTex'] = 0
+        shader['sdf'] = 1
+
+        tex = self.context.rgba8()
+        tex.bind_to_image(0, read=False, write=True)
+        self.tex.bind_to_image(1, read=True, write=False)
+        shader.run(*self.context.local_size)
+
+        logger().debug(f"Running {Shaders.PARTIAL_DERIVATIVE} shader...")
+
+        return ColorTexture(tex, context=self.context, mode=ColorSpaceMode.RGB)
+
+
     def fill_from_texture(self, layer: ColorTexture, background=(0.0, 0.0, 0.0, 0.0), inflate=0) -> ColorTexture:
         """
         Fills the signed distance field (SDF) texture based on another color texture, with optional background color and inflation.
