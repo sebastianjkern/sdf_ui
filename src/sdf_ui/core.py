@@ -64,6 +64,10 @@ class ColorTexture:
         """
         if not type(self) == type(obj):
             raise TypeError(f"{obj} of type {type(obj)} should be {type(self)}")
+        
+    def _mode_equal(self, obj):
+        if self.mode is not obj.mode:
+            raise TypeError(f"Modes of {obj} and {self} do not match")
 
     def show(self, conversion=True):
         """
@@ -213,7 +217,8 @@ class ColorTexture:
         >>> color_texture = ColorTexture(...)
         >>> blurred_texture = color_texture.blur(n=3, base=13)
         """
-        t = self.to_rgb()
+        
+        t = self.to_rgb() if self.mode is not ColorSpaceMode.RGB else self
 
         if base == 9:
             temp = t.blur_9(n)
@@ -1312,7 +1317,7 @@ def linear_gradient(context: Context, a, b, color1, color2):
     ex = ax - dx
     ey = ay + dy
 
-    return line(context, (cx, cy), (ex, ey)) \
+    return line(context, (cx, cy), (ex, ey)).abs() \
         .fill(color1, color2, 0, inner=0, outer=math.sqrt(dx * dx + dy * dy))
 
 

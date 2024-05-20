@@ -10,7 +10,7 @@ logger().setLevel(logging.INFO)
 
 
 with Context(SIZE) as ctx:
-    shapes = glyph_mask(ctx, "i", 0.25, 10, 10)
+    shapes = glyph_mask(ctx, "5", 0.25, 10, 10)
     background = clear_color(ctx, (0, 0, 0, 1))
     foreground = clear_color(ctx, (1, 1, 1, 1))
 

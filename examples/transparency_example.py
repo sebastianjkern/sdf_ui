@@ -43,6 +43,10 @@ def transparency_example():
                                 ctx.percent_of_min(10)))
 
         mask = mask_sdf.generate_mask()
+
+        mask.show()
+        mask.invert().show()
+
         outline = mask_sdf.outline((1.0, 1.0, 1.0, .25), (1.0, 1.0, 1.0, 0.0), inflate=-1.5)
 
         glass_col = (0.75, 0.75, 0.75, 0.75)

@@ -7,6 +7,7 @@ from examples.animation_example import animation_example
 from examples.complex_shapes_example import complex_shapes_example
 from examples.font_example import font_example
 from examples.arc_example import arc_example
+from examples.triangle_example import triangle_example
 
 from src.sdf_ui import logger
 
@@ -27,6 +28,7 @@ examples = {
     "complex": complex_shapes_example,
     "anim": animation_example,
     "arc": arc_example,
+    "triangle": triangle_example
 }
 
 parser = argparse.ArgumentParser(
