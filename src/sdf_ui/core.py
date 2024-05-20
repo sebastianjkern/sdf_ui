@@ -239,6 +239,9 @@ class ColorTexture:
         >>> color_texture = ColorTexture(...)
         >>> lab_texture = color_texture.to_lab()
         """
+        if self.mode == ColorSpaceMode.LAB:
+            return self
+        
         shader = self.context.get_shader(Shaders.TO_LAB)
         shader['destTex'] = 0
         shader['origTex'] = 1
@@ -263,6 +266,9 @@ class ColorTexture:
         >>> color_texture = ColorTexture(...)
         >>> rgb_texture = color_texture.to_rgb()
         """
+        if self.mode == ColorSpaceMode.RGB:
+            return self
+        
         shader = self.context.get_shader(Shaders.TO_RGB)
         shader['destTex'] = 0
         shader['origTex'] = 1

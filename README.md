@@ -78,3 +78,4 @@ ___
 - [ ] Ortographic Projection of 3D SDFs
 - [x] Fill with images (trough moderngl texture api)
 - [ ] YAML based render script, or node based editor, unsure about the alignment with the target specs
+- [ ] Hot reload of script to create art with
