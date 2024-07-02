@@ -68,7 +68,7 @@ ___
 
 ### Ideas for further development
 
-- [ ] Black and white to sdf conversion using go
+- [x] Black and white to sdf conversion using go (solved via reverse sdf)
 - [ ] Native Support for animation
 - [ ] Vector Fields
 - [ ] Voronoi sdf (Basically many overlayed circle sdfs)
