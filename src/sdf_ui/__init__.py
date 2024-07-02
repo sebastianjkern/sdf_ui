@@ -6,3 +6,4 @@ from .log import logger
 from .util import hex_col, collinear
 from .text import glyph_sdf
 from .anim import convert_to_video
+from .bw_to_sdf import image_to_sdf

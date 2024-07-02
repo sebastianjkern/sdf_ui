@@ -8,6 +8,7 @@ from examples.complex_shapes_example import complex_shapes_example
 from examples.font_example import font_example
 from examples.arc_example import arc_example
 from examples.partial_derivative import partial_derivative_example
+from examples.impossible_city import impossible_city_example
 
 from src.sdf_ui import logger
 
@@ -28,7 +29,8 @@ examples = {
     "complex": complex_shapes_example,
     "anim": animation_example,
     "arc": arc_example,
-    "pd": partial_derivative_example
+    "pd": partial_derivative_example,
+    "ic": impossible_city_example
 }
 
 parser = argparse.ArgumentParser(
