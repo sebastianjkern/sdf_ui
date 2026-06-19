@@ -36,4 +36,4 @@ Issues = "https://github.com/sebastianjkern/sdf_ui/issues"
 where = ["src"]
 
 [tool.setuptools.package-data]
-mypkg = ["*.glsl"]
+sdf_ui = ["core/shader_files/*.glsl", "core/shader_files/**/*.glsl"]

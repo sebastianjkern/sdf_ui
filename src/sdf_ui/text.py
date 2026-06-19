@@ -3,7 +3,7 @@ __docformat__ = "google"
 import ttfquery
 from ttfquery import describe, glyph
 
-from .core import line, bezier
+from .core.primitives import line, bezier
 from .util import collinear
 
 def middle(x1, y1, x2, y2):

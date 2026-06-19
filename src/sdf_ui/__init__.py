@@ -1,7 +1,20 @@
 from .ascii import convert_image_to_ascii_colored, convert_image_to_ascii
-from .context import Context, decrease_tex_registry, Shaders, show_texture
-from .core import linear_gradient, radial_gradient, rounded_rect, \
-    disc, grid, bezier, line, clear_color, film_grain, triangle
+from .context import Context, decrease_tex_registry, show_texture
+from .core import ColorSpaceMode, ColorTexture, SDFTexture, Shaders
+from .core import (
+    bezier,
+    clear_color,
+    disc,
+    film_grain,
+    grid,
+    interpolate,
+    line,
+    linear_gradient,
+    perlin_noise,
+    radial_gradient,
+    rounded_rect,
+    triangle,
+)
 from .log import logger
 from .util import hex_col, collinear
 from .text import glyph_sdf
