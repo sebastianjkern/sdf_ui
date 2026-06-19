@@ -8,7 +8,6 @@ example_images/
 /editor/
 *.ttf
 *.otf
-*.png
 
 src/sdf_ui/__pycache__/
 src/sdf_ui/core/__pycache__/

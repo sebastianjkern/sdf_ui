@@ -1,3 +1,5 @@
+<img src="banner.png">
+
 # SDF UI
 
 What started [here](https://github.com/sebastianjkern/metaballs), has become a not yet fully featured but relatively complex 2d graphics rendering engine with gpu support.
