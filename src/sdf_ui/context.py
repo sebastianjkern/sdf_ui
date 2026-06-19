@@ -40,8 +40,8 @@ class Shaders:
     # Postprocessing
     BLUR_HOR_9 = "blur_hor_9"
     BLUR_VER_9 = "blur_ver_9"
-    BLUR_VER_13 = "blur_hor_13"
-    BLUR_HOR_13 = "blur_vert_13"
+    BLUR_VER_13 = "blur_ver_13"
+    BLUR_HOR_13 = "blur_hor_13"
     TO_LAB = "to_lab"
     TO_RGB = "to_rgb"
     DITHERING = "dithering"

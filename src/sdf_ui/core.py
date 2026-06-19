@@ -484,7 +484,7 @@ class ColorTexture:
 
         tex = self.context.rgba8()
         tex.bind_to_image(0, read=False, write=True)
-        self.tex.bind_to_image(1, read=False, write=True)
+        self.tex.bind_to_image(1, read=True, write=False)
         shader.run(*self.context.local_size)
 
         logger().debug(f"Running {Shaders.INVERT} shader...")
@@ -1023,23 +1023,23 @@ def interpolate(ctx: Context, tex0: SDFTexture, tex1: SDFTexture, t=0.5) -> SDFT
     >>> sdf_texture_1 = SDFTexture(...)
     >>> interpolated_texture = interpolate(sdf_texture_0, sdf_texture_1, t=0.3)
     """
-    tex = ctx.rgba8()
+    tex = ctx.r32f()
 
     shader = ctx.get_shader(Shaders.INTERPOLATION)
     shader['destTex'] = 0
-    shader['sdf0'] = 0
-    shader['sdf1'] = 0
+    shader['sdf0'] = 1
+    shader['sdf1'] = 2
     shader['t'] = t
 
     tex.bind_to_image(0, read=False, write=True)
     tex0.tex.bind_to_image(1, read=True, write=False)
-    tex1.tex.bind_to_image(1, read=True, write=False)
+    tex1.tex.bind_to_image(2, read=True, write=False)
 
     shader.run(*ctx.local_size)
 
     logger().debug(f"Running {Shaders.INTERPOLATION} shader...")
 
-    return SDFTexture(tex)
+    return SDFTexture(tex, context=ctx)
 
 
 # Primitives
