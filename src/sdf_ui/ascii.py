@@ -8,6 +8,18 @@ from PIL import Image
 from console import fg, fx, bg
 
 
+def _validate_ascii_dimensions(cols, scale, original_width, original_height, rows):
+    if cols <= 0:
+        raise ValueError("cols must be greater than 0")
+    if scale <= 0:
+        raise ValueError("scale must be greater than 0")
+    if cols > original_width or rows > original_height:
+        raise ValueError(
+            "the requested ASCII output is larger than the source image; "
+            "choose fewer columns or a smaller scale"
+        )
+
+
 def get_average_l(image):
     """
     Get the average luminance value of an image.
@@ -106,9 +118,7 @@ def convert_image_to_ascii_colored(
 
     rows = int(original_height / new_height)
 
-    if cols > original_width or rows > original_height:
-        # TODO: Upscale in case of low input resolution
-        exit(0)
+    _validate_ascii_dimensions(cols, scale, original_width, original_height, rows)
 
     ascii_image = []
     for j in range(rows):
@@ -186,9 +196,7 @@ def convert_image_to_ascii(image, cols, scale, more_levels, invert, enhance):
 
     rows = int(original_height / new_height)
 
-    if cols > original_width or rows > original_height:
-        # TODO: Upscale in case of low input resolution
-        exit(0)
+    _validate_ascii_dimensions(cols, scale, original_width, original_height, rows)
 
     ascii_image = []
     for j in range(rows):
