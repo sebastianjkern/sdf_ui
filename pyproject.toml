@@ -27,6 +27,8 @@ dev = [
     "pytest>=8.0",
     "build",
     "ruff",
+    "mypy",
+    "pre-commit",
     "sphinx>=8.0"
 ]
 
@@ -42,3 +44,21 @@ sdf_ui = ["**/*.pyi", "py.typed", "core/plugins/**/*.glsl"]
 
 [tool.setuptools.exclude-package-data]
 "*" = ["*.pyc", "*.pyo", "__pycache__/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py38"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.mypy]
+python_version = "3.8"
+ignore_missing_imports = true
+show_error_codes = true
+warn_unused_configs = true
+exclude = '^(build|dist|docs/_build|docs/_autosummary|\.venv|\.pytest|\.pytest_cache|__pycache__)/'

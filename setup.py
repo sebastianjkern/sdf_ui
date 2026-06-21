@@ -1,7 +1,8 @@
-from pathlib import Path
 import sys
+from pathlib import Path
 
-from setuptools import Command, setup as setuptools_setup
+from setuptools import Command
+from setuptools import setup as setuptools_setup
 
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:

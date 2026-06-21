@@ -23,6 +23,10 @@ examples/__pycache__/
 /__pycache__/
 .idea
 
+# Tooling
+.codex/
+.vscode/
+
 # Pytest
 .pytest/
 

@@ -5,7 +5,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "src"
 PACKAGE = SRC / "sdf_ui"
@@ -153,33 +152,45 @@ def _collect_plugin_methods(class_name: str, runtime: dict[str, Any]) -> list[st
         plugins = [
             plugin
             for plugin in registry._plugins.values()
-            if plugin.public and not plugin.input_kinds and plugin.result == texture_kind.SDF
+            if plugin.public
+            and not plugin.input_kinds
+            and plugin.result == texture_kind.SDF
         ]
     elif class_name == "ColorNamespace":
         plugins = [
             plugin
             for plugin in registry._plugins.values()
-            if plugin.public and not plugin.input_kinds and plugin.result == texture_kind.COLOR
+            if plugin.public
+            and not plugin.input_kinds
+            and plugin.result == texture_kind.COLOR
         ]
     elif class_name == "SDFTexture":
         plugins = [
-            plugin for plugin in registry._plugins.values() if texture_kind.SDF in plugin.method_of
+            plugin
+            for plugin in registry._plugins.values()
+            if texture_kind.SDF in plugin.method_of
         ]
     elif class_name == "ColorTexture":
         plugins = [
-            plugin for plugin in registry._plugins.values() if texture_kind.COLOR in plugin.method_of
+            plugin
+            for plugin in registry._plugins.values()
+            if texture_kind.COLOR in plugin.method_of
         ]
     elif class_name == "PostNamespace":
         plugins = [
             plugin
             for plugin in registry._plugins.values()
-            if plugin.family == "postprocessing" and texture_kind.COLOR in plugin.method_of
+            if plugin.family == "postprocessing"
+            and texture_kind.COLOR in plugin.method_of
         ]
     else:
         plugins = []
 
     plugins.sort(key=lambda plugin: plugin.name)
-    return [_format_plugin_method(plugin, _plugin_return_type(texture_kind, plugin)) for plugin in plugins]
+    return [
+        _format_plugin_method(plugin, _plugin_return_type(texture_kind, plugin))
+        for plugin in plugins
+    ]
 
 
 def _merge_methods(class_name: str, cls: Any, runtime: dict[str, Any]) -> list[str]:
@@ -208,9 +219,15 @@ def _render_texture_stub(runtime: dict[str, Any]) -> str:
         "if TYPE_CHECKING:",
         "    from .color import ColorTexture",
         "",
-        _render_class("TextureNode", _collect_manual_methods("TextureNode", runtime["TextureNode"])).rstrip(),
+        _render_class(
+            "TextureNode",
+            _collect_manual_methods("TextureNode", runtime["TextureNode"]),
+        ).rstrip(),
         "",
-        _render_class("PostNamespace", _merge_methods("PostNamespace", runtime["PostNamespace"], runtime)).rstrip(),
+        _render_class(
+            "PostNamespace",
+            _merge_methods("PostNamespace", runtime["PostNamespace"], runtime),
+        ).rstrip(),
         "",
         _render_class(
             "MultiOutputResult",
