@@ -18,7 +18,6 @@ copyright = "2026, Sebastian Kern"
 extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
-    "sphinx.ext.intersphinx",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
 ]
@@ -39,7 +38,3 @@ version = release
 
 html_theme = "alabaster"
 html_static_path = ["_static"]
-
-intersphinx_mapping = {
-    "python": ("https://docs.python.org/3", {}),
-}
