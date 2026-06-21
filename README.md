@@ -79,7 +79,9 @@ and composition operators can be added as plugins without redesigning the public
 
 <img src="./sdf_ui_diagram.png" width="500">
 
-### Examples:
+### What can i do with this engine?
+
+Take a look below, or at the banner image, that was also created using this engine ;)
 ___
 
 <table>
@@ -122,7 +124,7 @@ ___
 - [ ] Native Support for animation
 - [ ] Vector Fields
 - [ ] Voronoi sdf (Basically many overlayed circle sdfs)
-- [ ] Text rendering (Stroke rendering of single letters already possible)
+- [x] Text rendering (Stroke rendering of single letters already possible)
 - [ ] Rendering of text with custom sdf font
 - [x] Freeform Gradients (Overlay of Different gradients, possible trough half transparent fills of sdfs)
 - [ ] Ortographic Projection of 3D SDFs
