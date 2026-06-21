@@ -28,3 +28,32 @@ def glyph(char, scale, ox, oy, path="fonts/SFUIDisplay-Bold.ttf", samples=16):
         path=path,
         samples=samples,
     )
+
+
+def text(
+    value,
+    size=64,
+    ox=0,
+    oy=0,
+    path="fonts/georgia_regular.ttf",
+    samples=16,
+    cache_size=128,
+    line_height=1.2,
+):
+    """
+    Generate a signed distance field (SDF) for a text run.
+
+    Glyph SDF patches are cached by font, character, curve sampling, and cache
+    resolution, then resized into the destination texture during layout.
+    """
+    return build(
+        "text",
+        value=value,
+        size=size,
+        ox=ox,
+        oy=oy,
+        path=path,
+        samples=samples,
+        cache_size=cache_size,
+        line_height=line_height,
+    )

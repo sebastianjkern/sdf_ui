@@ -6,9 +6,9 @@ from PIL import Image
 
 from sdf_ui import Canvas
 from sdf_ui.bw_to_sdf import image_to_sdf
-from sdf_ui.text import glyph
+from sdf_ui.core.plugins.primitives.text.plugin import _cached_glyph_sdf
+from sdf_ui.text import glyph, text
 from sdf_ui.util import hex_col
-
 from tests.helpers import PROJECT_ROOT, render, rgba_array
 
 
@@ -104,3 +104,34 @@ def test_glyph_fill_normalizes_255_tuple_colors():
     assert int(pixels[55, 30, 2]) == pytest.approx(106, abs=2)
     assert int(pixels[55, 30, 3]) == 255
     assert int(pixels[55, 60, 3]) == 0
+
+
+def test_text_renders_multiple_glyphs_from_cached_sdf_patches():
+    font_path = PROJECT_ROOT / "fonts" / "georgia_regular.ttf"
+    _cached_glyph_sdf.cache_clear()
+    scene = text("ii", size=72, ox=12, oy=12, path=str(font_path), cache_size=96)
+
+    with Canvas((160, 96)) as ctx:
+        texture = scene.render(ctx)
+        distances = np.frombuffer(texture.tex.read(), dtype=np.float32).reshape(
+            (96, 160)
+        )
+
+    cache_info = _cached_glyph_sdf.cache_info()
+    assert texture.kind == "sdf"
+    assert cache_info.hits == 1
+    assert cache_info.misses == 1
+    assert distances.min() < 0
+
+
+def test_sdf_namespace_exposes_text_factory():
+    from sdf_ui import sdf
+
+    with Canvas((96, 96)) as ctx:
+        texture = sdf.text("A", ox=12, oy=12).render(ctx)
+        distances = np.frombuffer(texture.tex.read(), dtype=np.float32).reshape(
+            (96, 96)
+        )
+
+    assert texture.kind == "sdf"
+    assert distances.min() < 0

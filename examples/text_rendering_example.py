@@ -1,14 +1,33 @@
-from sdf_ui import Canvas, sdf
+from sdf_ui import Canvas, color
+from sdf_ui.text import text
+from sdf_ui.util import hex_col
+
 
 def text_rendering_example():
-    with Canvas((500, 500)) as ctx:
-        l1 = sdf.line((250, 100), (50, 450))
-        l2 = sdf.line((250, 100), (450, 450))
-        l3 = sdf.line((100, 250), (400, 250))
+    with Canvas((960*2, 360*2)) as ctx:
+        cache = {}
+        background = color.clear(hex_col("#20232a")).cache("background")
+        title = text(
+            "Cached SDF text",
+            size=74*2,
+            ox=42,
+            oy=78,
+            path="fonts/georgia_regular.ttf",
+            cache_size=160,
+        ).cache("title")
+        subtitle = text(
+            "glyphs are rendered once,\nthen resized into this texture",
+            size=38*2,
+            ox=46,
+            oy=178,
+            path="fonts/georgia_regular.ttf",
+            cache_size=128,
+            line_height=1.25,
+        ).cache("subtitle")
 
-        text = (
-            l1.union(l2)
-            .union(l3)
-            .fill(inflate=5, fg_color=(1, 1, 1, 1), bg_color=(0, 0, 0, 1))
+        scene = (
+            background.alpha_overlay(title.shadow(14, inflate=1.5, transparency=0.65))
+            .alpha_overlay(title.fill(hex_col("#e9c46a"), "#00000000", inflate=1.5))
+            .alpha_overlay(subtitle.fill(hex_col("#f4f1de"), "#00000000"))
         )
-        text.show(ctx)
+        scene.to_rgb().show(ctx, cache=cache)
