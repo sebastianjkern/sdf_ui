@@ -1,3 +1,5 @@
+"""GPU context management, shader loading, and texture allocation."""
+
 __docformat__ = "google"
 
 import math

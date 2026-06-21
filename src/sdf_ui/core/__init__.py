@@ -1,3 +1,5 @@
+"""Public core rendering primitives and helpers for :mod:`sdf_ui`."""
+
 __docformat__ = "google"
 
 from .color import ColorSpaceMode, ColorTexture

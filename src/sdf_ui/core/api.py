@@ -1,3 +1,5 @@
+"""Dynamic namespaces that expose plugin-backed factory functions."""
+
 __docformat__ = "google"
 
 from .plugins.base import TextureKind

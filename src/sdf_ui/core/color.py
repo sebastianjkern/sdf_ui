@@ -1,3 +1,5 @@
+"""Color texture nodes and color-space conversion helpers."""
+
 __docformat__ = "google"
 
 from .plugins.common import build

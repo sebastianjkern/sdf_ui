@@ -1,3 +1,5 @@
+"""Render-node base types, renderer, and materialized output wrappers."""
+
 __docformat__ = "google"
 
 from abc import ABC

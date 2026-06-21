@@ -1,3 +1,5 @@
+"""Signed-distance texture helpers and boolean composition aliases."""
+
 __docformat__ = "google"
 
 from .plugins.common import build

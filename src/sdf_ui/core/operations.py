@@ -1,3 +1,5 @@
+"""Runtime helpers for executing compiled shader programs."""
+
 __docformat__ = "google"
 
 from ..log import logger

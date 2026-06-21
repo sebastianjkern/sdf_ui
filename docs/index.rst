@@ -8,6 +8,7 @@ functions and composable render nodes.
    :maxdepth: 2
    :caption: Contents
 
+   core
    api
 
 .. rubric:: Quick links

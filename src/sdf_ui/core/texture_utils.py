@@ -1,3 +1,5 @@
+"""Helpers for tracking and visualizing materialized textures."""
+
 __docformat__ = "google"
 
 import moderngl as mgl

@@ -1,3 +1,5 @@
+"""Expression tree utilities for resolving render-time parameters."""
+
 __docformat__ = "google"
 
 import math
