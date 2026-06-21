@@ -1,5 +1,5 @@
 @echo off
-REM Setup virtual environment and install project in editable mode
+REM Setup virtual environment, install the project, and activate the venv
 
 SET "VENV_DIR=.venv"
 
@@ -28,18 +28,30 @@ if exist "%VENV_DIR%\Scripts\python.exe" (
     )
 )
 
-REM Do not rely on activating the venv in this script (shell-specific).
+REM Use the venv Python directly for installation so this is reproducible.
 echo Using venv python executable to run pip commands so installation is reproducible.
 echo Upgrading pip, setuptools and wheel inside the venv...
 "%VENV_DIR%\Scripts\python.exe" -m pip install --upgrade pip setuptools wheel
 
 echo Installing project in editable mode into the venv...
-"%VENV_DIR%\Scripts\python.exe" -m pip install -e .
+"%VENV_DIR%\Scripts\python.exe" -m pip install --no-build-isolation -e .
+IF ERRORLEVEL 1 (
+    echo Failed to install project into the virtual environment.
+    exit /b 1
+)
+
+echo Activating the virtual environment in this shell...
+call "%VENV_DIR%\Scripts\activate.bat"
+IF ERRORLEVEL 1 (
+    echo Failed to activate virtual environment.
+    exit /b 1
+)
 
 echo Installation complete.
-echo To activate the venv in this shell, run:
-echo     %VENV_DIR%\Scripts\activate.bat
+echo The virtual environment is now active.
+echo To run an example inside the venv, use:
+echo     python examples.py render_api
 echo To run tests inside the venv:
-echo     %VENV_DIR%\Scripts\python.exe -m pytest
+echo     python -m pytest
 
 exit /b 0

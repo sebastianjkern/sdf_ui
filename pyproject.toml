@@ -28,6 +28,12 @@ dependencies = [
     "console"
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "build"
+]
+
 [project.urls]
 Homepage = "https://github.com/sebastianjkern/sdf_ui"
 Issues = "https://github.com/sebastianjkern/sdf_ui/issues"
@@ -36,4 +42,4 @@ Issues = "https://github.com/sebastianjkern/sdf_ui/issues"
 where = ["src"]
 
 [tool.setuptools.package-data]
-sdf_ui = ["core/shader_files/*.glsl", "core/shader_files/**/*.glsl"]
+sdf_ui = ["**/*.pyi", "py.typed", "core/plugins/**/*.glsl"]
