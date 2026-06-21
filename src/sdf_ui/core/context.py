@@ -1,6 +1,7 @@
 __docformat__ = "google"
 
 import math
+from pathlib import Path
 
 import moderngl as mgl
 
@@ -102,7 +103,10 @@ class Context:
         >>> context = Context((800, 600))
         >>> texture = context.texture_from_image("path/to/image.png")
         """
-        img = cv2.imread(path)
+        image_path = Path(path)
+        img = cv2.imread(str(image_path))
+        if img is None:
+            raise FileNotFoundError(f"Unable to load image from {image_path}")
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = np.flip(img, 0).copy(order="C")
         return self._mgl_ctx.texture(img.shape[1::-1], img.shape[2], img)
