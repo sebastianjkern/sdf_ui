@@ -9,8 +9,10 @@ from examples.font_example import font_example
 from examples.arc_example import arc_example
 from examples.partial_derivative import partial_derivative_example
 from examples.impossible_city import impossible_city_example
+from examples.render_api_example import render_api_example
+from examples.striped_circles_example import striped_circles_example
 
-from src.sdf_ui import logger
+from sdf_ui import logger
 
 import logging
 
@@ -30,7 +32,9 @@ examples = {
     "anim": animation_example,
     "arc": arc_example,
     "pd": partial_derivative_example,
-    "ic": impossible_city_example
+    "ic": impossible_city_example,
+    "render_api": render_api_example,
+    "striped_circles": striped_circles_example,
 }
 
 parser = argparse.ArgumentParser(

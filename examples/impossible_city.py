@@ -1,6 +1,6 @@
-from src.sdf_ui import *
-
 from functools import reduce
+
+from sdf_ui import Canvas, color, sdf
 
 TILING = 10
 
@@ -13,7 +13,7 @@ def isometric_cube(ctx, offset=(0, 0)):
     grid_height = ctx.percent(100/TILING)
     grid_width = ctx.percent(100/(TILING+2))
 
-    bg = clear_color(ctx, TRANSPARENT)
+    bg = color.clear(TRANSPARENT).cache("cube_background")
 
     #    p7
     # p6    p4
@@ -31,28 +31,28 @@ def isometric_cube(ctx, offset=(0, 0)):
 
     p7 = (offset[0], offset[1] + 2 * grid_height)
 
-    l1 = line(ctx, p1, p2).fill(FG_COLOR, TRANSPARENT, 2)
+    l1 = sdf.line(p1, p2).fill(FG_COLOR, TRANSPARENT, 2)
 
-    l2 = line(ctx, p2, p4).fill(FG_COLOR, TRANSPARENT, 2)
-    l3 = line(ctx, p1, p3).fill(FG_COLOR, TRANSPARENT, 2)
+    l2 = sdf.line(p2, p4).fill(FG_COLOR, TRANSPARENT, 2)
+    l3 = sdf.line(p1, p3).fill(FG_COLOR, TRANSPARENT, 2)
 
-    l4 = line(ctx, p3, p4).fill(FG_COLOR, TRANSPARENT, 2)
+    l4 = sdf.line(p3, p4).fill(FG_COLOR, TRANSPARENT, 2)
 
-    l5 = line(ctx, p2, p6).fill(FG_COLOR, TRANSPARENT, 2)
-    l6 = line(ctx, p1, p5).fill(FG_COLOR, TRANSPARENT, 2)
-    l7 = line(ctx, p5, p6).fill(FG_COLOR, TRANSPARENT, 2)
-    l8 = line(ctx, p6, p7).fill(FG_COLOR, TRANSPARENT, 2)
-    l9 = line(ctx, p4, p7).fill(FG_COLOR, TRANSPARENT, 2)
+    l5 = sdf.line(p2, p6).fill(FG_COLOR, TRANSPARENT, 2)
+    l6 = sdf.line(p1, p5).fill(FG_COLOR, TRANSPARENT, 2)
+    l7 = sdf.line(p5, p6).fill(FG_COLOR, TRANSPARENT, 2)
+    l8 = sdf.line(p6, p7).fill(FG_COLOR, TRANSPARENT, 2)
+    l9 = sdf.line(p4, p7).fill(FG_COLOR, TRANSPARENT, 2)
 
     return bg.alpha_overlay(l1).alpha_overlay(l2).alpha_overlay(l3).alpha_overlay(l4).alpha_overlay(l5).alpha_overlay(l6).alpha_overlay(l7).alpha_overlay(l8).alpha_overlay(l9)
 
 
 def impossible_city_example():
-    with Context((1080, 1080)) as ctx:
+    with Canvas((1080, 1080)) as ctx:
         grid_height = ctx.percent(100/TILING)
         grid_width = ctx.percent(100/(TILING+2))
 
-        bg = clear_color(ctx, BG_COLOR)
+        bg = color.clear(BG_COLOR).cache("city_background")
 
         cubes = []
 
@@ -60,4 +60,5 @@ def impossible_city_example():
             for h in range(int(TILING/2+.5)):
                 cubes.append(isometric_cube(ctx, offset=(grid_width + w*2*grid_width, h*2*grid_height)))
 
-        bg.alpha_overlay(reduce(lambda x, y: x.alpha_overlay(y), cubes)).show()
+        scene = bg.alpha_overlay(reduce(lambda x, y: x.alpha_overlay(y), cubes)).uncached()
+        scene.show(ctx)

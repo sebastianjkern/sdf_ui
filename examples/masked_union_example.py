@@ -1,11 +1,11 @@
 from functools import reduce
 
-from src.sdf_ui import disc, Context
+from sdf_ui import Canvas, sdf
 
 def masked_union_example():
     SIZE = (512, 512)
 
-    with Context(SIZE) as ctx:
+    with Canvas(SIZE) as ctx:
         points = [(245, 301),
             (362, 485),
             (306, 292),
@@ -16,14 +16,14 @@ def masked_union_example():
             (443, 482),
             (163, 294),
             (161, 453)]
-        discs = [disc(ctx, point, 50) for point in points]
+        discs = [sdf.circle(point, 50).cache(f"disc_{index}") for index, point in enumerate(points)]
 
-        combined_discs = reduce(lambda x, y: x.union(y), discs)
-        combined_discs.save("voronoi.png")
-        combined_discs.show()
+        combined_discs = reduce(lambda x, y: x.union(y), discs).cache("combined_discs")
+        masks = [mask for _, mask in (discs[0].masked_union(disc) for disc in discs[1:])]
 
-        objs = list(map(lambda disc: discs[0].masked_union(disc), discs[1:]))
-        masks = list(*list(zip(*objs))[1:])
+        mask = reduce(lambda m1, m2: m1.multiply(m2), masks).uncached()
+        cache = {}
 
-        mask = reduce(lambda m1, m2: m1.multiply(m2), masks)
-        mask.show()
+        combined_discs.save("voronoi.png", ctx, cache=cache)
+        combined_discs.show(ctx, cache=cache)
+        mask.show(ctx, cache=cache)

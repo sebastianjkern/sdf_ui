@@ -27,7 +27,55 @@ The project is structured to allow for pip installation:
 pip install git+https://github.com/sebastianjkern/sdf_ui
 ```
 
-For whatever reason, running the engine in an interactive python shell, the .show() function doesn't really work
+For interactive work, prefer `Canvas.render(...)` or a cached `Canvas.session(...)` and handle display or saving yourself.
+
+### Usage:
+
+The public API is built around render nodes. `sdf` creates signed-distance-field textures,
+`color` creates color textures, and `Canvas` materializes the same nodes on the GPU:
+
+```python
+from PIL import Image
+
+from sdf_ui import Canvas, color, sdf
+
+scene = (
+    color.clear("#ffffff")
+    .over(
+        sdf.circle(("40%x", "50%y"), "18%min")
+        .smooth_union(sdf.rect(("58%x", "50%y"), ("22%x", "18%y"), ("3%min", "3%min", "3%min", "3%min")), k="2%min")
+        .fill("#62bb47", (0.0, 0.0, 0.0, 0.0))
+    )
+    .post.blur(1)
+    .to_rgb()
+)
+
+def save_texture(texture, path):
+    image = Image.frombytes("RGBA", texture.tex.size, texture.tex.read(), "raw")
+    image.transpose(Image.FLIP_TOP_BOTTOM).save(path)
+
+cache = {}
+with Canvas((640, 360)) as canvas:
+    with canvas.session(cache=cache) as renderer:
+        save_texture(renderer.render(scene), "out.png")
+```
+
+### Architecture Note
+
+Internally, `sdf_ui` is organized around immutable render nodes instead of immediate drawing calls.
+Factories such as `sdf.circle(...)` and `color.clear(...)` do not render right away. They build a
+small expression graph of `TextureNode` objects that can be composed, cached, and rendered later
+against a `Canvas`.
+
+At render time, the node graph is resolved by the renderer and dispatched through the plugin
+registry. Each primitive, shading step, layer operation, or postprocessing effect is registered as
+plugin metadata plus shader code, which keeps the runtime extensible without forcing the public API
+to be hardcoded in one giant module.
+
+To keep editor support and static analysis usable for library users, the public typed API is also
+generated at build time from the plugin metadata. That means new plugins can extend the runtime
+surface while shipped `.pyi` stubs still provide autocomplete and type checking for the supported
+entry points.
 
 ### How it works:
 

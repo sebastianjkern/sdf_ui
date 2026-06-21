@@ -1,6 +1,7 @@
-from src.sdf_ui import *
-
 import random
+
+from sdf_ui import Canvas, color, sdf
+from sdf_ui.util import hex_col
 
 size = (1920, 1080)
 
@@ -9,13 +10,6 @@ def rand_color():
     green = random.randint(0, 255) / 255
     blue = random.randint(0, 255) / 255
     return red, green, blue
-
-
-def rand_point():
-    x = random.randint(0, size[0])
-    y = random.randint(0, size[1])
-
-    return x, y
 
 
 COLORS = [
@@ -29,18 +23,42 @@ COLORS = [
 
 
 def transparency_example():
-    with Context(size) as ctx:
-        backdrop = radial_gradient(ctx, (size[0] / 2, size[1] / 2), hex_col("#004C81", alpha=255),
-                           hex_col("#062A4A", alpha=255), inner=0, outer=ctx.percent_of_min(75)).alpha_overlay(grid(ctx, (10, 10), (50, 50)).fill(hex_col("#5EC6E2", 255), hex_col("#5EC6E2", 0), inflate=.5)).alpha_overlay(grid(ctx, (10, 10), (150, 150)).fill(hex_col("#5EC6E2", 255), hex_col("#5EC6E2", 0), inflate=1.5))
+    with Canvas(size) as ctx:
+        backdrop = (
+            color.radial_gradient(
+                (size[0] / 2, size[1] / 2),
+                hex_col("#004C81", alpha=255),
+                hex_col("#062A4A", alpha=255),
+                inner=0,
+                outer=ctx.percent_of_min(75),
+            )
+            .cache("backdrop")
+            .alpha_overlay(
+                sdf.grid((10, 10), (50, 50))
+                .cache("fine_grid")
+                .fill(hex_col("#5EC6E2", 255), hex_col("#5EC6E2", 0), inflate=.5)
+            )
+            .alpha_overlay(
+                sdf.grid((10, 10), (150, 150))
+                .cache("coarse_grid")
+                .fill(hex_col("#5EC6E2", 255), hex_col("#5EC6E2", 0), inflate=1.5)
+            )
+        )
 
-        gradient = linear_gradient(ctx, (100, 100), (900, 100), (*rand_color(), 1.0), (*rand_color(), 1.0)).transparency(0.45)
+        gradient = color.linear_gradient((100, 100), (900, 100), (*rand_color(), 1.0), (*rand_color(), 1.0)).transparency(0.45)
 
-        blur = backdrop.blur(n=1, base=13)
+        blur = backdrop.post.blur(n=1, base=13)
 
-        mask_sdf = rounded_rect(ctx, (int(size[0] / 2), int(size[1] / 2)),
-                                (int(size[1] / 3), int(size[1] / 3)),
-                                (ctx.percent_of_min(10), ctx.percent_of_min(10), ctx.percent_of_min(10),
-                                ctx.percent_of_min(10)))
+        mask_sdf = sdf.rect(
+            (int(size[0] / 2), int(size[1] / 2)),
+            (int(size[1] / 3), int(size[1] / 3)),
+            (
+                ctx.percent_of_min(10),
+                ctx.percent_of_min(10),
+                ctx.percent_of_min(10),
+                ctx.percent_of_min(10),
+            ),
+        ).cache("mask_rect")
 
         mask = mask_sdf.generate_mask()
         outline = mask_sdf.outline((1.0, 1.0, 1.0, .25), (1.0, 1.0, 1.0, 0.0), inflate=-1.5)
@@ -50,7 +68,10 @@ def transparency_example():
 
         glass_shadow = mask_sdf.shadow(25, 0, 0.75)
 
-        mask_sdf.fill_from_texture(gradient)
+        gradient_fill = mask_sdf.fill_from_texture(gradient)
+        cache = {}
+
+        gradient_fill.save("out/transparency_gradient.png", ctx, cache=cache)
 
         for i in range(10):
             x, y = random.randint(50, size[0] - 50), random.randint(50, size[1] - 50)
@@ -60,13 +81,14 @@ def transparency_example():
             col1 = (*col0, 1.0)
             col2 = (*col0, 0.0)
 
-            distance = disc(ctx, (x, y), r)
+            distance = sdf.circle((x, y), r)
             shade = distance.shadow(7, 0, transparency=0.5)
 
             backdrop1 = (backdrop if i == 0 else backdrop1).alpha_overlay(shade).alpha_overlay(distance.fill(col1, col2, 0))
 
         image = backdrop1.alpha_overlay(glass_shadow).mask(blur, mask).alpha_overlay(glass).alpha_overlay(
-            outline) #.alpha_overlay(film_grain(ctx).to_lab().transparency(5 / 255)).to_rgb()
+            outline
+        )  # .alpha_overlay(film_grain(ctx).to_lab().transparency(5 / 255)).to_rgb()
 
-        image.show()
+        image.show(ctx, cache=cache)
 
