@@ -9,8 +9,14 @@ import cv2
 import numpy as np
 
 from .shaders import ShaderLibrary
+
 # Re-export the texture bookkeeping helpers so existing imports keep working.
-from .texture_utils import decrease_tex_registry, get_tex_registry, show_texture, tex_registry
+from .texture_utils import (
+    decrease_tex_registry,
+    get_tex_registry,
+    show_texture,
+    tex_registry,
+)
 from ..log import logger
 
 
@@ -24,6 +30,7 @@ class Context:
     Example:
     >>> context = Context((800, 600))
     """
+
     def __init__(self, size):
         self.size = size
         self._closed = False
@@ -97,9 +104,8 @@ class Context:
         """
         img = cv2.imread(path)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        img = np.flip(img, 0).copy(order='C')
+        img = np.flip(img, 0).copy(order="C")
         return self._mgl_ctx.texture(img.shape[1::-1], img.shape[2], img)
-    
 
     def get_shader(self, shader: str):
         """
@@ -194,7 +200,7 @@ class Context:
         >>> r32f_texture = context.r32f()
         """
         logger().debug("Created r32f texture...")
-        tex = self._mgl_ctx.texture(self.size, 1, dtype='f4')
+        tex = self._mgl_ctx.texture(self.size, 1, dtype="f4")
         tex.filter = mgl.LINEAR, mgl.LINEAR
 
         global tex_registry

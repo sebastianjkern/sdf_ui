@@ -25,8 +25,22 @@ def render_masked_union(renderer, inputs, params):
         ),
     )
 
-    return SDFTexture(tex=tex, context=ctx), ColorTexture(tex=mask, context=ctx, mode=ColorSpaceMode.RGB)
+    return SDFTexture(tex=tex, context=ctx), ColorTexture(
+        tex=mask, context=ctx, mode=ColorSpaceMode.RGB
+    )
 
 
 def register_plugins(registry):
-    registry.register(Plugin("masked_union", PluginFamily.PRIMITIVE, TextureKind.MULTI_OUTPUT, (TextureKind.SDF, TextureKind.SDF), shader=shader("masked_union", "plugins/primitives/masked_union/shader.glsl"), render_func=render_masked_union, method_of=(TextureKind.SDF,)))
+    registry.register(
+        Plugin(
+            "masked_union",
+            PluginFamily.PRIMITIVE,
+            TextureKind.MULTI_OUTPUT,
+            (TextureKind.SDF, TextureKind.SDF),
+            shader=shader(
+                "masked_union", "plugins/primitives/masked_union/shader.glsl"
+            ),
+            render_func=render_masked_union,
+            method_of=(TextureKind.SDF,),
+        )
+    )

@@ -15,7 +15,7 @@ def run_shader(ctx: Context, shader_name: str, *, uniforms=None, image_bindings=
     for name, value in (uniforms or {}).items():
         shader[name] = value
 
-    for texture, location, read, write in (image_bindings or ()):
+    for texture, location, read, write in image_bindings or ():
         texture.bind_to_image(location, read=read, write=write)
 
     shader.run(*ctx.local_size)

@@ -2,7 +2,8 @@ __docformat__ = "google"
 
 import logging
 
-logging.basicConfig(level=logging.CRITICAL, format='%(asctime)s :: %(message)s')
+logging.basicConfig(level=logging.CRITICAL, format="%(asctime)s :: %(message)s")
+
 
 def logger():
     """

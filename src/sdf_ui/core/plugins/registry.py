@@ -20,7 +20,9 @@ class PluginRegistry:
             return self._plugins[name]
         except KeyError as exc:
             known = ", ".join(sorted(self._plugins))
-            raise KeyError(f"Unknown texture plugin '{name}'. Known plugins: {known}") from exc
+            raise KeyError(
+                f"Unknown texture plugin '{name}'. Known plugins: {known}"
+            ) from exc
 
     def build(self, name: str, *args, **kwargs):
         plugin = self.get(name)
@@ -31,8 +33,7 @@ class PluginRegistry:
     def method_names_for(self, kind: str):
         self.ensure_loaded()
         return tuple(
-            name for name, plugin in self._plugins.items()
-            if kind in plugin.method_of
+            name for name, plugin in self._plugins.items() if kind in plugin.method_of
         )
 
     def public_names(self):
@@ -59,9 +60,13 @@ class PluginRegistry:
     def _check_inputs(self, plugin, inputs):
         for index, (expected, actual) in enumerate(zip(plugin.input_kinds, inputs)):
             if not hasattr(actual, "kind"):
-                raise TypeError(f"{plugin.name} input {index} should be a texture, got {type(actual)}")
+                raise TypeError(
+                    f"{plugin.name} input {index} should be a texture, got {type(actual)}"
+                )
             if expected != TextureKind.MULTI_OUTPUT and actual.kind != expected:
-                raise TypeError(f"{plugin.name} input {index} should be {expected}, got {actual.kind}")
+                raise TypeError(
+                    f"{plugin.name} input {index} should be {expected}, got {actual.kind}"
+                )
 
     def _node(self, plugin, inputs, params):
         from sdf_ui.core.color import ColorTexture
@@ -70,13 +75,19 @@ class PluginRegistry:
         if plugin.result == TextureKind.SDF:
             return SDFTexture(op=plugin.name, inputs=inputs, params=params)
         if plugin.result == TextureKind.COLOR:
-            return ColorTexture(op=plugin.name, inputs=inputs, params=params, mode=plugin.mode)
+            return ColorTexture(
+                op=plugin.name, inputs=inputs, params=params, mode=plugin.mode
+            )
         if plugin.result == TextureKind.MULTI_OUTPUT:
             from sdf_ui.core.texture import MultiOutputResult
             from sdf_ui.core.texture import texture_params
 
-            return MultiOutputResult(op=plugin.name, inputs=inputs, params=texture_params(**params))
-        raise ValueError(f"Plugin '{plugin.name}' has unknown result kind '{plugin.result}'")
+            return MultiOutputResult(
+                op=plugin.name, inputs=inputs, params=texture_params(**params)
+            )
+        raise ValueError(
+            f"Plugin '{plugin.name}' has unknown result kind '{plugin.result}'"
+        )
 
 
 registry = PluginRegistry()

@@ -15,5 +15,27 @@ def _uniforms(params):
 
 def register_plugins(registry):
     descriptor = shader("rect", "plugins/primitives/rect/shader.glsl")
-    registry.register(Plugin("rect", PluginFamily.PRIMITIVE, TextureKind.SDF, params=("center", "size", "corner_radius", "angle"), defaults={"corner_radius": 0.0, "angle": 0.0}, shader=descriptor, make_uniforms=_uniforms, public=True))
-    registry.register(Plugin("rounded_rect", PluginFamily.PRIMITIVE, TextureKind.SDF, params=("center", "size", "corner_radius", "angle"), defaults={"angle": 0.0}, shader=descriptor, make_uniforms=_uniforms, public=True))
+    registry.register(
+        Plugin(
+            "rect",
+            PluginFamily.PRIMITIVE,
+            TextureKind.SDF,
+            params=("center", "size", "corner_radius", "angle"),
+            defaults={"corner_radius": 0.0, "angle": 0.0},
+            shader=descriptor,
+            make_uniforms=_uniforms,
+            public=True,
+        )
+    )
+    registry.register(
+        Plugin(
+            "rounded_rect",
+            PluginFamily.PRIMITIVE,
+            TextureKind.SDF,
+            params=("center", "size", "corner_radius", "angle"),
+            defaults={"angle": 0.0},
+            shader=descriptor,
+            make_uniforms=_uniforms,
+            public=True,
+        )
+    )

@@ -17,7 +17,9 @@ class ShaderLibrary:
         self._cache = {}
 
     def get(self, shader_name: str):
-        shader_files = {descriptor.name: descriptor for descriptor in registry.shader_files()}
+        shader_files = {
+            descriptor.name: descriptor for descriptor in registry.shader_files()
+        }
         if shader_name not in shader_files:
             known = ", ".join(sorted(shader_files))
             raise KeyError(f"Unknown shader '{shader_name}'. Known shaders: {known}")
@@ -27,7 +29,9 @@ class ShaderLibrary:
             path = self._base_path / descriptor.path
 
             if not path.exists():
-                raise FileNotFoundError(f"Shader '{shader_name}' is registered at '{path}', but no file exists there.")
+                raise FileNotFoundError(
+                    f"Shader '{shader_name}' is registered at '{path}', but no file exists there."
+                )
 
             code = path.read_text(encoding="utf-8")
             self._cache[shader_name] = self._mgl_ctx.compute_shader(code)

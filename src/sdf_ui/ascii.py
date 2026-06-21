@@ -59,10 +59,12 @@ def rgb_to_hex(rgb):
     >>> color_tuple = (255, 0, 128)
     >>> hex_color = rgb_to_hex(color_tuple)
     """
-    return '%02x%02x%02x' % rgb[:3]
+    return "%02x%02x%02x" % rgb[:3]
 
 
-def convert_image_to_ascii_colored(image, cols, scale, more_levels, invert, enhance, as_background):
+def convert_image_to_ascii_colored(
+    image, cols, scale, more_levels, invert, enhance, as_background
+):
     """
     Convert a colored image to colored ASCII art and print it.
 
@@ -79,10 +81,12 @@ def convert_image_to_ascii_colored(image, cols, scale, more_levels, invert, enha
     >>> input_image = Image.open("example.jpg")
     >>> convert_image_to_ascii_colored(input_image, 80, 0.43, True, False, True, True)
     """
-    hr_ascii_table = "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1{}[]?-_+~<>i!lI;:,\"^`'. "
-    lr_ascii_table = '@%#*+=-:. '
+    hr_ascii_table = (
+        "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1{}[]?-_+~<>i!lI;:,\"^`'. "
+    )
+    lr_ascii_table = "@%#*+=-:. "
 
-    bw_image = image.convert('L')
+    bw_image = image.convert("L")
 
     if enhance:
         image = PIL.ImageEnhance.Contrast(image).enhance(3)
@@ -134,7 +138,7 @@ def convert_image_to_ascii_colored(image, cols, scale, more_levels, invert, enha
                 symbol = lr_ascii_table[int((avg * 9) / 255)]
 
             if as_background:
-                symbol = getattr(bg, "t_" + rgb_to_hex(clr)) + ' ' + fx.end
+                symbol = getattr(bg, "t_" + rgb_to_hex(clr)) + " " + fx.end
             else:
                 symbol = getattr(fg, "t_" + rgb_to_hex(clr)) + symbol + fx.end
 
@@ -161,10 +165,12 @@ def convert_image_to_ascii(image, cols, scale, more_levels, invert, enhance):
     >>> convert_image_to_ascii(input_image, 80, 0.43, True, False, True)
     """
 
-    hr_ascii_table = "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1{}[]?-_+~<>i!lI;:,\"^`'. "
-    lr_ascii_table = '@%#*+=-:. '
+    hr_ascii_table = (
+        "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1{}[]?-_+~<>i!lI;:,\"^`'. "
+    )
+    lr_ascii_table = "@%#*+=-:. "
 
-    image = image.convert('L')
+    image = image.convert("L")
 
     if enhance:
         image = PIL.ImageEnhance.Contrast(image).enhance(3)
@@ -229,5 +235,12 @@ def print_texture(texture, colored=True):
     if not colored:
         convert_image_to_ascii(image, 150, 0.43, True, True, True)
     else:
-        convert_image_to_ascii_colored(image, 150, 0.43, more_levels=False, invert=False, enhance=True,
-                                       as_background=True)
+        convert_image_to_ascii_colored(
+            image,
+            150,
+            0.43,
+            more_levels=False,
+            invert=False,
+            enhance=True,
+            as_background=True,
+        )

@@ -42,10 +42,12 @@ class Plugin:
 
     def bind(self, args, kwargs):
         if len(args) < len(self.input_kinds):
-            raise TypeError(f"{self.name} expects at least {len(self.input_kinds)} input argument(s)")
+            raise TypeError(
+                f"{self.name} expects at least {len(self.input_kinds)} input argument(s)"
+            )
 
-        inputs = args[:len(self.input_kinds)]
-        param_args = args[len(self.input_kinds):]
+        inputs = args[: len(self.input_kinds)]
+        param_args = args[len(self.input_kinds) :]
         if len(param_args) > len(self.params):
             raise TypeError(f"{self.name} got too many positional arguments")
 
@@ -82,18 +84,24 @@ class Plugin:
         elif self.result == TextureKind.COLOR:
             tex = ctx.rgba8()
         else:
-            raise ValueError(f"Plugin '{self.name}' cannot use the default renderer for result '{self.result}'")
+            raise ValueError(
+                f"Plugin '{self.name}' cannot use the default renderer for result '{self.result}'"
+            )
 
         uniforms = {"destTex": 0}
         if self.make_uniforms is not None:
             uniforms.update(self.make_uniforms(params))
 
         image_bindings = [(tex, 0, False, True)]
-        for location, (uniform_name, texture) in enumerate(zip(self.input_uniforms, inputs), start=1):
+        for location, (uniform_name, texture) in enumerate(
+            zip(self.input_uniforms, inputs), start=1
+        ):
             uniforms[uniform_name] = location
             image_bindings.append((texture.tex, location, True, False))
 
-        run_shader(ctx, self.shader.name, uniforms=uniforms, image_bindings=image_bindings)
+        run_shader(
+            ctx, self.shader.name, uniforms=uniforms, image_bindings=image_bindings
+        )
 
         if self.result == TextureKind.SDF:
             return SDFTexture(tex=tex, context=ctx)

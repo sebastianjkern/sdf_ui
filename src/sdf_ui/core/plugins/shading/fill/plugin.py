@@ -15,4 +15,22 @@ def _uniforms(params):
 
 
 def register_plugins(registry):
-    registry.register(Plugin("fill", PluginFamily.SHADING, TextureKind.COLOR, (TextureKind.SDF,), params=("fg_color", "bg_color", "inflate", "inner", "outer"), defaults={"bg_color": (0.0, 0.0, 0.0, 1.0), "inflate": 0.0, "inner": -1.5, "outer": 0.0}, shader=shader("fill", "plugins/shading/fill/shader.glsl"), input_uniforms=("sdf",), make_uniforms=_uniforms, method_of=(TextureKind.SDF,)))
+    registry.register(
+        Plugin(
+            "fill",
+            PluginFamily.SHADING,
+            TextureKind.COLOR,
+            (TextureKind.SDF,),
+            params=("fg_color", "bg_color", "inflate", "inner", "outer"),
+            defaults={
+                "bg_color": (0.0, 0.0, 0.0, 1.0),
+                "inflate": 0.0,
+                "inner": -1.5,
+                "outer": 0.0,
+            },
+            shader=shader("fill", "plugins/shading/fill/shader.glsl"),
+            input_uniforms=("sdf",),
+            make_uniforms=_uniforms,
+            method_of=(TextureKind.SDF,),
+        )
+    )

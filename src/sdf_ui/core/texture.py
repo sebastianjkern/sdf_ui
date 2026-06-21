@@ -91,7 +91,8 @@ class Renderer:
     def _node_key(self, node):
         context_key = (id(self.ctx), self.ctx.size)
         input_keys = tuple(
-            self._node_key(input_) if isinstance(input_, TextureNode) or isinstance(input_, MultiOutputResult)
+            self._node_key(input_)
+            if isinstance(input_, TextureNode) or isinstance(input_, MultiOutputResult)
             else self._freeze_runtime(self._resolve(input_))
             for input_ in node.inputs
         )
@@ -105,7 +106,9 @@ class Renderer:
         if isinstance(value, TextureNode) or isinstance(value, MultiOutputResult):
             return self._node_key(value)
         if isinstance(value, dict):
-            return tuple(sorted((key, self._freeze_runtime(val)) for key, val in value.items()))
+            return tuple(
+                sorted((key, self._freeze_runtime(val)) for key, val in value.items())
+            )
         if isinstance(value, (list, tuple)):
             return tuple(self._freeze_runtime(item) for item in value)
         return value
@@ -129,7 +132,11 @@ class TextureNode(ABC):
         self.context = context
         self.op = op
         self.inputs = tuple(inputs)
-        self.params = texture_params(**(params or {})) if isinstance(params, dict) else tuple(params or ())
+        self.params = (
+            texture_params(**(params or {}))
+            if isinstance(params, dict)
+            else tuple(params or ())
+        )
         self.label = label
         self.should_cache = should_cache
 
@@ -151,6 +158,7 @@ class TextureNode(ABC):
         from sdf_ui.core.plugins.registry import registry
 
         if name in registry.method_names_for(self.kind):
+
             def method(*args, **kwargs):
                 return build(name, self, *args, **kwargs)
 
@@ -171,26 +179,50 @@ class TextureNode(ABC):
 
     def show(self, ctx=None, params=None, cache=None, conversion=True, size=None):
         def _show(texture):
-            if getattr(texture, "mode", None) == "LAB" and conversion and hasattr(texture, "to_rgb"):
+            if (
+                getattr(texture, "mode", None) == "LAB"
+                and conversion
+                and hasattr(texture, "to_rgb")
+            ):
                 texture = texture.to_rgb().render(texture.context)
             show_texture(texture.tex)
 
-        self._with_rendered_texture(_show, ctx=ctx, params=params, cache=cache, size=size)
+        self._with_rendered_texture(
+            _show, ctx=ctx, params=params, cache=cache, size=size
+        )
 
-    def save(self, name="./image.png", ctx=None, params=None, cache=None, conversion=True, size=None):
+    def save(
+        self,
+        name="./image.png",
+        ctx=None,
+        params=None,
+        cache=None,
+        conversion=True,
+        size=None,
+    ):
         def _save(texture):
             if self.kind == "color":
-                if getattr(texture, "mode", None) == "LAB" and conversion and hasattr(texture, "to_rgb"):
+                if (
+                    getattr(texture, "mode", None) == "LAB"
+                    and conversion
+                    and hasattr(texture, "to_rgb")
+                ):
                     texture = texture.to_rgb().render(texture.context)
-                image = Image.frombytes("RGBA", texture.tex.size, texture.tex.read(), "raw")
+                image = Image.frombytes(
+                    "RGBA", texture.tex.size, texture.tex.read(), "raw"
+                )
             else:
-                image = Image.frombytes("F", texture.tex.size, texture.tex.read(), "raw")
+                image = Image.frombytes(
+                    "F", texture.tex.size, texture.tex.read(), "raw"
+                )
                 image = image.convert("L")
 
             image = image.transpose(Image.FLIP_TOP_BOTTOM)
             image.save(name)
 
-        self._with_rendered_texture(_save, ctx=ctx, params=params, cache=cache, size=size)
+        self._with_rendered_texture(
+            _save, ctx=ctx, params=params, cache=cache, size=size
+        )
 
     def named(self, label: str):
         return self._clone(label=label, should_cache=self.should_cache)
@@ -248,7 +280,10 @@ class PostNamespace:
             plugin = registry.get(name)
         except KeyError as exc:
             raise AttributeError(f"No postprocessing plugin named '{name}'") from exc
-        if plugin.family != "postprocessing" or self.texture.kind not in plugin.method_of:
+        if (
+            plugin.family != "postprocessing"
+            or self.texture.kind not in plugin.method_of
+        ):
             raise AttributeError(f"No postprocessing plugin named '{name}'")
 
         def method(*args, **kwargs):
@@ -272,7 +307,10 @@ class PostNamespace:
         from sdf_ui.core.plugins.registry import registry
 
         plugin = registry.get(name)
-        if plugin.family != "postprocessing" or self.texture.kind not in plugin.method_of:
+        if (
+            plugin.family != "postprocessing"
+            or self.texture.kind not in plugin.method_of
+        ):
             raise AttributeError(f"No postprocessing plugin named '{name}'")
 
         def method(*args, **kwargs):
@@ -300,5 +338,12 @@ class MultiOutputResult:
         from sdf_ui.core.color import ColorSpaceMode, ColorTexture
         from sdf_ui.core.sdf import SDFTexture
 
-        yield SDFTexture(op="output", inputs=(self,), params={"index": 0, "kind": "sdf"})
-        yield ColorTexture(op="output", inputs=(self,), params={"index": 1, "kind": "color"}, mode=ColorSpaceMode.RGB)
+        yield SDFTexture(
+            op="output", inputs=(self,), params={"index": 0, "kind": "sdf"}
+        )
+        yield ColorTexture(
+            op="output",
+            inputs=(self,),
+            params={"index": 1, "kind": "color"},
+            mode=ColorSpaceMode.RGB,
+        )

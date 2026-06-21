@@ -26,5 +26,8 @@ def blur_pass(ctx, shader_name, dest, src):
         ctx,
         shader_name,
         uniforms={"destTex": 0, "origTex": 1},
-        image_bindings=((dest, 0, False, True), (src.tex if hasattr(src, "tex") else src, 1, True, False)),
+        image_bindings=(
+            (dest, 0, False, True),
+            (src.tex if hasattr(src, "tex") else src, 1, True, False),
+        ),
     )

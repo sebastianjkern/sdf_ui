@@ -6,6 +6,7 @@ from ttfquery import describe, glyph
 from . import sdf
 from .util import collinear
 
+
 def middle(x1, y1, x2, y2):
     """
     Calculate the midpoint between two points.
@@ -35,7 +36,6 @@ def get_glyph(font_file_path, char):
     g = glyph.Glyph(ttfquery.glyphquery.glyphName(font, char))
     ttf_contours = g.calculateContours(font)
 
-
     interpolated_contours = []
 
     for contour in ttf_contours:
@@ -44,11 +44,15 @@ def get_glyph(font_file_path, char):
         for i in range(1, len(contour)):
             if contour[i][1] == contour[i - 1][1]:
                 interpolated_points.append(
-                    [*middle(
-                        contour[i - 1][0][0],
-                        contour[i - 1][0][1],
-                        contour[i][0][0],
-                        contour[i][0][1])])
+                    [
+                        *middle(
+                            contour[i - 1][0][0],
+                            contour[i - 1][0][1],
+                            contour[i][0][0],
+                            contour[i][0][1],
+                        )
+                    ]
+                )
             interpolated_points.append(list(contour[i][0]))
 
         interpolated_contours.append(interpolated_points)
@@ -59,7 +63,7 @@ def get_glyph(font_file_path, char):
         bezier_curves_control_points = []
 
         for i in range(0, len(contour) - 1, 2):
-            bezier_curves_control_points.append(contour[0 + i:3 + i])
+            bezier_curves_control_points.append(contour[0 + i : 3 + i])
 
         bezier_control_points.append(bezier_curves_control_points)
 

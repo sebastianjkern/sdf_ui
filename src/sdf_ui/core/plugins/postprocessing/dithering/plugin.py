@@ -5,4 +5,14 @@ from sdf_ui.core.plugins.common import shader
 
 
 def register_plugins(registry):
-    registry.register(Plugin("dithering", PluginFamily.POSTPROCESSING, TextureKind.COLOR, (TextureKind.COLOR,), shader=shader("dithering", "plugins/postprocessing/dithering/shader.glsl"), input_uniforms=("origTex",), method_of=(TextureKind.COLOR,)))
+    registry.register(
+        Plugin(
+            "dithering",
+            PluginFamily.POSTPROCESSING,
+            TextureKind.COLOR,
+            (TextureKind.COLOR,),
+            shader=shader("dithering", "plugins/postprocessing/dithering/shader.glsl"),
+            input_uniforms=("origTex",),
+            method_of=(TextureKind.COLOR,),
+        )
+    )

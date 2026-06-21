@@ -31,7 +31,8 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
-    "build"
+    "build",
+    "ruff"
 ]
 
 [project.urls]

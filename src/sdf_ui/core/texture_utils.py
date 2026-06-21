@@ -63,7 +63,9 @@ def show_texture(tex: mgl.Texture):
         elif tex.components == 4:
             mode = "RGBA"
         else:
-            raise NotImplementedError("the mode for the show_texture function is not implemented")
+            raise NotImplementedError(
+                "the mode for the show_texture function is not implemented"
+            )
 
     image = Image.frombytes(mode, tex.size, tex.read(), "raw")
     image = image.transpose(Image.FLIP_TOP_BOTTOM)

@@ -19,5 +19,9 @@ class SDFTexture(TextureNode):
     def intersect(self, other):
         return self.intersection(other)
 
-    def mask(self, inflate=0.0, color0=(0.0, 0.0, 0.0, 1.0), color1=(1.0, 1.0, 1.0, 1.0)):
-        return build("generate_mask", self, inflate=inflate, color0=color0, color1=color1)
+    def mask(
+        self, inflate=0.0, color0=(0.0, 0.0, 0.0, 1.0), color1=(1.0, 1.0, 1.0, 1.0)
+    ):
+        return build(
+            "generate_mask", self, inflate=inflate, color0=color0, color1=color1
+        )

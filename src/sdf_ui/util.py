@@ -2,6 +2,7 @@ __docformat__ = "google"
 
 import numpy as np
 
+
 def rgb_col(r: int, g: int, b: int, *a):
     """
     Convert RGB values to a normalized tuple.
@@ -42,7 +43,7 @@ def hex_col(string: str, alpha=255):
     (1.0, 0.0, 0.0, 0.5)
     """
     g = string.lstrip("#")
-    col = tuple(int(g[i:i + 2], 16) for i in (0, 2, 4))
+    col = tuple(int(g[i : i + 2], 16) for i in (0, 2, 4))
     return rgb_col(*col, alpha)
 
 

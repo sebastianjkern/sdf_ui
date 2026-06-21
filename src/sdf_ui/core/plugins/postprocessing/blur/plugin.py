@@ -48,7 +48,11 @@ def render_blur(renderer, inputs, params):
     from sdf_ui.core.plugins.registry import registry
 
     texture = inputs[0]
-    rgb = texture if texture.mode == "RGB" else renderer.render(registry.build("to_rgb", texture))
+    rgb = (
+        texture
+        if texture.mode == "RGB"
+        else renderer.render(registry.build("to_rgb", texture))
+    )
     base = 13 if params["base"] == 13 else 9
     blurred = renderer.render(registry.build(f"blur_{base}", rgb, n=params["n"]))
     if texture.mode == "RGB":
@@ -57,32 +61,47 @@ def render_blur(renderer, inputs, params):
 
 
 def register_plugins(registry):
-    registry.register(Plugin(
-        "blur_9",
-        PluginFamily.POSTPROCESSING,
-        TextureKind.COLOR,
-        (TextureKind.COLOR,),
-        params=("n",),
-        defaults={"n": 0},
-        extra_shaders=(
-            shader("blur_ver_9", "plugins/postprocessing/blur/blur9_vert.glsl"),
-            shader("blur_hor_9", "plugins/postprocessing/blur/blur9_hor.glsl"),
-        ),
-        render_func=render_blur_9,
-        method_of=(TextureKind.COLOR,),
-    ))
-    registry.register(Plugin(
-        "blur_13",
-        PluginFamily.POSTPROCESSING,
-        TextureKind.COLOR,
-        (TextureKind.COLOR,),
-        params=("n",),
-        defaults={"n": 0},
-        extra_shaders=(
-            shader("blur_ver_13", "plugins/postprocessing/blur/blur13_vert.glsl"),
-            shader("blur_hor_13", "plugins/postprocessing/blur/blur13_hor.glsl"),
-        ),
-        render_func=render_blur_13,
-        method_of=(TextureKind.COLOR,),
-    ))
-    registry.register(Plugin("blur", PluginFamily.POSTPROCESSING, TextureKind.COLOR, (TextureKind.COLOR,), params=("n", "base"), defaults={"n": 0, "base": 9}, render_func=render_blur, method_of=(TextureKind.COLOR,)))
+    registry.register(
+        Plugin(
+            "blur_9",
+            PluginFamily.POSTPROCESSING,
+            TextureKind.COLOR,
+            (TextureKind.COLOR,),
+            params=("n",),
+            defaults={"n": 0},
+            extra_shaders=(
+                shader("blur_ver_9", "plugins/postprocessing/blur/blur9_vert.glsl"),
+                shader("blur_hor_9", "plugins/postprocessing/blur/blur9_hor.glsl"),
+            ),
+            render_func=render_blur_9,
+            method_of=(TextureKind.COLOR,),
+        )
+    )
+    registry.register(
+        Plugin(
+            "blur_13",
+            PluginFamily.POSTPROCESSING,
+            TextureKind.COLOR,
+            (TextureKind.COLOR,),
+            params=("n",),
+            defaults={"n": 0},
+            extra_shaders=(
+                shader("blur_ver_13", "plugins/postprocessing/blur/blur13_vert.glsl"),
+                shader("blur_hor_13", "plugins/postprocessing/blur/blur13_hor.glsl"),
+            ),
+            render_func=render_blur_13,
+            method_of=(TextureKind.COLOR,),
+        )
+    )
+    registry.register(
+        Plugin(
+            "blur",
+            PluginFamily.POSTPROCESSING,
+            TextureKind.COLOR,
+            (TextureKind.COLOR,),
+            params=("n", "base"),
+            defaults={"n": 0, "base": 9},
+            render_func=render_blur,
+            method_of=(TextureKind.COLOR,),
+        )
+    )

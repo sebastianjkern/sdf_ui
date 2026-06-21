@@ -10,5 +10,25 @@ def _uniforms(params):
 
 def register_plugins(registry):
     descriptor = shader("circle", "plugins/primitives/circle/shader.glsl")
-    registry.register(Plugin("circle", PluginFamily.PRIMITIVE, TextureKind.SDF, params=("center", "radius"), shader=descriptor, make_uniforms=_uniforms, public=True))
-    registry.register(Plugin("disc", PluginFamily.PRIMITIVE, TextureKind.SDF, params=("center", "radius"), shader=descriptor, make_uniforms=_uniforms, public=True))
+    registry.register(
+        Plugin(
+            "circle",
+            PluginFamily.PRIMITIVE,
+            TextureKind.SDF,
+            params=("center", "radius"),
+            shader=descriptor,
+            make_uniforms=_uniforms,
+            public=True,
+        )
+    )
+    registry.register(
+        Plugin(
+            "disc",
+            PluginFamily.PRIMITIVE,
+            TextureKind.SDF,
+            params=("center", "radius"),
+            shader=descriptor,
+            make_uniforms=_uniforms,
+            public=True,
+        )
+    )

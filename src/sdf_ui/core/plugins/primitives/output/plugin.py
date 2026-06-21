@@ -8,4 +8,13 @@ def render_output(renderer, inputs, params):
 
 
 def register_plugins(registry):
-    registry.register(Plugin("output", PluginFamily.PRIMITIVE, TextureKind.MULTI_OUTPUT, (TextureKind.MULTI_OUTPUT,), params=("index", "kind"), render_func=render_output))
+    registry.register(
+        Plugin(
+            "output",
+            PluginFamily.PRIMITIVE,
+            TextureKind.MULTI_OUTPUT,
+            (TextureKind.MULTI_OUTPUT,),
+            params=("index", "kind"),
+            render_func=render_output,
+        )
+    )
