@@ -26,7 +26,8 @@ dependencies = [
 dev = [
     "pytest>=8.0",
     "build",
-    "ruff"
+    "ruff",
+    "sphinx>=8.0"
 ]
 
 [project.urls]
