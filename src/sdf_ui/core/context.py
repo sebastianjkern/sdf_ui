@@ -3,22 +3,20 @@ __docformat__ = "google"
 import math
 from pathlib import Path
 
-import moderngl as mgl
-
 import cv2
-
+import moderngl as mgl
 import numpy as np
 
+from ..log import logger
 from .shaders import ShaderLibrary
 
 # Re-export the texture bookkeeping helpers so existing imports keep working.
-from .texture_utils import (
+from .texture_utils import (  # noqa: F401
     decrease_tex_registry,
     get_tex_registry,
     show_texture,
     tex_registry,
 )
-from ..log import logger
 
 
 class Context:

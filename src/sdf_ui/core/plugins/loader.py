@@ -4,7 +4,6 @@ from importlib import import_module
 from importlib.metadata import entry_points
 from pkgutil import walk_packages
 
-
 PLUGIN_PACKAGES = (
     "sdf_ui.core.plugins.primitives",
     "sdf_ui.core.plugins.shading",

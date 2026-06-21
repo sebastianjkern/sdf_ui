@@ -1,9 +1,11 @@
 __docformat__ = "google"
 
-import PIL.Image
-import PIL
-import numpy
 from functools import reduce
+
+import numpy
+import PIL
+import PIL.Image
+
 from . import sdf
 
 

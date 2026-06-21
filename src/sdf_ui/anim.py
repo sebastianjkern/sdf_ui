@@ -1,6 +1,10 @@
-__docformat__ = "google"
+"""Rudimentary video export support.
 
-"""Rudimentary video export support. images need to be exported beforehand, and are combined using the function down below"""
+Images need to be exported beforehand and are combined using the function
+below.
+"""
+
+__docformat__ = "google"
 
 import cv2
 

@@ -6,10 +6,10 @@ from typing import Optional
 
 from PIL import Image
 
+from ..util import hex_col
 from .context import Context, decrease_tex_registry
 from .plugins.common import build
 from .texture_utils import show_texture
-from ..util import hex_col
 
 
 def freeze(value):

@@ -79,8 +79,7 @@ class PluginRegistry:
                 op=plugin.name, inputs=inputs, params=params, mode=plugin.mode
             )
         if plugin.result == TextureKind.MULTI_OUTPUT:
-            from sdf_ui.core.texture import MultiOutputResult
-            from sdf_ui.core.texture import texture_params
+            from sdf_ui.core.texture import MultiOutputResult, texture_params
 
             return MultiOutputResult(
                 op=plugin.name, inputs=inputs, params=texture_params(**params)

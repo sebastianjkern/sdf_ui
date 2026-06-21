@@ -1,7 +1,7 @@
 __docformat__ = "google"
 
-from .context import Context
 from ..log import logger
+from .context import Context
 
 
 def run_shader(ctx: Context, shader_name: str, *, uniforms=None, image_bindings=None):

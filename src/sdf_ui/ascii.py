@@ -1,11 +1,9 @@
 __docformat__ = "google"
 
-import PIL
 import numpy as np
-
+import PIL
+from console import bg, fg, fx
 from PIL import Image
-
-from console import fg, fx, bg
 
 
 def _validate_ascii_dimensions(cols, scale, original_width, original_height, rows):

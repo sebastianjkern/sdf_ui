@@ -1,8 +1,7 @@
 __docformat__ = "google"
 
-from PIL import Image
-
 import moderngl as mgl
+from PIL import Image
 
 from ..log import logger
 
@@ -17,7 +16,7 @@ class Counter:
         logger().debug(f"Maximum of {self.name} is {self.max}")
 
     def __add__(self, other):
-        if type(other) != int:
+        if not isinstance(other, int):
             logger().critical("TypeError")
 
         self.value += other
@@ -26,7 +25,7 @@ class Counter:
         return self
 
     def __sub__(self, other):
-        if type(other) != int:
+        if not isinstance(other, int):
             logger().critical("TypeError")
 
         self.value -= other
