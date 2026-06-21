@@ -2,7 +2,8 @@ __docformat__ = "google"
 
 import logging
 
-logging.basicConfig(level=logging.CRITICAL, format="%(asctime)s :: %(message)s")
+_LOGGER = logging.getLogger("sdf_ui")
+_LOGGER.addHandler(logging.NullHandler())
 
 
 def logger():
@@ -16,4 +17,4 @@ def logger():
     >>> log = logger()
     >>> log.debug("Debug message")
     """
-    return logging.getLogger(__name__)
+    return _LOGGER
