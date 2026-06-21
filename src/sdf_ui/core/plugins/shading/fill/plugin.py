@@ -1,14 +1,14 @@
 __docformat__ = "google"
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
-from sdf_ui.core.plugins.common import shader
+from sdf_ui.core.plugins.common import color, shader
 
 
 def _uniforms(params):
     return {
         "inflate": params["inflate"],
-        "background": params["bg_color"],
-        "color": params["fg_color"],
+        "background": color(params["bg_color"]),
+        "color": color(params["fg_color"]),
         "first": params["inner"],
         "second": params["outer"],
     }

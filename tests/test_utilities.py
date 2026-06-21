@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 import pytest
 from PIL import Image
 
 from sdf_ui import Canvas
 from sdf_ui.bw_to_sdf import image_to_sdf
-from sdf_ui.text import glyph_sdf
+from sdf_ui.text import glyph
+from sdf_ui.util import hex_col
 
 from tests.helpers import PROJECT_ROOT, render, rgba_array
 
@@ -38,12 +37,70 @@ def test_image_to_sdf_rejects_images_without_dark_pixels(tmp_path):
         image_to_sdf(str(image_path), resize=False, preview=False)
 
 
-def test_glyph_sdf_renders_using_the_bundled_font():
+def test_hex_col_supports_short_and_long_alpha_forms():
+    assert hex_col("#fff") == (1.0, 1.0, 1.0, 1.0)
+    assert hex_col("#fff0") == (1.0, 1.0, 1.0, 0.0)
+    assert hex_col("#00000000") == (0.0, 0.0, 0.0, 0.0)
+    assert hex_col("#000000", alpha=0) == (0.0, 0.0, 0.0, 0.0)
+
+
+def test_glyph_renders_using_the_bundled_font():
     font_path = PROJECT_ROOT / "fonts" / "georgia_regular.ttf"
-    scene = glyph_sdf("i", 0.65, 25, 25, path=str(font_path))
+    scene = glyph("i", 0.65, 25, 25, path=str(font_path))
 
     with Canvas((128, 128)) as ctx:
         texture = scene.fill((255, 255, 255, 255), (0, 0, 0, 255)).render(ctx)
 
     assert texture.tex.size == (128, 128)
     assert texture.kind == "color"
+
+
+def test_glyph_generates_a_filled_signed_field_with_counters():
+    font_path = PROJECT_ROOT / "fonts" / "georgia_regular.ttf"
+    scene = glyph("o", 0.08, 20, 15, path=str(font_path))
+
+    with Canvas((128, 128)) as ctx:
+        texture = scene.render(ctx)
+        distances = np.frombuffer(texture.tex.read(), dtype=np.float32).reshape(
+            (128, 128)
+        )
+
+    assert texture.kind == "sdf"
+    assert distances[55, 60] > 0
+    assert distances[55, 30] < 0
+    assert distances[55, 90] < 0
+
+
+def test_glyph_fill_preserves_transparent_hex_background():
+    font_path = PROJECT_ROOT / "fonts" / "georgia_regular.ttf"
+    scene = glyph("o", 0.08, 20, 15, path=str(font_path)).fill(
+        "#e9c46a", "#00000000"
+    )
+
+    with Canvas((128, 128)) as ctx:
+        texture = scene.to_rgb().render(ctx)
+        pixels = np.frombuffer(texture.tex.read(), dtype=np.uint8).reshape(
+            (128, 128, 4)
+        )
+
+    assert pixels[55, 30, 3] == 255
+    assert pixels[55, 60, 3] == 0
+
+
+def test_glyph_fill_normalizes_255_tuple_colors():
+    font_path = PROJECT_ROOT / "fonts" / "georgia_regular.ttf"
+    scene = glyph("o", 0.08, 20, 15, path=str(font_path)).fill(
+        (233, 196, 106, 255), (0, 0, 0, 0)
+    )
+
+    with Canvas((128, 128)) as ctx:
+        texture = scene.to_rgb().render(ctx)
+        pixels = np.frombuffer(texture.tex.read(), dtype=np.uint8).reshape(
+            (128, 128, 4)
+        )
+
+    assert int(pixels[55, 30, 0]) == pytest.approx(233, abs=2)
+    assert int(pixels[55, 30, 1]) == pytest.approx(196, abs=2)
+    assert int(pixels[55, 30, 2]) == pytest.approx(106, abs=2)
+    assert int(pixels[55, 30, 3]) == 255
+    assert int(pixels[55, 60, 3]) == 0

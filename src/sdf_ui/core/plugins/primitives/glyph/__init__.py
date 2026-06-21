@@ -1,0 +1,1 @@
+"""Filled glyph SDF primitive."""

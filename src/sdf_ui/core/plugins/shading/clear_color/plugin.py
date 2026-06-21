@@ -1,7 +1,7 @@
 __docformat__ = "google"
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
-from sdf_ui.core.plugins.common import params, shader
+from sdf_ui.core.plugins.common import colors, shader
 
 
 def register_plugins(registry):
@@ -13,7 +13,7 @@ def register_plugins(registry):
             TextureKind.COLOR,
             params=("color",),
             shader=descriptor,
-            make_uniforms=params("color"),
+            make_uniforms=colors("color"),
             public=True,
         )
     )
@@ -24,7 +24,7 @@ def register_plugins(registry):
             TextureKind.COLOR,
             params=("color",),
             shader=descriptor,
-            make_uniforms=params("color"),
+            make_uniforms=colors("color"),
             public=True,
         )
     )

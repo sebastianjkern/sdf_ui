@@ -42,9 +42,16 @@ def hex_col(string: str, alpha=255):
     >>> print(color)
     (1.0, 0.0, 0.0, 0.5)
     """
-    g = string.lstrip("#")
-    col = tuple(int(g[i : i + 2], 16) for i in (0, 2, 4))
-    return rgb_col(*col, alpha)
+    value = string.lstrip("#")
+    if len(value) in {3, 4}:
+        value = "".join(channel * 2 for channel in value)
+    if len(value) == 6:
+        value = f"{value}{alpha:02x}"
+    if len(value) != 8:
+        raise ValueError(f"Expected #RGB, #RGBA, #RRGGBB, or #RRGGBBAA, got {string!r}")
+
+    col = tuple(int(value[i : i + 2], 16) for i in (0, 2, 4, 6))
+    return rgb_col(*col)
 
 
 def collinear(x1, y1, x2, y2, x3, y3):

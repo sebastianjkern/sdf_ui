@@ -89,6 +89,14 @@ class Renderer:
         return value
 
     def _node_key(self, node):
+        if getattr(node, "tex", None) is not None:
+            return (
+                id(node.context),
+                node.kind,
+                id(node.tex),
+                getattr(node, "mode", None),
+            )
+
         context_key = (id(self.ctx), self.ctx.size)
         input_keys = tuple(
             self._node_key(input_)
@@ -302,21 +310,6 @@ class PostNamespace:
         )
         names.update({"to_lab", "to_rgb"})
         return sorted(names)
-
-    def __getattr__(self, name):
-        from sdf_ui.core.plugins.registry import registry
-
-        plugin = registry.get(name)
-        if (
-            plugin.family != "postprocessing"
-            or self.texture.kind not in plugin.method_of
-        ):
-            raise AttributeError(f"No postprocessing plugin named '{name}'")
-
-        def method(*args, **kwargs):
-            return registry.build(name, self.texture, *args, **kwargs)
-
-        return method
 
 
 @dataclass(frozen=True)

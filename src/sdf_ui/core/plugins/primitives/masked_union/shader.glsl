@@ -2,10 +2,10 @@
 
 layout (local_size_x = 16, local_size_y = 16) in;
 
-layout (r32f, location = 0) writeonly uniform image2D destTex;
-layout (rgba8, location = 1) writeonly uniform image2D maskTex;
-layout (r32f, location = 2) readonly uniform image2D sdf0;
-layout (r32f, location = 3) readonly uniform image2D sdf1;
+layout (r32f, binding = 0) writeonly uniform image2D destTex;
+layout (rgba8, binding = 1) writeonly uniform image2D maskTex;
+layout (r32f, binding = 2) readonly uniform image2D sdf0;
+layout (r32f, binding = 3) readonly uniform image2D sdf1;
 
 #define K 0.1
 

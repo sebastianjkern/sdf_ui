@@ -7,8 +7,8 @@
 
 layout (local_size_x = 16, local_size_y = 16) in;
 
-layout (rgba8, location = 0) writeonly uniform image2D destTex;
-layout (rgba8, location = 1) readonly uniform image2D origTex;
+layout (rgba8, binding = 0) writeonly uniform image2D destTex;
+layout (rgba8, binding = 1) readonly uniform image2D origTex;
 
 uniform float offset[SIZE] = float[](0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0);
 uniform float weight[SIZE] = float[](0.2094726562, 0.1832885742, 0.1221923828, 0.0610961914, 0.0222167969, 0.0055541992, 0.0008544922, 0.0000610352);

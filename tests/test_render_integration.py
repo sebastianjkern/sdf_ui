@@ -87,18 +87,20 @@ def test_fill_from_texture_maps_a_layer_through_an_sdf():
 def test_alpha_overlay_and_mask_layers_change_pixels():
     overlay_pixels = rgba_array(
         render(
-            color.clear((0, 0, 0, 0)).alpha_overlay(
-                sdf.circle((8, 8), 5).fill((255, 0, 0, 255), (0, 0, 0, 0))
-            ).to_rgb(),
+            color.clear((0, 0, 0, 0))
+            .alpha_overlay(sdf.circle((8, 8), 5).fill((255, 0, 0, 255), (0, 0, 0, 0)))
+            .to_rgb(),
             size=(16, 16),
         )
     )
     mask_pixels = rgba_array(
         render(
-            color.clear((0, 0, 0, 0)).mask(
+            color.clear((0, 0, 0, 0))
+            .mask(
                 color.clear((255, 0, 0, 255)),
                 sdf.circle((8, 8), 5).generate_mask(),
-            ).to_rgb(),
+            )
+            .to_rgb(),
             size=(16, 16),
         )
     )
@@ -122,13 +124,44 @@ def test_color_compositing_and_transparency_render_predictably():
         render(color.clear("#ffffff").transparency(0.5).to_rgb(), size=(8, 8))
     )
 
-    assert multiply_pixels[0, 0, 1] > 200
     assert multiply_pixels[0, 0, 0] < 5
+    assert multiply_pixels[0, 0, 1] < 5
     assert multiply_pixels[0, 0, 2] < 5
     assert transparency_pixels[0, 0, 3] == 128
 
 
-@pytest.mark.parametrize("factory_name", ["blur", "blur_9", "blur_13", "dithering", "dither_1bit", "invert"])
+def test_rgb_layer_operations_normalize_tuple_colors():
+    red = color.clear((255, 0, 0, 255))
+    blue = color.clear((0, 0, 255, 255))
+
+    clear_pixels = rgba_array(render(red.to_rgb(), size=(8, 8)))
+    overlay_pixels = rgba_array(
+        render(color.clear((0, 0, 0, 0)).alpha_overlay(red), size=(8, 8))
+    )
+    mask_pixels = rgba_array(
+        render(
+            color.clear((0, 0, 0, 255)).mask(
+                blue, sdf.circle((4, 4), 3).generate_mask()
+            ),
+            size=(8, 8),
+        )
+    )
+
+    assert int(clear_pixels[0, 0, 0]) == pytest.approx(255, abs=2)
+    assert int(clear_pixels[0, 0, 1]) == pytest.approx(0, abs=2)
+    assert int(clear_pixels[0, 0, 2]) == pytest.approx(0, abs=2)
+    assert int(clear_pixels[0, 0, 3]) == 255
+    assert int(overlay_pixels[0, 0, 0]) == pytest.approx(255, abs=2)
+    assert int(overlay_pixels[0, 0, 1]) == pytest.approx(0, abs=2)
+    assert int(overlay_pixels[0, 0, 2]) == pytest.approx(0, abs=2)
+    assert int(overlay_pixels[0, 0, 3]) == 255
+    assert mask_pixels[4, 4, 2] < 20
+    assert mask_pixels[0, 0, 2] > 200
+
+
+@pytest.mark.parametrize(
+    "factory_name", ["blur", "blur_9", "blur_13", "dithering", "dither_1bit", "invert"]
+)
 def test_color_postprocessing_methods_render_successfully(factory_name):
     texture = render(getattr(color.clear("#ffffff"), factory_name)(), size=(8, 8))
 
@@ -147,6 +180,7 @@ def test_invert_turns_white_into_black():
     assert np.all(pixels[..., :3] < 5)
     assert np.all(pixels[..., 3] == 255)
 
+
 @pytest.mark.parametrize(
     ("factory_name", "point_a", "point_b"),
     [
@@ -160,7 +194,9 @@ def test_gradient_factories_produce_distinct_pixels(factory_name, point_a, point
             (8, 8), (255, 0, 0, 255), (0, 0, 255, 255), inner=0, outer=8
         )
     else:
-        scene = color.linear_gradient((0, 8), (15, 8), (255, 0, 0, 255), (0, 0, 255, 255))
+        scene = color.linear_gradient(
+            (0, 8), (15, 8), (255, 0, 0, 255), (0, 0, 255, 255)
+        )
 
     pixels = rgba_array(render(scene.to_rgb(), size=(16, 16)))
 
@@ -178,7 +214,9 @@ def test_outline_shadow_and_partial_derivative_render_distinct_features():
     )
     shadow_pixels = rgba_array(
         render(
-            sdf.circle((8, 8), 5).shadow(distance=3, inflate=0, transparency=0.5).to_rgb(),
+            sdf.circle((8, 8), 5)
+            .shadow(distance=3, inflate=0, transparency=0.5)
+            .to_rgb(),
             size=(16, 16),
         )
     )
@@ -186,7 +224,7 @@ def test_outline_shadow_and_partial_derivative_render_distinct_features():
         render(sdf.circle((8, 8), 5).partial_derivative(), size=(16, 16))
     )
 
-    assert outline_pixels[8, 3, 0] > 200
+    assert outline_pixels[8, 2, 0] > 200
     assert outline_pixels[8, 8, 0] < 20
     assert shadow_pixels[0, 0, 3] > shadow_pixels[8, 8, 3]
     assert derivative_pixels[0, 0, 0] > derivative_pixels[8, 8, 0]
