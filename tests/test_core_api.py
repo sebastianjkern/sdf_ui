@@ -6,15 +6,27 @@ from pathlib import Path
 import pytest
 
 import sdf_ui
-from sdf_ui import Canvas, ColorTexture, SDFTexture, color, core, sdf
+from sdf_ui import Canvas, DispatchConfig, color, core, sdf
 from sdf_ui.core.api import ColorNamespace, SDFNamespace
 from sdf_ui.core.context import Context
-from sdf_ui.core.expressions import evaluate_expr
-from sdf_ui.core.plugins.base import Plugin, PluginFamily, ShaderFile, TextureKind
-from sdf_ui.core.plugins.loader import PLUGIN_PACKAGES
+from sdf_ui.core.expressions import (
+    cos,
+    evaluate_expr,
+    param,
+    percent,
+    percent_of_min,
+    percent_x,
+    percent_y,
+    sin,
+)
+from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.core.plugins.registry import PluginRegistry, registry
-from sdf_ui.core.texture import MultiOutputResult, PostNamespace, Renderer, freeze, texture_params
-from sdf_ui.core.expressions import Expr, cos, param, percent, percent_of_min, percent_x, percent_y, sin
+from sdf_ui.core.texture import (
+    MultiOutputResult,
+    PostNamespace,
+    freeze,
+    texture_params,
+)
 
 
 class FakeContext:
@@ -36,14 +48,35 @@ class FakeContext:
 
 def test_root_exports_the_new_public_api():
     assert Canvas is Context
+    assert DispatchConfig is core.DispatchConfig
     assert isinstance(sdf, SDFNamespace)
     assert isinstance(color, ColorNamespace)
     assert hasattr(sdf_ui, "core")
     assert hasattr(sdf_ui, "logger")
     assert not hasattr(sdf_ui, "disc")
     assert "Canvas" in sdf_ui.__all__
+    assert "DispatchConfig" in sdf_ui.__all__
     assert "sdf" in sdf_ui.__all__
     assert "color" in sdf_ui.__all__
+
+
+def test_dispatch_config_calculates_group_counts_and_validates_values():
+    default = DispatchConfig()
+    custom = DispatchConfig(shader_local_size=(8, 4))
+    explicit = DispatchConfig(group_count=(3, 2))
+
+    assert default.groups_for_size((33, 17)) == (3, 2, 1)
+    assert custom.shader_local_size == (8, 4, 1)
+    assert custom.groups_for_size((33, 17)) == (5, 5, 1)
+    assert explicit.groups_for_size((100, 100)) == (3, 2, 1)
+    assert DispatchConfig.from_value({"shader_local_size": (4, 4)}) == DispatchConfig(
+        shader_local_size=(4, 4, 1)
+    )
+
+    with pytest.raises(ValueError, match="greater than 0"):
+        DispatchConfig(shader_local_size=(0, 16))
+    with pytest.raises(TypeError, match="DispatchConfig"):
+        DispatchConfig.from_value((16, 16))
 
 
 def test_namespace_dir_exposes_the_public_factories():

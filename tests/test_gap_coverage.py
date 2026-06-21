@@ -1,21 +1,20 @@
 from __future__ import annotations
 
-from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
 from PIL import Image
 
-import sdf_ui.ascii as ascii_mod
 import sdf_ui.anim as anim_mod
+import sdf_ui.ascii as ascii_mod
 import sdf_ui.core.context as context_mod
 import sdf_ui.core.operations as operations_mod
 import sdf_ui.core.shaders as shaders_mod
 import sdf_ui.core.texture_utils as texture_utils_mod
 from sdf_ui import color, sdf
 from sdf_ui.core.color import ColorSpaceMode
-from sdf_ui.core.texture import Renderer
+from sdf_ui.core.texture import Renderer, RenderStats
 from sdf_ui.text import glyph
 from sdf_ui.util import collinear, rgb_col
 
@@ -291,6 +290,7 @@ def test_run_shader_binds_uniforms_and_image_inputs():
     uniforms = []
     bind_calls = []
     run_calls = []
+    stats = RenderStats()
 
     class FakeShader:
         def __setitem__(self, key, value):
@@ -307,7 +307,8 @@ def test_run_shader_binds_uniforms_and_image_inputs():
             bind_calls.append((location, read, write))
 
     class FakeCtx:
-        local_size = (2, 3, 1)
+        dispatch_groups = (2, 3, 1)
+        _active_render_stats = stats
 
         def get_shader(self, shader_name):
             assert shader_name == "demo"
@@ -323,6 +324,8 @@ def test_run_shader_binds_uniforms_and_image_inputs():
     assert uniforms == [("alpha", 1)]
     assert bind_calls == [(0, False, True), (1, True, False)]
     assert run_calls == [(2, 3, 1)]
+    assert stats.shader_dispatches == 1
+    assert stats.shader_dispatches_by_name == {"demo": 1}
     assert isinstance(shader, FakeShader)
 
 

@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import numpy as np
-from PIL import Image
 import pytest
+from PIL import Image
 
 from sdf_ui import Canvas, color, sdf
-
 from tests.helpers import render, rgba_array
 
 
@@ -287,3 +286,30 @@ def test_canvas_session_cache_reuses_rendered_texture_objects():
 
     assert first is second is third
     assert uncached is not first
+
+
+def test_canvas_session_exposes_render_stats_and_cache_info():
+    scene = color.clear("#ffffff").to_rgb()
+    cache = {}
+
+    with Canvas((8, 8)) as ctx:
+        with ctx.session(cache=cache) as renderer:
+            first = renderer.render(scene)
+            second = renderer.render(scene)
+            cache_info = renderer.cache_info()
+            stats = renderer.stats
+
+        assert ctx.last_render_stats is stats
+
+    assert first is second
+    assert cache_info.entries == 2
+    assert cache_info.hits >= 1
+    assert cache_info.misses >= 2
+    assert stats.shader_dispatches == 2
+    assert stats.texture_allocations == 2
+    assert stats.render_calls == 2
+    assert stats.elapsed_seconds > 0
+    assert stats.as_dict()["shader_dispatches_by_name"] == {
+        "clear_color": 1,
+        "to_rgb": 1,
+    }

@@ -20,6 +20,13 @@ def run_shader(ctx: Context, shader_name: str, *, uniforms=None, image_bindings=
     for texture, location, read, write in image_bindings or ():
         texture.bind_to_image(location, read=read, write=write)
 
-    shader.run(*ctx.local_size)
+    dispatch_groups = getattr(ctx, "dispatch_groups", None)
+    if dispatch_groups is None:
+        dispatch_groups = ctx.local_size
+    stats = getattr(ctx, "_active_render_stats", None)
+    if stats is not None:
+        stats.record_shader_dispatch(shader_name, dispatch_groups)
+
+    shader.run(*dispatch_groups)
     logger().debug(f"Running {shader_name} shader...")
     return shader

@@ -3,7 +3,9 @@
 __docformat__ = "google"
 
 import math
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional, Tuple
 
 import cv2
 import moderngl as mgl
@@ -21,6 +23,60 @@ from .texture_utils import (  # noqa: F401
 )
 
 
+def _triple(value, name):
+    items = tuple(value)
+    if len(items) == 2:
+        items = (*items, 1)
+    if len(items) != 3:
+        raise ValueError(f"{name} must have two or three values")
+    if any(int(item) <= 0 for item in items):
+        raise ValueError(f"{name} values must be greater than 0")
+    return tuple(int(item) for item in items)
+
+
+@dataclass(frozen=True)
+class DispatchConfig:
+    """Compute dispatch configuration for shader execution.
+
+    ``shader_local_size`` must match the ``layout(local_size_*)`` declared by
+    the shader. The built-in shaders currently use 16x16x1.
+    """
+
+    shader_local_size: Tuple[int, int, int] = (16, 16, 1)
+    group_count: Optional[Tuple[int, int, int]] = None
+
+    def __post_init__(self):
+        object.__setattr__(
+            self, "shader_local_size", _triple(self.shader_local_size, "shader_local_size")
+        )
+        if self.group_count is not None:
+            object.__setattr__(
+                self, "group_count", _triple(self.group_count, "group_count")
+            )
+
+    @classmethod
+    def from_value(cls, value):
+        if value is None:
+            return cls()
+        if isinstance(value, cls):
+            return value
+        if isinstance(value, dict):
+            return cls(**value)
+        raise TypeError("dispatch_config must be a DispatchConfig, dict, or None")
+
+    def groups_for_size(self, size):
+        if self.group_count is not None:
+            return self.group_count
+
+        width, height = size
+        group_width, group_height, _group_depth = self.shader_local_size
+        return (
+            math.ceil(width / group_width),
+            math.ceil(height / group_height),
+            1,
+        )
+
+
 class Context:
     """
     Represents a rendering context with functionality for managing shaders and textures.
@@ -32,16 +88,26 @@ class Context:
     >>> context = Context((800, 600))
     """
 
-    def __init__(self, size):
+    def __init__(self, size, dispatch_config=None):
         self.size = size
         self._closed = False
 
         self._mgl_ctx = mgl.create_standalone_context()
         self._shader_library = ShaderLibrary(self._mgl_ctx)
+        self._active_render_stats = None
+        self.last_render_stats = None
 
-        w, h = size
-        gw, gh = 16, 16
-        self.local_size = math.ceil(w / gw), math.ceil(h / gh), 1
+        self.dispatch_config = DispatchConfig.from_value(dispatch_config)
+        self.dispatch_groups = self.dispatch_config.groups_for_size(size)
+
+    @property
+    def local_size(self):
+        """Compatibility alias for the compute shader dispatch group count."""
+        return self.dispatch_groups
+
+    @local_size.setter
+    def local_size(self, value):
+        self.dispatch_groups = _triple(value, "local_size")
 
     def __enter__(self):
         """
@@ -206,6 +272,9 @@ class Context:
         logger().debug("Created r32f texture...")
         tex = self._mgl_ctx.texture(self.size, 1, dtype="f4")
         tex.filter = mgl.LINEAR, mgl.LINEAR
+        stats = getattr(self, "_active_render_stats", None)
+        if stats is not None:
+            stats.record_texture_allocation("r32f")
 
         global tex_registry
         tex_registry += 1
@@ -226,6 +295,9 @@ class Context:
         logger().debug("Created rgba8 texture...")
         tex = self._mgl_ctx.texture(self.size, 4)
         tex.filter = mgl.LINEAR, mgl.LINEAR
+        stats = getattr(self, "_active_render_stats", None)
+        if stats is not None:
+            stats.record_texture_allocation("rgba8")
 
         global tex_registry
         tex_registry += 1

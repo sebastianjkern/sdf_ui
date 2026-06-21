@@ -4,12 +4,12 @@ from sdf_ui.util import hex_col
 
 
 def text_rendering_example():
-    with Canvas((960*2, 360*2)) as ctx:
+    with Canvas((960 * 2, 360 * 2)) as ctx:
         cache = {}
         background = color.clear(hex_col("#20232a")).cache("background")
         title = text(
             "Cached SDF text",
-            size=74*2,
+            size=74 * 2,
             ox=42,
             oy=78,
             path="fonts/georgia_regular.ttf",
@@ -17,7 +17,7 @@ def text_rendering_example():
         ).cache("title")
         subtitle = text(
             "glyphs are rendered once,\nthen resized into this texture",
-            size=38*2,
+            size=38 * 2,
             ox=46,
             oy=178,
             path="fonts/georgia_regular.ttf",
@@ -30,4 +30,17 @@ def text_rendering_example():
             .alpha_overlay(title.fill(hex_col("#e9c46a"), "#00000000", inflate=1.5))
             .alpha_overlay(subtitle.fill(hex_col("#f4f1de"), "#00000000"))
         )
-        scene.to_rgb().show(ctx, cache=cache)
+        with ctx.session(cache=cache) as renderer:
+            rendered = renderer.render(scene.to_rgb())
+            rendered.show(conversion=False)
+
+            stats = renderer.stats
+            cache_info = renderer.cache_info()
+            print(
+                "Render stats: "
+                f"{stats.shader_dispatches} dispatches, "
+                f"{stats.texture_allocations} textures, "
+                f"{cache_info.hits} cache hits, "
+                f"{cache_info.misses} cache misses, "
+                f"{stats.elapsed_seconds:.3f}s"
+            )

@@ -3,8 +3,9 @@
 __docformat__ = "google"
 
 from abc import ABC
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from time import perf_counter
+from typing import Dict, Optional
 
 from PIL import Image
 
@@ -28,6 +29,55 @@ def texture_params(**kwargs):
     return tuple(sorted((key, freeze(value)) for key, value in kwargs.items()))
 
 
+@dataclass
+class RenderStats:
+    shader_dispatches: int = 0
+    shader_dispatches_by_name: Dict[str, int] = field(default_factory=dict)
+    cache_hits: int = 0
+    cache_misses: int = 0
+    cache_writes: int = 0
+    cache_skips: int = 0
+    texture_allocations: int = 0
+    texture_allocations_by_kind: Dict[str, int] = field(default_factory=dict)
+    render_calls: int = 0
+    elapsed_seconds: float = 0.0
+
+    def record_shader_dispatch(self, shader_name, dispatch_groups):
+        self.shader_dispatches += 1
+        self.shader_dispatches_by_name[shader_name] = (
+            self.shader_dispatches_by_name.get(shader_name, 0) + 1
+        )
+
+    def record_texture_allocation(self, kind):
+        self.texture_allocations += 1
+        self.texture_allocations_by_kind[kind] = (
+            self.texture_allocations_by_kind.get(kind, 0) + 1
+        )
+
+    def as_dict(self):
+        return {
+            "shader_dispatches": self.shader_dispatches,
+            "shader_dispatches_by_name": dict(self.shader_dispatches_by_name),
+            "cache_hits": self.cache_hits,
+            "cache_misses": self.cache_misses,
+            "cache_writes": self.cache_writes,
+            "cache_skips": self.cache_skips,
+            "texture_allocations": self.texture_allocations,
+            "texture_allocations_by_kind": dict(self.texture_allocations_by_kind),
+            "render_calls": self.render_calls,
+            "elapsed_seconds": self.elapsed_seconds,
+        }
+
+
+@dataclass(frozen=True)
+class RenderCacheInfo:
+    entries: int
+    hits: int
+    misses: int
+    writes: int
+    skips: int
+
+
 class Renderer:
     def __init__(self, ctx, params=None, cache=None):
         if ctx is None:
@@ -35,6 +85,8 @@ class Renderer:
         self.ctx = ctx
         self.params = params or {}
         self.cache = {} if cache is None else cache
+        self.stats = RenderStats()
+        self._render_depth = 0
 
     def __enter__(self):
         return self
@@ -43,12 +95,39 @@ class Renderer:
         self.close()
 
     def render(self, value):
-        if isinstance(value, TextureNode) or isinstance(value, MultiOutputResult):
-            return self._eval(value)
-        return self._resolve(value)
+        is_root_render = self._render_depth == 0
+        if is_root_render:
+            start = perf_counter()
+            previous_stats = getattr(self.ctx, "_active_render_stats", None)
+            self.ctx._active_render_stats = self.stats
+            self.stats.render_calls += 1
+
+        self._render_depth += 1
+        try:
+            if isinstance(value, TextureNode) or isinstance(value, MultiOutputResult):
+                return self._eval(value)
+            return self._resolve(value)
+        finally:
+            self._render_depth -= 1
+            if is_root_render:
+                self.stats.elapsed_seconds += perf_counter() - start
+                self.ctx._active_render_stats = previous_stats
+                self.ctx.last_render_stats = self.stats
 
     def close(self):
         self.cache.clear()
+
+    def clear_cache(self):
+        self.cache.clear()
+
+    def cache_info(self):
+        return RenderCacheInfo(
+            entries=len(self.cache),
+            hits=self.stats.cache_hits,
+            misses=self.stats.cache_misses,
+            writes=self.stats.cache_writes,
+            skips=self.stats.cache_skips,
+        )
 
     def _eval(self, node):
         if getattr(node, "tex", None) is not None:
@@ -56,7 +135,12 @@ class Renderer:
 
         cache_key = self._node_key(node)
         if node.should_cache and cache_key in self.cache:
+            self.stats.cache_hits += 1
             return self.cache[cache_key]
+        if node.should_cache:
+            self.stats.cache_misses += 1
+        else:
+            self.stats.cache_skips += 1
 
         from sdf_ui.core.plugins.registry import registry
 
@@ -67,6 +151,7 @@ class Renderer:
 
         if node.should_cache:
             self.cache[cache_key] = result
+            self.stats.cache_writes += 1
 
         return result
 

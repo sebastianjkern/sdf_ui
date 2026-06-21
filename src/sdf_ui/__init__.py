@@ -1,5 +1,5 @@
 from . import core
-from .core import ColorTexture, Context, SDFTexture
+from .core import ColorTexture, Context, DispatchConfig, SDFTexture
 from .core.api import ColorNamespace, SDFNamespace
 from .core.expressions import (
     Expr,
@@ -20,6 +20,7 @@ color = ColorNamespace()
 __all__ = [
     "Canvas",
     "Context",
+    "DispatchConfig",
     "ColorTexture",
     "SDFTexture",
     "color",
