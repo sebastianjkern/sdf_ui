@@ -27,7 +27,7 @@ The project is structured to allow for pip installation:
 pip install git+https://github.com/sebastianjkern/sdf_ui
 ```
 
-For interactive work, prefer `Canvas.render(...)` or a cached `Canvas.session(...)` and handle display or saving yourself.
+For interactive work, prefer `Canvas.render(...)`, the built-in `.save(...)` method on render nodes, or a cached `Canvas.session(...)`.
 
 ### Usage:
 
@@ -35,8 +35,6 @@ The public API is built around render nodes. `sdf` creates signed-distance-field
 `color` creates color textures, and `Canvas` materializes the same nodes on the GPU:
 
 ```python
-from PIL import Image
-
 from sdf_ui import Canvas, color, sdf
 
 scene = (
@@ -50,14 +48,9 @@ scene = (
     .to_rgb()
 )
 
-def save_texture(texture, path):
-    image = Image.frombytes("RGBA", texture.tex.size, texture.tex.read(), "raw")
-    image.transpose(Image.FLIP_TOP_BOTTOM).save(path)
-
 cache = {}
 with Canvas((640, 360)) as canvas:
-    with canvas.session(cache=cache) as renderer:
-        save_texture(renderer.render(scene), "out.png")
+    scene.save("out.png", ctx=canvas, cache=cache)
 ```
 
 ### Architecture Note
@@ -127,5 +120,3 @@ ___
 - [x] Freeform Gradients (Overlay of Different gradients, possible trough half transparent fills of sdfs)
 - [ ] Ortographic Projection of 3D SDFs
 - [x] Fill with images (trough moderngl texture api)
-- [ ] YAML based render script, or node based editor, unsure about the alignment with the target specs
-- [ ] Hot reload of script to create art with
