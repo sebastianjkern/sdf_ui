@@ -1,11 +1,5 @@
 [build-system]
-requires = [
-    "setuptools>=61.0", 
-    "TTFQuery>=2.0.0b1", 
-    "numpy>=1.22.3", 
-    "opencv-python>=4.5.1.48", 
-    "pillow>= 8.1.0", 
-    "moderngl>= 5.6.4"]
+requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -13,10 +7,10 @@ name = "sdf_ui"
 version = "0.1.0"
 description = "2D Rendering engine based on Signed Distance Functions"
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.8"
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
 dependencies = [
@@ -44,3 +38,6 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 sdf_ui = ["**/*.pyi", "py.typed", "core/plugins/**/*.glsl"]
+
+[tool.setuptools.exclude-package-data]
+"*" = ["*.pyc", "*.pyo", "__pycache__/*"]

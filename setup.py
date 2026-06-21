@@ -2,9 +2,6 @@ from pathlib import Path
 import sys
 
 from setuptools import Command, setup as setuptools_setup
-from setuptools.command.build_py import build_py as _build_py
-from setuptools.command.egg_info import egg_info as _egg_info
-from setuptools.command.sdist import sdist as _sdist
 
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
@@ -45,26 +42,6 @@ def api_stub_manual_method_return_overrides():
     }
 
 
-class _GenerateApiStubsMixin:
-    def run(self):
-        from build_tools.generate_api_stubs import generate_api_stubs
-
-        generate_api_stubs()
-        super().run()
-
-
-class build_py(_GenerateApiStubsMixin, _build_py):
-    pass
-
-
-class egg_info(_GenerateApiStubsMixin, _egg_info):
-    pass
-
-
-class sdist(_GenerateApiStubsMixin, _sdist):
-    pass
-
-
 class generate_api_stubs_command(Command):
     description = "generate public API type stubs from plugin metadata"
     user_options = []
@@ -84,9 +61,6 @@ class generate_api_stubs_command(Command):
 if __name__ == "__main__":
     setuptools_setup(
         cmdclass={
-            "build_py": build_py,
-            "egg_info": egg_info,
-            "sdist": sdist,
             "generate_api_stubs": generate_api_stubs_command,
         }
     )
