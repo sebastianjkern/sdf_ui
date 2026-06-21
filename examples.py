@@ -11,6 +11,8 @@ from examples.partial_derivative import partial_derivative_example
 from examples.impossible_city import impossible_city_example
 from examples.render_api_example import render_api_example
 from examples.striped_circles_example import striped_circles_example
+from examples.github_banner_example import github_banner_example
+from examples.dawn_example import dawn_example
 
 from sdf_ui import logger
 
@@ -35,6 +37,8 @@ examples = {
     "ic": impossible_city_example,
     "render_api": render_api_example,
     "striped_circles": striped_circles_example,
+    "github": github_banner_example,
+    "art": dawn_example
 }
 
 parser = argparse.ArgumentParser(
