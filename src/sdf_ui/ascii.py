@@ -79,7 +79,7 @@ def convert_image_to_ascii_colored(image, cols, scale, more_levels, invert, enha
     >>> input_image = Image.open("example.jpg")
     >>> convert_image_to_ascii_colored(input_image, 80, 0.43, True, False, True, True)
     """
-    hr_ascii_table = "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\|()1{}[]?-_+~<>i!lI;:,\"^`'. "
+    hr_ascii_table = "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1{}[]?-_+~<>i!lI;:,\"^`'. "
     lr_ascii_table = '@%#*+=-:. '
 
     bw_image = image.convert('L')
@@ -161,7 +161,7 @@ def convert_image_to_ascii(image, cols, scale, more_levels, invert, enhance):
     >>> convert_image_to_ascii(input_image, 80, 0.43, True, False, True)
     """
 
-    hr_ascii_table = "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\|()1{}[]?-_+~<>i!lI;:,\"^`'. "
+    hr_ascii_table = "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1{}[]?-_+~<>i!lI;:,\"^`'. "
     lr_ascii_table = '@%#*+=-:. '
 
     image = image.convert('L')

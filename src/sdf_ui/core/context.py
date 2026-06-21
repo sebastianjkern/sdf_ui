@@ -1,117 +1,17 @@
 __docformat__ = "google"
 
+import math
+
 import moderngl as mgl
 
 import cv2
 
 import numpy as np
 
-from PIL import Image
-
-from .shaders import ShaderLibrary, Shaders
+from .shaders import ShaderLibrary
+# Re-export the texture bookkeeping helpers so existing imports keep working.
+from .texture_utils import decrease_tex_registry, get_tex_registry, show_texture, tex_registry
 from ..log import logger
-
-
-class Counter:
-    """
-    Simple counter class with logging capabilities.
-    """
-    def __init__(self, value=0, name="TEX_REGISTRY") -> None:
-        """
-        Initializes the counter.
-
-        Args:
-        - value (int): Initial value of the counter.
-        - name (str, optional): Name of the counter. Defaults to "TEX_REGISTRY".
-        """
-        self.value = value
-        self.name = name
-
-        self.max = 0
-
-    def __del__(self):
-        """
-        Destructor method that logs the maximum value of the counter.
-        """
-        logger().debug(f"Maximum of {self.name} is {self.max}")
-
-    def __add__(self, other):
-        """
-        Adds a value to the counter.
-
-        Args:
-        - other (int): Value to add.
-
-        Returns:
-        The updated Counter instance.
-        """
-        if type(other) != int:
-            logger().critical("TypeError")
-
-        self.value += other
-
-        self.max = max(self.max, self.value)
-
-        logger().debug(f"Value of {self.name} is {self.value}")
-
-        return self
-
-    def __sub__(self, other):
-        """
-        Subtracts a value from the counter.
-
-        Args:
-        - other (int): Value to subtract.
-
-        Returns:
-        The updated Counter instance.
-        """
-        if type(other) != int:
-            logger().critical("TypeError")
-
-        self.value -= other
-        
-        logger().debug(f"Value of {self.name} is {self.value}")
-
-        return self
-
-    def __int__(self):
-        """
-        Converts the Counter to an integer.
-
-        Returns:
-        The integer value of the Counter.
-        """
-        return self.value
-
-    def __str__(self) -> str:
-        """
-        Converts the Counter to a string.
-
-        Returns:
-        The string representation of the Counter.
-        """
-        return str(self.value)
-
-# The tex registry is not necessary to run the program, 
-# but it helps checking for correct texture caching and deletion processes.
-tex_registry = Counter(0)
-
-
-def decrease_tex_registry():
-    """
-    Decreases the texture registry count and logs a debug message.
-    """
-    logger().debug("Deleted texture...")
-    global tex_registry
-    tex_registry -= 1
-
-
-def get_tex_registry():
-    """
-    Prints the current texture registry count.
-    """
-    print(tex_registry)
 
 
 class Context:
@@ -126,13 +26,14 @@ class Context:
     """
     def __init__(self, size):
         self.size = size
+        self._closed = False
 
         self._mgl_ctx = mgl.create_standalone_context()
         self._shader_library = ShaderLibrary(self._mgl_ctx)
 
         w, h = size
         gw, gh = 16, 16
-        self.local_size = int(w / gw + 0.5), int(h / gh + 0.5), 1
+        self.local_size = math.ceil(w / gw), math.ceil(h / gh), 1
 
     def __enter__(self):
         """
@@ -153,6 +54,32 @@ class Context:
         >>>     # context-related operations
         >>> # Exiting the 'with' block
         """
+        self.close()
+
+    def __del__(self):
+        try:
+            self.close()
+        except Exception:
+            pass
+
+    def close(self):
+        if self._closed:
+            return
+
+        self._closed = True
+        release = getattr(getattr(self, "_mgl_ctx", None), "release", None)
+        if callable(release):
+            release()
+
+    def render(self, texture, params=None, cache=None):
+        from .texture import Renderer
+
+        return Renderer(self, params=params, cache=cache).render(texture)
+
+    def session(self, params=None, cache=None):
+        from .texture import Renderer
+
+        return Renderer(self, params=params, cache=cache)
 
     def texture_from_image(self, path):
         """
@@ -308,37 +235,3 @@ def init_sdf_ui(size):
     """
     global _context
     _context = Context(size)
-
-
-def show_texture(tex: mgl.Texture):
-    """Display the content of an OpenGL texture.
-
-    Args:
-            tex (mgl.Texture): The OpenGL texture to be displayed.
-
-    Raises:
-        ValueError: If the provided texture is not of the expected format or size.
-
-    Note:
-        This method uses the Pillow library (PIL) to convert the texture data into an image
-        and then displays the image using the default image viewer.
-
-    Example:
-        Assuming `my_texture` is an instance of the mgl.Texture class:
-
-        >>> show_texture(my_texture)
-
-    """
-    
-    mode = "F"
-    if tex.dtype == "f1":
-        if tex.components == 3:
-            mode = "RGB"
-        elif tex.components == 4:
-            mode = "RGBA"
-        else:
-            raise NotImplementedError("the mode for the show_texture function is not implemented")
-
-    image = Image.frombytes(mode, tex.size, tex.read(), "raw")
-    image = image.transpose(Image.FLIP_TOP_BOTTOM)
-    image.show()

@@ -1,22 +1,28 @@
-from .ascii import convert_image_to_ascii_colored, convert_image_to_ascii
-from .context import Context, decrease_tex_registry, show_texture
-from .core import ColorSpaceMode, ColorTexture, SDFTexture, Shaders
-from .core import (
-    bezier,
-    clear_color,
-    disc,
-    film_grain,
-    grid,
-    interpolate,
-    line,
-    linear_gradient,
-    perlin_noise,
-    radial_gradient,
-    rounded_rect,
-    triangle,
-)
+from . import core
+from .core import ColorTexture, Context, SDFTexture
+from .core.api import ColorNamespace, SDFNamespace
+from .core.expressions import Expr, cos, param, percent, percent_of_min, percent_x, percent_y, sin
 from .log import logger
-from .util import hex_col, collinear
-from .text import glyph_sdf
-from .anim import convert_to_video
-from .bw_to_sdf import image_to_sdf
+
+Canvas = Context
+sdf = SDFNamespace()
+color = ColorNamespace()
+
+__all__ = [
+    "Canvas",
+    "Context",
+    "ColorTexture",
+    "SDFTexture",
+    "color",
+    "core",
+    "cos",
+    "Expr",
+    "logger",
+    "param",
+    "percent",
+    "percent_of_min",
+    "percent_x",
+    "percent_y",
+    "sdf",
+    "sin",
+]

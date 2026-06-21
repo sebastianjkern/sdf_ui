@@ -3,7 +3,7 @@ __docformat__ = "google"
 import ttfquery
 from ttfquery import describe, glyph
 
-from .core.primitives import line, bezier
+from . import sdf
 from .util import collinear
 
 def middle(x1, y1, x2, y2):
@@ -66,7 +66,7 @@ def get_glyph(font_file_path, char):
     return bezier_control_points
 
 
-def glyph_sdf(ctx, glyph, scale, ox, oy, path="fonts/SFUIDisplay-Bold.ttf"):
+def glyph_sdf(glyph, scale, ox, oy, path="fonts/SFUIDisplay-Bold.ttf"):
     """
     Generate the signed distance field (SDF) for a glyph.
 
@@ -77,7 +77,7 @@ def glyph_sdf(ctx, glyph, scale, ox, oy, path="fonts/SFUIDisplay-Bold.ttf"):
     - path (str): Path to the font file.
 
     Returns:
-    SDFTexture: The union of Bezier curves representing the SDF.
+        SDFTexture: The union of Bezier curves representing the glyph SDF.
     """
     control_points = get_glyph(path, glyph)
 
@@ -90,9 +90,9 @@ def glyph_sdf(ctx, glyph, scale, ox, oy, path="fonts/SFUIDisplay-Bold.ttf"):
             c = (stroke[2][0] * scale + ox, stroke[2][1] * scale + oy)
 
             if not collinear(*a, *b, *c):
-                bezier_sdf = bezier(ctx, a, b, c)
+                bezier_sdf = sdf.bezier(a, b, c)
             else:
-                bezier_sdf = line(ctx, a, c)
+                bezier_sdf = sdf.line(a, c)
 
             if iy == 0 and ix == 0:
                 union_sdf = bezier_sdf
