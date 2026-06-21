@@ -21,6 +21,10 @@ src/sdf_ui/__pycache__/
 src/sdf_ui/core/__pycache__/
 examples/__pycache__/
 /__pycache__/
+.idea
+
+# Pytest
+.pytest/
 
 # Test build files
 build/

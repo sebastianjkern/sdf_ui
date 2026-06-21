@@ -1,0 +1,25 @@
+#!/bin/sh
+# Run repository-level precommit script (POSIX / Git Bash)
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+# Run a shell precommit if present and executable
+if [ -x "$REPO_ROOT/precommit.sh" ]; then
+  "$REPO_ROOT/precommit.sh" || exit $?
+fi
+
+# If a Windows batch precommit exists, try to run it via cmd.exe
+if [ -f "$REPO_ROOT/precommit.bat" ]; then
+  if command -v cmd.exe >/dev/null 2>&1; then
+    if command -v cygpath >/dev/null 2>&1; then
+      winroot="$(cygpath -w "$REPO_ROOT")"
+    else
+      winroot="$REPO_ROOT"
+    fi
+    cmd.exe /C "\"$winroot\\precommit.bat\"" || exit $?
+  else
+    # fall back to attempting to execute the .bat via shell
+    "$REPO_ROOT/precommit.bat" || exit $?
+  fi
+fi
+
+exit 0
