@@ -1,4 +1,6 @@
 @echo off
+call "./setup_env.bat"
+
 set "PYTHON=python"
 if exist ".venv\Scripts\python.exe" set "PYTHON=.venv\Scripts\python.exe"
 set "PYTEST_BASETEMP=.pytest"
