@@ -19,6 +19,8 @@ Arcs can be represented as sdfs aswell. Subtract a small circle from a bigger ci
 
 While some functionality is not yet available or quiet expensive, many features are cost effective in comparison. While traditional render pipelines (atleast if they don't copy memory) have problems with repetition (Drawing 1000 circles is more expensive than 1 circle), sdf-ui can flex its muscles, because drawing equally spaced objects multiple times comes at a fixed cost. Drawing 1000 circles in a grid is not more expansive than drawing 100 circles in a grid.
 
+This makes the renderer especially interesting for procedural 2D scenes, repeated motifs, boolean-heavy shape construction, and soft effects like antialiasing, outlines, masks, and morphing. Instead of paying mainly for scene complexity, many operations behave more like full-canvas field evaluation, which opens up a different set of strengths than a traditional draw-call-based backend.
+
 ### Installation:
 
 The project is structured to allow for pip installation:
@@ -70,6 +72,9 @@ generated at build time from the plugin metadata. That means new plugins can ext
 surface while shipped `.pyi` stubs still provide autocomplete and type checking for the supported
 entry points.
 
+That architecture is a good fit for experimentation: new primitives, shading passes, post effects,
+and composition operators can be added as plugins without redesigning the public API each time.
+
 ### How it works:
 
 <img src="./sdf_ui_diagram.png" width="500">
@@ -108,6 +113,8 @@ ___
 
 - [ ] Subframe rendering (Smaller feature set but far better performance in most tasks)
 - [ ] Changing Local Size can (in theory) improve performance
+- [ ] Dirty-region rendering so unchanged parts of the canvas can be skipped
+- [ ] Render-graph caching for repeated subtrees and reusable procedural scenes
 
 ### Ideas for further development
 
@@ -120,3 +127,6 @@ ___
 - [x] Freeform Gradients (Overlay of Different gradients, possible trough half transparent fills of sdfs)
 - [ ] Ortographic Projection of 3D SDFs
 - [x] Fill with images (trough moderngl texture api)
+- [ ] Domain warping and turbulence for procedural field-based scenes
+- [ ] First-class glow, bevel, and inner-shadow effects
+- [ ] Native animation timelines and time-based shader controls
