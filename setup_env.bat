@@ -34,7 +34,7 @@ echo Upgrading pip, setuptools and wheel inside the venv...
 "%VENV_DIR%\Scripts\python.exe" -m pip install --upgrade pip setuptools wheel
 
 echo Installing project in editable mode into the venv...
-"%VENV_DIR%\Scripts\python.exe" -m pip install --no-build-isolation -e .
+"%VENV_DIR%\Scripts\python.exe" -m pip install --no-build-isolation -e .[dev]
 IF ERRORLEVEL 1 (
     echo Failed to install project into the virtual environment.
     exit /b 1
