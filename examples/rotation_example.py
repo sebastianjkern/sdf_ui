@@ -17,4 +17,4 @@ def rotation_example():
             ),
             25 / 360 * math.pi,
         ).cache("rotated_rect")
-        shape.fill((1.0, 1.0, 1.0, 1.0), (0.0, 0.0, 0.0, 1.0), 10).show(context)
+        shape.fill((1.0, 1.0, 1.0, 1.0), (0.0, 0.0, 0.0, 1.0), 10).show(ctx)

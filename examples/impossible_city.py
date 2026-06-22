@@ -1,8 +1,11 @@
+from pathlib import Path
+
 from functools import reduce
 
 from sdf_ui import Canvas, color, sdf
 
 TILING = 10
+OUTPUT_DIR = Path("out/examples")
 
 FG_COLOR = (0, 0, 0, 1)
 BG_COLOR = (1, 1, 1, 1)
@@ -49,6 +52,7 @@ def isometric_cube(ctx, offset=(0, 0)):
 
 def impossible_city_example():
     with Canvas((1080, 1080)) as ctx:
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         grid_height = ctx.percent(100/TILING)
         grid_width = ctx.percent(100/(TILING+2))
 
@@ -61,4 +65,4 @@ def impossible_city_example():
                 cubes.append(isometric_cube(ctx, offset=(grid_width + w*2*grid_width, h*2*grid_height)))
 
         scene = bg.alpha_overlay(reduce(lambda x, y: x.alpha_overlay(y), cubes)).uncached()
-        scene.show(ctx)
+        scene.save(str(OUTPUT_DIR / "impossible_city_square.png"), ctx)

@@ -1,10 +1,14 @@
+from pathlib import Path
+
 from sdf_ui import Canvas, sdf
+
+OUTPUT_DIR = Path("out/examples")
 
 
 def diamond_example():
-    with Canvas((800, 500)) as ctx:
-        sdf.diamond((400, 250), (170, 120)).fill(
+    with Canvas((1080, 1080)) as ctx:
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        sdf.diamond((540, 540), (260, 200)).fill(
             (15, 23, 42, 255),
             (248, 250, 252, 255),
-        ).show(ctx)
-
+        ).save(str(OUTPUT_DIR / "diamond_square.png"), ctx)

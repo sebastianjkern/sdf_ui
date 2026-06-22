@@ -1,10 +1,25 @@
+from pathlib import Path
+
 from sdf_ui import Canvas, sdf
+
+OUTPUT_DIR = Path("out/examples")
 
 
 def polygon_example():
-    with Canvas((800, 500)) as ctx:
-        sdf.polygon(((150, 100), (650, 100), (650, 180), (320, 180), (320, 320), (650, 320), (650, 400), (150, 400))).fill(
+    with Canvas((1080, 1080)) as ctx:
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        sdf.polygon(
+            (
+                (220, 160),
+                (860, 160),
+                (860, 300),
+                (520, 300),
+                (520, 780),
+                (860, 780),
+                (860, 920),
+                (220, 920),
+            )
+        ).fill(
             (15, 23, 42, 255),
             (248, 250, 252, 255),
-        ).show(ctx)
-
+        ).save(str(OUTPUT_DIR / "polygon_square.png"), ctx)

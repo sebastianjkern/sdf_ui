@@ -1,10 +1,14 @@
+from pathlib import Path
+
 from sdf_ui import Canvas, sdf
+
+OUTPUT_DIR = Path("out/examples")
 
 
 def sector_example():
-    with Canvas((800, 500)) as ctx:
-        sdf.sector((400, 250), 170, -0.6, 1.8).fill(
+    with Canvas((1080, 1080)) as ctx:
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        sdf.sector((540, 540), 320, -0.6, 1.8).fill(
             (15, 23, 42, 255),
             (248, 250, 252, 255),
-        ).show(ctx)
-
+        ).save(str(OUTPUT_DIR / "sector_square.png"), ctx)

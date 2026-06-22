@@ -1,9 +1,11 @@
 import random
+from pathlib import Path
 
 from sdf_ui import Canvas, color, sdf
 from sdf_ui.util import hex_col
 
-size = (1920, 1080)
+SIZE = (1080, 1080)
+OUTPUT_DIR = Path("out/examples")
 
 def rand_color():
     red = random.randint(0, 255) / 255
@@ -23,10 +25,12 @@ COLORS = [
 
 
 def transparency_example():
-    with Canvas(size) as ctx:
+    with Canvas(SIZE) as ctx:
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        width, height = SIZE
         backdrop = (
             color.radial_gradient(
-                (size[0] / 2, size[1] / 2),
+                (width / 2, height / 2),
                 hex_col("#004C81", alpha=255),
                 hex_col("#062A4A", alpha=255),
                 inner=0,
@@ -45,13 +49,15 @@ def transparency_example():
             )
         )
 
-        gradient = color.linear_gradient((100, 100), (900, 100), (*rand_color(), 1.0), (*rand_color(), 1.0)).transparency(0.45)
+        gradient = color.linear_gradient(
+            (120, 120), (960, 180), (*rand_color(), 1.0), (*rand_color(), 1.0)
+        ).transparency(0.45)
 
         blur = backdrop.post.blur(n=1, base=13)
 
         mask_sdf = sdf.rect(
-            (int(size[0] / 2), int(size[1] / 2)),
-            (int(size[1] / 3), int(size[1] / 3)),
+            (int(width / 2), int(height / 2)),
+            (int(width / 3), int(height / 3)),
             (
                 ctx.percent_of_min(10),
                 ctx.percent_of_min(10),
@@ -71,10 +77,10 @@ def transparency_example():
         gradient_fill = mask_sdf.fill_from_texture(gradient)
         cache = {}
 
-        gradient_fill.save("out/transparency_gradient.png", ctx, cache=cache)
+        gradient_fill.save(str(OUTPUT_DIR / "transparency_square.png"), ctx, cache=cache)
 
         for i in range(10):
-            x, y = random.randint(50, size[0] - 50), random.randint(50, size[1] - 50)
+            x, y = random.randint(50, width - 50), random.randint(50, height - 50)
             r = random.randint(50, 100)
 
             col0 = hex_col(random.choice(COLORS))[:3]
@@ -90,5 +96,4 @@ def transparency_example():
             outline
         )  # .alpha_overlay(film_grain(ctx).to_lab().transparency(5 / 255)).to_rgb()
 
-        image.show(ctx, cache=cache)
-
+        image.save(str(OUTPUT_DIR / "transparency_square.png"), ctx, cache=cache)

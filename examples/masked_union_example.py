@@ -1,11 +1,15 @@
 from functools import reduce
+from pathlib import Path
 
 from sdf_ui import Canvas, sdf
 
+OUTPUT_DIR = Path("out/examples")
+
 def masked_union_example():
-    SIZE = (512, 512)
+    SIZE = (1080, 1080)
 
     with Canvas(SIZE) as ctx:
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         points = [(245, 301),
             (362, 485),
             (306, 292),
@@ -24,6 +28,4 @@ def masked_union_example():
         mask = reduce(lambda m1, m2: m1.multiply(m2), masks).uncached()
         cache = {}
 
-        combined_discs.save("voronoi.png", ctx, cache=cache)
-        combined_discs.show(ctx, cache=cache)
-        mask.show(ctx, cache=cache)
+        combined_discs.save(str(OUTPUT_DIR / "masked_union_square.png"), ctx, cache=cache)

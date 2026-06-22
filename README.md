@@ -84,30 +84,76 @@ and composition operators can be added as plugins without redesigning the public
 Take a look below, or at the banner image, that was also created using this engine ;)
 ___
 
+#### Primitives
+
 <table>
     <tr>
-        <th>Transparency</th>    
-        <th>Text Letter Rendering</th>
-        <th>Print Images to console</th>
-        <th>Freeform Gradient</th>
+        <th>Capsule</th>
+        <th>Ring</th>
+        <th>Diamond</th>
+        <th>Polygon</th>
     </tr>
     <tr>
-        <td><img src="./image1.png" width="150"></td>
-        <td><img src="./image2.png" width="150"></td>
-        <td><img src="./console.png" width="150"></td>
-        <td><img src="./image3.png" width="150"></td>
+        <td><img src="./out/examples/capsule_square.png" width="180"></td>
+        <td><img src="./out/examples/ring_square.png" width="180"></td>
+        <td><img src="./out/examples/diamond_square.png" width="180"></td>
+        <td><img src="./out/examples/polygon_square.png" width="180"></td>
+    </tr>
+</table>
+
+<table>
+    <tr>
+        <th>Arc</th>
+        <th>Sector</th>
+        <th>Ellipse</th>
     </tr>
     <tr>
-        <th>BW Voronoi Texture</th>    
-        <th></th>
-        <th></th>
-        <th></th>
+        <td><img src="./out/examples/arc_square.png" width="180"></td>
+        <td><img src="./out/examples/sector_square.png" width="180"></td>
+        <td><img src="./out/examples/ellipse_square.png" width="180"></td>
+    </tr>
+</table>
+
+#### Composition
+
+<table>
+    <tr>
+        <th>Transparency</th>
+        <th>Voronoi Field</th>
+        <th>Cached Text</th>
+        <th>Complex Shapes</th>
     </tr>
     <tr>
-        <td><img src="./voronoi.png" width="150"></td>
-        <td></td>
-        <td></td>
-        <td></td>
+        <td><img src="./out/examples/transparency_square.png" width="180"></td>
+        <td><img src="./out/examples/voronoi_square.png" width="180"></td>
+        <td><img src="./out/examples/text_square.png" width="180"></td>
+        <td><img src="./out/examples/complex_square.png" width="180"></td>
+    </tr>
+</table>
+
+<table>
+    <tr>
+        <th>Lighting</th>
+        <th>Isolines</th>
+        <th>Voronoi Field</th>
+        <th>Complex Shapes</th>
+    </tr>
+    <tr>
+        <td><img src="./out/examples/light_square.png" width="180"></td>
+        <td><img src="./out/examples/isolines_square.png" width="180"></td>
+        <td><img src="./out/examples/voronoi_square.png" width="180"></td>
+        <td><img src="./out/examples/complex_square.png" width="180"></td>
+    </tr>
+</table>
+
+#### Larger Scenes
+
+<table>
+    <tr>
+        <th>Impossible City</th>
+    </tr>
+    <tr>
+        <td><img src="./out/examples/impossible_city_square.png" width="240"></td>
     </tr>
 </table>
 
