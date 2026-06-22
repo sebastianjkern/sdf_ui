@@ -29,14 +29,14 @@ def render_glyph(renderer, _inputs, params):
         yy, xx = np.mgrid[0:height, 0:width]
         points = np.stack((xx.astype(np.float32), yy.astype(np.float32)), axis=-1)
         distance_sq = np.full((height, width), np.inf, dtype=np.float32)
-        inside = np.zeros((height, width), dtype=bool)
+        winding = np.zeros((height, width), dtype=np.int16)
 
         for contour in contours:
             distance_sq = np.minimum(distance_sq, _contour_distance_sq(points, contour))
-            inside ^= _points_inside_contour(points, contour)
+            winding += _contour_winding(points, contour)
 
         field = np.sqrt(distance_sq).astype(np.float32)
-        field[inside] *= -1.0
+        field[winding != 0] *= -1.0
 
     tex = ctx.r32f()
     tex.write(field.tobytes())
@@ -177,17 +177,23 @@ def _contour_distance_sq(points, contour):
     return distance_sq
 
 
-def _points_inside_contour(points, contour):
+def _contour_winding(points, contour):
     x = points[..., 0]
     y = points[..., 1]
-    inside = np.zeros(points.shape[:2], dtype=bool)
+    winding = np.zeros(points.shape[:2], dtype=np.int16)
     for start, end in zip(contour, contour[1:]):
         x0, y0 = start
         x1, y1 = end
-        crosses = (y0 > y) != (y1 > y)
-        x_intersection = (x1 - x0) * (y - y0) / ((y1 - y0) or 1e-12) + x0
-        inside ^= crosses & (x < x_intersection)
-    return inside
+        is_left = (x1 - x0) * (y - y0) - (x - x0) * (y1 - y0)
+        upward = (y0 <= y) & (y1 > y) & (is_left > 0)
+        downward = (y0 > y) & (y1 <= y) & (is_left < 0)
+        winding += upward.astype(np.int16)
+        winding -= downward.astype(np.int16)
+    return winding
+
+
+def _points_inside_contour(points, contour):
+    return _contour_winding(points, contour) != 0
 
 
 def register_plugins(registry):

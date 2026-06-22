@@ -117,6 +117,7 @@ def github_banner_example(output="banner.png"):
             cache_size=192,
             line_height=1.25,
             oversample=4.0,
+            min_render_size=96,
         ).cache("subtitle_sdf")
 
         ui_sdf = text(

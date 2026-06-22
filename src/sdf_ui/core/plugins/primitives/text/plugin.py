@@ -10,8 +10,8 @@ from ttfquery import describe
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.core.plugins.primitives.glyph.plugin import (
     _contour_distance_sq,
+    _contour_winding,
     _flatten_contour,
-    _points_inside_contour,
     _raw_glyph_contours,
 )
 
@@ -26,10 +26,17 @@ def render_text(renderer, _inputs, params):
     samples = int(params["samples"])
     cache_size = int(params["cache_size"])
     line_height = float(params["line_height"])
+    oversample = float(params["oversample"])
+    min_render_size = float(params["min_render_size"])
 
     metrics = _font_metrics(path)
     scale = font_size / metrics["units_per_em"]
+    effective_font_size = max(font_size, min_render_size)
+    distance_scale = effective_font_size / metrics["units_per_em"]
     field = np.full((height, width), max(width, height), dtype=np.float32)
+    glyph_cache_size = _glyph_cache_size(
+        font_size, oversample, cache_size, min_render_size
+    )
 
     previous = None
     pen_x = 0.0
@@ -40,7 +47,7 @@ def render_text(renderer, _inputs, params):
         if char == "\n":
             previous = None
             pen_x = 0.0
-            pen_y += line_advance
+            pen_y -= line_advance
             continue
 
         glyph_metrics = _glyph_metrics(path, char)
@@ -48,7 +55,7 @@ def render_text(renderer, _inputs, params):
             pen_x += _kerning(path, previous, char)
 
         if glyph_metrics["name"] is not None:
-            patch = _cached_glyph_sdf(path, char, samples, cache_size)
+            patch = _cached_glyph_sdf(path, char, samples, glyph_cache_size)
             if patch["field"].size:
                 _composite_glyph(
                     field,
@@ -56,7 +63,7 @@ def render_text(renderer, _inputs, params):
                     ox + pen_x * scale,
                     oy + pen_y * scale,
                     scale,
-                    metrics["units_per_em"] / cache_size,
+                    distance_scale,
                 )
 
         pen_x += glyph_metrics["advance"]
@@ -70,9 +77,19 @@ def render_text(renderer, _inputs, params):
     return SDFTexture(tex=tex, context=ctx)
 
 
-def _composite_glyph(field, patch, x, y, scale, source_units_per_pixel):
+def _glyph_cache_size(font_size, oversample, cache_size, min_render_size=0.0):
+    effective_font_size = max(font_size, min_render_size)
+    target_size = max(1, int(ceil(effective_font_size * max(oversample, 1.0))))
+    if cache_size > 0:
+        target_size = max(target_size, cache_size)
+    return target_size
+
+
+def _composite_glyph(field, patch, x, y, scale, distance_scale):
     glyph_field = patch["field"]
+    source_units_per_pixel = patch["units_per_pixel"]
     source_to_dest = scale * source_units_per_pixel
+    distance_to_dest = distance_scale * source_units_per_pixel
     if source_to_dest <= 0:
         return
 
@@ -92,8 +109,26 @@ def _composite_glyph(field, patch, x, y, scale, source_units_per_pixel):
     yy, xx = np.mgrid[y0:y1, x0:x1]
     source_x = (xx - left) / source_to_dest
     source_y = (yy - top) / source_to_dest
-    distances = _sample_bilinear(glyph_field, source_x, source_y) * source_to_dest
+    distances = _sample_sdf(glyph_field, source_x, source_y, source_to_dest)
+    distances = distances * distance_to_dest
     field[y0:y1, x0:x1] = np.minimum(field[y0:y1, x0:x1], distances)
+
+
+def _sample_sdf(values, x, y, source_to_dest):
+    if source_to_dest >= 1.0:
+        return _sample_bilinear(values, x, y)
+
+    source_pixels_per_dest = 1.0 / source_to_dest
+    radius = max(1, int(ceil(source_pixels_per_dest * 0.5)))
+    sampled = _sample_bilinear(values, x, y)
+    for offset_y in range(-radius, radius + 1):
+        for offset_x in range(-radius, radius + 1):
+            if offset_x == 0 and offset_y == 0:
+                continue
+            sampled = np.minimum(
+                sampled, _sample_bilinear(values, x + offset_x, y + offset_y)
+            )
+    return sampled
 
 
 def _sample_bilinear(values, x, y):
@@ -114,15 +149,19 @@ def _sample_bilinear(values, x, y):
 
 
 @lru_cache(maxsize=512)
-def _cached_glyph_sdf(path, char, samples, cache_size):
+def _cached_glyph_sdf(path, char, samples, glyph_cache_size):
     raw_contours = _raw_glyph_contours(path, char)
     glyph_metrics = _glyph_metrics(path, char)
     if not raw_contours or glyph_metrics["name"] is None:
-        return {"field": np.empty((0, 0), dtype=np.float32), "origin": (0.0, 0.0)}
+        return {
+            "field": np.empty((0, 0), dtype=np.float32),
+            "origin": (0.0, 0.0),
+            "units_per_pixel": 1.0,
+        }
 
     font_metrics = _font_metrics(path)
-    units_per_pixel = font_metrics["units_per_em"] / cache_size
-    pad = max(2, int(cache_size * 0.08))
+    units_per_pixel = font_metrics["units_per_em"] / glyph_cache_size
+    pad = max(2, int(glyph_cache_size * 0.08))
     pad_units = pad * units_per_pixel
     x_min, y_min, x_max, y_max = glyph_metrics["bbox"]
     origin = (x_min - pad_units, y_min - pad_units)
@@ -143,15 +182,15 @@ def _cached_glyph_sdf(path, char, samples, cache_size):
     yy, xx = np.mgrid[0:height, 0:width]
     points = np.stack((xx.astype(np.float32), yy.astype(np.float32)), axis=-1)
     distance_sq = np.full((height, width), np.inf, dtype=np.float32)
-    inside = np.zeros((height, width), dtype=bool)
+    winding = np.zeros((height, width), dtype=np.int16)
 
     for contour in contours:
         distance_sq = np.minimum(distance_sq, _contour_distance_sq(points, contour))
-        inside ^= _points_inside_contour(points, contour)
+        winding += _contour_winding(points, contour)
 
     field = np.sqrt(distance_sq).astype(np.float32)
-    field[inside] *= -1.0
-    return {"field": field, "origin": origin}
+    field[winding != 0] *= -1.0
+    return {"field": field, "origin": origin, "units_per_pixel": units_per_pixel}
 
 
 @lru_cache(maxsize=64)
@@ -216,6 +255,8 @@ def register_plugins(registry):
                 "samples",
                 "cache_size",
                 "line_height",
+                "oversample",
+                "min_render_size",
             ),
             defaults={
                 "size": 64,
@@ -225,6 +266,8 @@ def register_plugins(registry):
                 "samples": 16,
                 "cache_size": 128,
                 "line_height": 1.2,
+                "oversample": 2.0,
+                "min_render_size": 64,
             },
             public=True,
             render_func=render_text,

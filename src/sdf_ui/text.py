@@ -39,12 +39,17 @@ def text(
     samples=16,
     cache_size=128,
     line_height=1.2,
+    oversample=2.0,
+    min_render_size=64,
 ):
     """
     Generate a signed distance field (SDF) for a text run.
 
-    Glyph SDF patches are cached by font, character, curve sampling, and cache
-    resolution, then resized into the destination texture during layout.
+    Glyph SDF patches are cached by font, character, curve sampling, and
+    requested pixel size. ``cache_size`` sets the minimum cached pixels-per-em
+    value, ``oversample`` raises the cache resolution for larger text, and
+    ``min_render_size`` keeps small text from losing too much SDF distance when
+    resized down.
     """
     return build(
         "text",
@@ -56,4 +61,6 @@ def text(
         samples=samples,
         cache_size=cache_size,
         line_height=line_height,
+        oversample=oversample,
+        min_render_size=min_render_size,
     )
