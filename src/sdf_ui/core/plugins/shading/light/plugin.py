@@ -25,7 +25,9 @@ def _height_profile(value):
             return _HEIGHT_PROFILES[value]
         except KeyError as exc:
             known = ", ".join(sorted(_HEIGHT_PROFILES))
-            raise ValueError(f"Unknown light height profile '{value}'. Known: {known}") from exc
+            raise ValueError(
+                f"Unknown light height profile '{value}'. Known: {known}"
+            ) from exc
     return value
 
 

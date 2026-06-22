@@ -47,7 +47,9 @@ class DispatchConfig:
 
     def __post_init__(self):
         object.__setattr__(
-            self, "shader_local_size", _triple(self.shader_local_size, "shader_local_size")
+            self,
+            "shader_local_size",
+            _triple(self.shader_local_size, "shader_local_size"),
         )
         if self.group_count is not None:
             object.__setattr__(
