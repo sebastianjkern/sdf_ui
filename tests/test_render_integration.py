@@ -225,7 +225,8 @@ def test_outline_shadow_and_partial_derivative_render_distinct_features():
 
     assert outline_pixels[8, 2, 0] > 200
     assert outline_pixels[8, 8, 0] < 20
-    assert shadow_pixels[0, 0, 3] > shadow_pixels[8, 8, 3]
+    assert shadow_pixels[8, 8, 3] > shadow_pixels[0, 0, 3]
+    assert shadow_pixels[8, 2, 3] > shadow_pixels[0, 0, 3]
     assert derivative_pixels[0, 0, 0] > derivative_pixels[8, 8, 0]
 
 

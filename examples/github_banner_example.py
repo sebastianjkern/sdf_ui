@@ -98,7 +98,10 @@ def github_banner_example(output="banner.png"):
             (95, 95),
             (26, 26, 26, 26),
             angle=0.65,
-        ).fill("#f4b82f", TRANSPARENT)
+        )
+
+        spark_2_fill = spark_2.fill("#f4b82f", TRANSPARENT)
+        spark_2_shadow = spark_2.shadow(10, 0, 0.75)
 
         title_sdf = text(
             "SDF",
@@ -149,7 +152,8 @@ def github_banner_example(output="banner.png"):
             # contours,
             spark_0.transparency(1),
             spark_1.transparency(1),
-            spark_2.transparency(1),
+            spark_2_shadow,
+            spark_2_fill.transparency(1),
             title,
             subtitle,
         ).to_rgb()

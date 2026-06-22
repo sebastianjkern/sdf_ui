@@ -121,14 +121,15 @@ ___
 ### Ideas for further development
 
 - [x] Black and white to sdf conversion using go (solved via reverse sdf)
-- [ ] Native Support for animation
+- [x] Fill with images (trough moderngl texture api)
+- [x] Text rendering (Stroke rendering of single letters already possible)
+- [x] Freeform Gradients (Overlay of Different gradients, possible trough half transparent fills of sdfs)
+
 - [ ] Vector Fields
 - [ ] Voronoi sdf (Basically many overlayed circle sdfs)
-- [x] Text rendering (Stroke rendering of single letters already possible)
 - [ ] Rendering of text with custom sdf font
-- [x] Freeform Gradients (Overlay of Different gradients, possible trough half transparent fills of sdfs)
 - [ ] Ortographic Projection of 3D SDFs
-- [x] Fill with images (trough moderngl texture api)
 - [ ] Domain warping and turbulence for procedural field-based scenes
 - [ ] First-class glow, bevel, and inner-shadow effects
 - [ ] Native animation timelines and time-based shader controls
+- [ ] Native Support for animation

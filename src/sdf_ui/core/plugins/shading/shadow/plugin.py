@@ -10,7 +10,8 @@ def render_shadow(renderer, inputs, params):
         "generate_mask",
         inputs[0],
         inflate=params["inflate"],
-        color1=(0.0, 0.0, 0.0, 0.0),
+        color0=(0.0, 0.0, 0.0, 0.0),
+        color1=(0.0, 0.0, 0.0, 1.0),
     )
     blur = registry.build("blur", mask, n=params["distance"], base=9)
     return renderer.render(registry.build("transparency", blur, params["transparency"]))
