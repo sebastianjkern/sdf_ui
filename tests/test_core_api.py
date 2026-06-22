@@ -246,9 +246,14 @@ def test_registry_method_names_match_texture_kinds():
     sdf_methods = set(registry.method_names_for("sdf"))
     color_methods = set(registry.method_names_for("color"))
 
-    assert {"fill", "fill_from_texture", "generate_mask", "outline", "shadow"}.issubset(
-        sdf_methods
-    )
+    assert {
+        "fill",
+        "fill_from_texture",
+        "generate_mask",
+        "light",
+        "outline",
+        "shadow",
+    }.issubset(sdf_methods)
     assert {"alpha_overlay", "mask", "multiply", "transparency", "blur", "invert"}.issubset(
         color_methods
     )
@@ -260,7 +265,9 @@ def test_texture_node_dir_and_clone_helpers_are_kind_aware():
     sdf_node = sdf.circle((1, 2), 3)
     color_node = color.clear("#fff")
 
-    assert {"fill", "outline", "shadow", "generate_mask"}.issubset(dir(sdf_node))
+    assert {"fill", "outline", "shadow", "light", "generate_mask"}.issubset(
+        dir(sdf_node)
+    )
     assert {
         "alpha_overlay",
         "mask",

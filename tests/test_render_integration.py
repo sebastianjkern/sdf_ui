@@ -202,7 +202,7 @@ def test_gradient_factories_produce_distinct_pixels(factory_name, point_a, point
     assert not np.array_equal(pixels[point_a], pixels[point_b])
 
 
-def test_outline_shadow_and_partial_derivative_render_distinct_features():
+def test_outline_shadow_light_and_partial_derivative_render_distinct_features():
     outline_pixels = rgba_array(
         render(
             sdf.circle((8, 8), 5)
@@ -219,6 +219,21 @@ def test_outline_shadow_and_partial_derivative_render_distinct_features():
             size=(16, 16),
         )
     )
+    light_pixels = rgba_array(
+        render(
+            sdf.circle((16, 16), 10)
+            .light(
+                (80, 180, 255, 255),
+                (0, 0, 0, 255),
+                light_dir=(-0.7, -0.7, 0.8),
+                ambient=0.2,
+                diffuse=0.9,
+                specular=0.0,
+                normal_strength=7.0,
+            ),
+            size=(32, 32),
+        )
+    )
     derivative_pixels = rgba_array(
         render(sdf.circle((8, 8), 5).partial_derivative(), size=(16, 16))
     )
@@ -227,6 +242,24 @@ def test_outline_shadow_and_partial_derivative_render_distinct_features():
     assert outline_pixels[8, 8, 0] < 20
     assert shadow_pixels[8, 8, 3] > shadow_pixels[0, 0, 3]
     assert shadow_pixels[8, 2, 3] > shadow_pixels[0, 0, 3]
+    assert light_pixels[8, 16, 2] > light_pixels[24, 16, 2]
+    assert light_pixels[16, 8, 2] > light_pixels[16, 24, 2]
+    assert light_pixels[10, 10, 2] > light_pixels[22, 22, 2]
+    assert light_pixels[16, 16, 2] > light_pixels[0, 0, 2]
+    light_alpha_pixels = rgba_array(
+        render(
+            sdf.circle((16, 16), 10).light(
+                (255, 255, 255, 255),
+                (0, 0, 0, 255),
+                ambient=1.0,
+                diffuse=0.0,
+                specular=0.0,
+            ),
+            size=(32, 32),
+        )
+    )
+    antialias_values = light_alpha_pixels[..., 0]
+    assert np.count_nonzero((antialias_values > 0) & (antialias_values < 255)) > 0
     assert derivative_pixels[0, 0, 0] > derivative_pixels[8, 8, 0]
 
 

@@ -1,25 +1,24 @@
-from examples.masked_union_example import masked_union_example
-from examples.rotation_example import rotation_example
-from examples.voronoi_example import voronoi_example
-from examples.text_rendering_example import text_rendering_example
-from examples.transparency_example import transparency_example
-from examples.animation_example import animation_example
-from examples.complex_shapes_example import complex_shapes_example
-from examples.font_example import font_example
-from examples.arc_example import arc_example
-from examples.partial_derivative import partial_derivative_example
-from examples.impossible_city import impossible_city_example
-from examples.render_api_example import render_api_example
-from examples.striped_circles_example import striped_circles_example
-from examples.github_banner_example import github_banner_example
-from examples.dawn_example import dawn_example
-from examples.isolines_example import isolines_example
-
-from sdf_ui import logger
-
+import argparse
 import logging
 
-import argparse
+from examples.animation_example import animation_example
+from examples.arc_example import arc_example
+from examples.complex_shapes_example import complex_shapes_example
+from examples.dawn_example import dawn_example
+from examples.font_example import font_example
+from examples.github_banner_example import github_banner_example
+from examples.impossible_city import impossible_city_example
+from examples.isolines_example import isolines_example
+from examples.light_example import light_example
+from examples.masked_union_example import masked_union_example
+from examples.partial_derivative import partial_derivative_example
+from examples.render_api_example import render_api_example
+from examples.rotation_example import rotation_example
+from examples.striped_circles_example import striped_circles_example
+from examples.text_rendering_example import text_rendering_example
+from examples.transparency_example import transparency_example
+from examples.voronoi_example import voronoi_example
+from sdf_ui import logger
 
 logger().setLevel(logging.CRITICAL)
 
@@ -41,6 +40,7 @@ examples = {
     "github": github_banner_example,
     "art": dawn_example,
     "isolines": isolines_example,
+    "light": light_example,
 }
 
 parser = argparse.ArgumentParser(
