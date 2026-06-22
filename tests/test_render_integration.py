@@ -223,13 +223,16 @@ def test_outline_shadow_light_and_partial_derivative_render_distinct_features():
         render(
             sdf.circle((16, 16), 10)
             .light(
-                (80, 180, 255, 255),
+                (80, 180, 220, 255),
                 (0, 0, 0, 255),
                 light_dir=(-0.7, -0.7, 0.8),
                 ambient=0.2,
-                diffuse=0.9,
+                diffuse=0.45,
                 specular=0.0,
-                normal_strength=7.0,
+                normal_strength=4.0,
+                bevel=8.0,
+                shade_background=True,
+                background_bevel=8.0,
             ),
             size=(32, 32),
         )
@@ -242,9 +245,9 @@ def test_outline_shadow_light_and_partial_derivative_render_distinct_features():
     assert outline_pixels[8, 8, 0] < 20
     assert shadow_pixels[8, 8, 3] > shadow_pixels[0, 0, 3]
     assert shadow_pixels[8, 2, 3] > shadow_pixels[0, 0, 3]
-    assert light_pixels[8, 16, 2] > light_pixels[24, 16, 2]
-    assert light_pixels[16, 8, 2] > light_pixels[16, 24, 2]
-    assert light_pixels[10, 10, 2] > light_pixels[22, 22, 2]
+    assert light_pixels[5, 16, 2] > light_pixels[27, 16, 2]
+    assert light_pixels[16, 5, 2] > light_pixels[16, 27, 2]
+    assert light_pixels[8, 8, 2] > light_pixels[24, 24, 2]
     assert light_pixels[16, 16, 2] > light_pixels[0, 0, 2]
     light_alpha_pixels = rgba_array(
         render(
@@ -260,6 +263,64 @@ def test_outline_shadow_light_and_partial_derivative_render_distinct_features():
     )
     antialias_values = light_alpha_pixels[..., 0]
     assert np.count_nonzero((antialias_values > 0) & (antialias_values < 255)) > 0
+    soft_profile_pixels = rgba_array(
+        render(
+            sdf.circle((16, 16), 10).light(
+                (80, 180, 255, 255),
+                (0, 0, 0, 255),
+                light_dir=(-0.7, -0.7, 0.8),
+                ambient=0.2,
+                diffuse=0.9,
+                specular=0.0,
+                normal_strength=7.0,
+                height_profile="soft",
+                height_gamma=0.6,
+            ),
+            size=(32, 32),
+        )
+    )
+    assert not np.array_equal(light_pixels, soft_profile_pixels)
+    background_lit_pixels = rgba_array(
+        render(
+            sdf.circle((16, 16), 8).light(
+                (255, 255, 255, 255),
+                (128, 128, 128, 255),
+                light_dir=(-0.6, -0.7, 0.45),
+                ambient=0.5,
+                diffuse=0.8,
+                specular=0.0,
+                normal_strength=6.0,
+                height=0.6,
+                shade_background=True,
+                background_bevel=8.0,
+            ),
+            size=(32, 32),
+        )
+    )
+    assert not np.array_equal(background_lit_pixels[16, 6], background_lit_pixels[0, 0])
+    assert np.array_equal(background_lit_pixels[0, 0], [128, 128, 128, 255])
+    groove_pixels = rgba_array(
+        render(
+            sdf.rounded_rect((16, 16), (13, 10), (3, 3, 3, 3))
+            .subtract(sdf.circle((16, 16), 5))
+            .light(
+                (255, 255, 255, 255),
+                (128, 128, 128, 255),
+                light_dir=(-0.6, -0.7, 0.45),
+                ambient=0.5,
+                diffuse=0.8,
+                specular=0.0,
+                normal_strength=6.0,
+                bevel=3.0,
+                height=0.6,
+                shade_background=True,
+                background_bevel=3.0,
+            ),
+            size=(32, 32),
+        )
+    )
+    assert np.array_equal(groove_pixels[16, 16], [128, 128, 128, 255])
+    assert not np.array_equal(groove_pixels[16, 11], groove_pixels[16, 16])
     assert derivative_pixels[0, 0, 0] > derivative_pixels[8, 8, 0]
 
 
