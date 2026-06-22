@@ -135,13 +135,11 @@ ___
     <tr>
         <th>Lighting</th>
         <th>Isolines</th>
-        <th>Voronoi Field</th>
         <th>Complex Shapes</th>
     </tr>
     <tr>
         <td><img src="./out/examples/light_square.png" width="180"></td>
         <td><img src="./out/examples/isolines_square.png" width="180"></td>
-        <td><img src="./out/examples/voronoi_square.png" width="180"></td>
         <td><img src="./out/examples/complex_square.png" width="180"></td>
     </tr>
 </table>
