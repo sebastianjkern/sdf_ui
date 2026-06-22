@@ -1,11 +1,12 @@
+from math import pi
+
 from sdf_ui import Canvas, sdf
 
+
 def arc_example():
-    arc_width=10
-    arc_inner_radius=50
-
-    with Canvas((512, 512)) as context:
-        d1 = sdf.circle((int(512/2), int(512/2)), arc_inner_radius+arc_width).cache("outer_circle")
-        d2 = sdf.circle((int(512/2), int(512/2)), arc_inner_radius)
-
-        d1.subtract(d2).fill((1, 1, 1, 1), (0, 0, 0, 1)).show(context)
+    with Canvas((800, 500)) as ctx:
+        sdf.arc((400, 250), 160, -pi * 0.15, pi * 1.15).fill(
+            (15, 23, 42, 255),
+            (248, 250, 252, 255),
+            2,
+        ).show(ctx)
