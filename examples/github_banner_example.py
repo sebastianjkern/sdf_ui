@@ -92,7 +92,7 @@ def github_banner_example(output="banner.png"):
             (WIDTH * 0.52, HEIGHT * 0.23),
             (WIDTH * 0.56, HEIGHT * 0.17),
             (WIDTH * 0.60, HEIGHT * 0.25),
-        ).fill("#2c8956", TRANSPARENT)
+        ).fill("#2c8956", TRANSPARENT, inflate=10)
         spark_2 = sdf.rect(
             (WIDTH * 0.92, HEIGHT * 0.66),
             (95, 95),
@@ -156,7 +156,10 @@ def github_banner_example(output="banner.png"):
             spark_2_fill.transparency(1),
             title,
             subtitle,
+            color.film_grain().transparency(0.025)
         ).to_rgb()
+
+        
 
         with ctx.session(cache=cache) as renderer:
             rendered = renderer.render(scene)

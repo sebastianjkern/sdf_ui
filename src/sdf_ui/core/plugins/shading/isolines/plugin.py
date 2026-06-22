@@ -4,18 +4,6 @@ from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.core.plugins.common import color, shader
 
 
-def _uniforms(params):
-    return {
-        "background": color(params["bg_color"]),
-        "line_color": color(params["fg_color"]),
-        "inflate": params["inflate"],
-        "spacing": params["spacing"],
-        "line_width": params["line_width"],
-        "feather": params["feather"],
-        "phase": params["phase"],
-    }
-
-
 def register_plugins(registry):
     registry.register(
         Plugin(
@@ -35,15 +23,22 @@ def register_plugins(registry):
             defaults={
                 "bg_color": (0.0, 0.0, 0.0, 0.0),
                 "inflate": 0.0,
-                "spacing": 12.0,
-                "line_width": 1.0,
-                "feather": 0.0,
+                "spacing": 0.75,
+                "line_width": 0.2,
+                "feather": 0.15,
                 "phase": 0.0,
             },
             shader=shader("isolines", "plugins/shading/isolines/shader.glsl"),
             input_uniforms=("sdf",),
-            make_uniforms=_uniforms,
+            make_uniforms=lambda p: {
+                "background": color(p["bg_color"]),
+                "line_color": color(p["fg_color"]),
+                "inflate": p["inflate"],
+                "spacing": p["spacing"],
+                "line_width": p["line_width"],
+                "feather": p["feather"],
+                "phase": p["phase"],
+            },
             method_of=(TextureKind.SDF,),
         )
     )
-

@@ -3,7 +3,6 @@ import unittest
 import numpy as np
 
 from sdf_ui import Canvas, sdf
-from sdf_ui.core.sdf import SDFTexture
 from sdf_ui.core.plugins.loader import PLUGIN_PACKAGES
 from sdf_ui.core.plugins.registry import registry
 from tests.helpers import rgba_array
@@ -28,19 +27,17 @@ class PluginLoaderTests(unittest.TestCase):
 
         self.assertIn("isolines", registry.method_names_for("sdf"))
         with Canvas((48, 48)) as ctx:
-            field = np.tile(np.arange(48, dtype=np.float32), (48, 1))
-            tex = ctx.r32f()
-            tex.write(field.tobytes())
-            image = SDFTexture(tex=tex, context=ctx).isolines(
+            image = sdf.grid((8, 8), (12, 12)).isolines(
                 (255, 255, 255, 255),
-                (0, 0, 0, 0),
-                spacing=4.0,
-                line_width=1.0,
+                (0, 0, 0, 255),
+                spacing=2.0,
+                line_width=0.5,
             ).render(ctx)
 
-        alpha = rgba_array(image)[..., 3]
-        self.assertGreater(np.count_nonzero(alpha), 0)
-        self.assertGreater(int(alpha.max()), 0)
+        pixels = rgba_array(image)
+        unique_colors = np.unique(pixels[..., :3].reshape(-1, 3), axis=0)
+        self.assertGreater(len(unique_colors), 1)
+        self.assertGreater(np.count_nonzero(np.any(pixels[..., :3] != pixels[0, 0, :3], axis=-1)), 0)
 
 
 if __name__ == "__main__":

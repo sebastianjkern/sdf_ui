@@ -113,9 +113,13 @@ ___
 
 ### Performance Improvements
 
-- [ ] Subframe rendering (Smaller feature set but far better performance in most tasks)
+
 - [ ] Changing Local Size can (in theory) improve performance
 - [ ] Dirty-region rendering so unchanged parts of the canvas can be skipped
+
+- [ ] Voronoi bounding box based subframe rendering
+- [ ] Subframe rendering (Smaller feature set but far better performance in most tasks)
+
 - [ ] Render-graph caching for repeated subtrees and reusable procedural scenes
 
 ### Ideas for further development

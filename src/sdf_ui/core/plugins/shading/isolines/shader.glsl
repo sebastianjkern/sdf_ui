@@ -1,6 +1,7 @@
 #version 430
 
 #define AA_DISTANCE 1.5
+#define SMOOTHSTEP_OFFSET 0.0001
 
 layout (local_size_x = 16, local_size_y = 16) in;
 
@@ -53,6 +54,13 @@ void main() {
     }
 
     float distance = abs(imageLoad(sdf, texelPos).r - inflate);
+    vec4 fg_lab = vec4(rgb2lab(line_color.rgb), line_color.a);
+    vec4 bg_lab = vec4(rgb2lab(background.rgb), background.a);
+    if (distance != distance || distance > 1e20) {
+        imageStore(destTex, texelPos, bg_lab);
+        return;
+    }
+
     float period = max(spacing, 1e-6);
     float shifted = distance + phase;
     float wrapped = mod(shifted, period);
@@ -61,16 +69,13 @@ void main() {
     }
     float band = min(wrapped, period - wrapped);
     float line_half_width = max(line_width * 0.5, 0.0);
+    float aa = AA_DISTANCE + SMOOTHSTEP_OFFSET + max(feather, 0.0);
     float line = 1.0 - smoothstep(
-        line_half_width,
-        line_half_width + feather + AA_DISTANCE,
+        max(line_half_width - aa, 0.0),
+        line_half_width + aa,
         band
     );
-
-    vec4 fg_lab = vec4(rgb2lab(line_color.rgb), line_color.a);
-    vec4 bg_lab = vec4(rgb2lab(background.rgb), background.a);
     vec4 col = mix(bg_lab, fg_lab, line);
 
     imageStore(destTex, texelPos, col);
 }
-
