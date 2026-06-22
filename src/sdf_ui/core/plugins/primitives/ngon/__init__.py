@@ -1,0 +1,2 @@
+"""Regular polygon primitive plugin."""
+
