@@ -9,8 +9,8 @@ layout (r32f, binding = 2) readonly uniform image2D sdf1;
 uniform float smoothness;
 
 float smin(float a, float b, float k) {
-    float res = exp(-k * a) + exp(-k * b);
-    return -log(res) / k;
+    float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
+    return mix(b, a, h) - k * h * (1.0 - h);
 }
 
 
@@ -24,7 +24,7 @@ void main() {
     float d0 = imageLoad(sdf0, texelPos).r;
     float d1 = imageLoad(sdf1, texelPos).r;
 
-    float distance = smin(d0, d1, smoothness);
+    float distance = smin(d0, d1, max(smoothness, 1e-6));
 
     imageStore(destTex, texelPos, vec4(distance, .0, .0, .0));
 }
