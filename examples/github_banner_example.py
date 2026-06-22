@@ -8,6 +8,17 @@ HEIGHT = 794
 FONT = "fonts/roboto/Roboto-Regular (3).ttf"
 
 TRANSPARENT = "#00000000"
+FIELD_COLOR = "#10253f"
+FIELD_COLOR_ACCENT = "#1b3b63"
+WARM_HALO_COLOR = "#8e6b2aac"
+COOL_HALO_COLOR = "#1c4f8fac"
+GRID_COLOR = "#8fa8c6ff"
+SPARK_BLUE_COLOR = "#2f79b8"
+SPARK_GREEN_COLOR = "#2d7a5a"
+SPARK_GOLD_COLOR = "#d6a23a"
+TITLE_ACCENT_COLOR = "#d48b2f"
+TITLE_TEXT_COLOR = "#f6f7f9"
+SUBTITLE_TEXT_COLOR = "#dde4ec"
 
 def _over(base, *layers):
     for layer in layers:
@@ -20,43 +31,6 @@ def github_banner_example(output="banner.png"):
     cache = {}
 
     with Canvas((WIDTH, HEIGHT)) as ctx:
-        background = color.linear_gradient(
-            (0, 0),
-            (WIDTH, HEIGHT),
-            "#03152C",
-            "#021225",
-        ).cache("background")
-
-        warm_halo = (
-            color.radial_gradient(
-                (WIDTH * 0.76, HEIGHT * 0.30),
-                "#bd9c5fac",
-                TRANSPARENT,
-                inner=0,
-                outer=1500,
-            )
-            .transparency(0.15)
-            .cache("warm_halo")
-        )
-        cool_halo = (
-            color.radial_gradient(
-                (WIDTH * 0.26, HEIGHT * 0.72),
-                "#1f71ebac",
-                TRANSPARENT,
-                inner=0,
-                outer=1200,
-            )
-            .transparency(0.15)
-            .cache("cool_halo")
-        )
-
-        grid = (
-            sdf.grid((0, 0), (96, 96), angle=-0.18)
-            .outline("#ffffffff", TRANSPARENT)
-            .transparency(0.15)
-            .cache("grid")
-        )
-
         left_blob = sdf.circle((WIDTH * 0.60, HEIGHT * 0.48), 136)
         right_blob = sdf.circle((WIDTH * 0.74, HEIGHT * 0.47), 176)
         lower_blob = sdf.circle((WIDTH * 0.67, HEIGHT * 0.64), 118)
@@ -74,25 +48,66 @@ def github_banner_example(output="banner.png"):
             )
             .cache("field")
         )
-        field_core = field.fill_from_texture(
-            color.linear_gradient(
-                (WIDTH * 0.50, HEIGHT * 0.25),
-                (WIDTH * 0.88, HEIGHT * 0.73),
-                "#c32c1b",
-                "#ee8a2d",
-            ),
-            background=TRANSPARENT,
-            inflate=1.0,
+
+        background = field.light(
+            fg_color=FIELD_COLOR,
+            bg_color=FIELD_COLOR,
+            light_dir=(-0.55, -0.72, 0.42),
+            ambient=0.62,
+            diffuse=0.62,
+            specular=0.05,
+            shininess=40.0,
+            normal_strength=5.2,
+            bevel="7%min",
+            shade_background=True,
+            background_bevel="7%min",
+            height_profile="circle_in",
+            height_gamma=0.72,
+            height=0.5,
         ).cache("field_core")
 
+        warm_halo = (
+            color.radial_gradient(
+                (WIDTH * 0.76, HEIGHT * 0.30),
+                WARM_HALO_COLOR,
+                TRANSPARENT,
+                inner=0,
+                outer=1500,
+            )
+            .transparency(0.15)
+            .cache("warm_halo")
+        )
+        cool_halo = (
+            color.radial_gradient(
+                (WIDTH * 0.26, HEIGHT * 0.72),
+                COOL_HALO_COLOR,
+                TRANSPARENT,
+                inner=0,
+                outer=1200,
+            )
+            .transparency(0.15)
+            .cache("cool_halo")
+        )
+
+        grid = (
+            sdf.grid((0, 0), (96, 96), angle=-0.18)
+            .outline(GRID_COLOR, TRANSPARENT)
+            .transparency(0.15)
+            .cache("grid")
+        )
+
         spark_0 = sdf.circle((WIDTH * 0.89, HEIGHT * 0.28), 34).fill(
-            "#268ac2", TRANSPARENT
+            SPARK_BLUE_COLOR, TRANSPARENT
         )
         spark_1 = sdf.triangle(
             (WIDTH * 0.52, HEIGHT * 0.23),
             (WIDTH * 0.56, HEIGHT * 0.17),
             (WIDTH * 0.60, HEIGHT * 0.25),
-        ).fill("#2c8956", TRANSPARENT, inflate=10)
+        )
+
+        spark_1_fill = spark_1.fill(SPARK_GREEN_COLOR, TRANSPARENT, inflate=10)
+        spark_1_shadow = spark_1.shadow(10, 10, 0.75)
+
         spark_2 = sdf.rect(
             (WIDTH * 0.92, HEIGHT * 0.66),
             (95, 95),
@@ -100,7 +115,7 @@ def github_banner_example(output="banner.png"):
             angle=0.65,
         )
 
-        spark_2_fill = spark_2.fill("#f4b82f", TRANSPARENT)
+        spark_2_fill = spark_2.fill(SPARK_GOLD_COLOR, TRANSPARENT)
         spark_2_shadow = spark_2.shadow(10, 0, 0.75)
 
         title_sdf = text(
@@ -134,26 +149,25 @@ def github_banner_example(output="banner.png"):
 
         title = _over(
             color.clear(TRANSPARENT),
-            title_sdf.fill(
-                "#ee8a2d", TRANSPARENT, inflate=1.2
-            ),
-            ui_sdf.fill("#ffffff", TRANSPARENT, inflate=1.2)
+            title_sdf.fill(TITLE_ACCENT_COLOR, TRANSPARENT, inflate=1.2),
+            ui_sdf.fill(TITLE_TEXT_COLOR, TRANSPARENT, inflate=1.2)
         ).cache("title")
-        subtitle = subtitle_sdf.fill("#f3fbf7", TRANSPARENT, inflate=0.6).cache(
-            "subtitle"
-        )
+        subtitle = subtitle_sdf.fill(
+            SUBTITLE_TEXT_COLOR, TRANSPARENT, inflate=0.6
+        ).cache("subtitle")
 
         scene = _over(
             background,
             warm_halo,
             cool_halo,
             grid,
-            field_core,
-            # contours,
-            spark_0.transparency(1),
-            spark_1.transparency(1),
+            spark_0,
+
+            spark_1_shadow,
+            spark_1_fill,
+            
             spark_2_shadow,
-            spark_2_fill.transparency(1),
+            spark_2_fill,
             title,
             subtitle,
             color.film_grain().transparency(0.025)

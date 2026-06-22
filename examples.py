@@ -11,6 +11,7 @@ from examples.impossible_city import impossible_city_example
 from examples.isolines_example import isolines_example
 from examples.light_example import light_example
 from examples.masked_union_example import masked_union_example
+from examples.neuromorphism_light_example import neuromorphism_light_example
 from examples.partial_derivative import partial_derivative_example
 from examples.render_api_example import render_api_example
 from examples.rotation_example import rotation_example
@@ -41,6 +42,7 @@ examples = {
     "art": dawn_example,
     "isolines": isolines_example,
     "light": light_example,
+    "neuromorphism": neuromorphism_light_example,
 }
 
 parser = argparse.ArgumentParser(
