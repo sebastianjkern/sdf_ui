@@ -1,0 +1,2 @@
+"""Ellipse primitive plugin."""
+
