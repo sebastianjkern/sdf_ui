@@ -13,6 +13,7 @@ from examples.render_api_example import render_api_example
 from examples.striped_circles_example import striped_circles_example
 from examples.github_banner_example import github_banner_example
 from examples.dawn_example import dawn_example
+from examples.isolines_example import isolines_example
 
 from sdf_ui import logger
 
@@ -38,7 +39,8 @@ examples = {
     "render_api": render_api_example,
     "striped_circles": striped_circles_example,
     "github": github_banner_example,
-    "art": dawn_example
+    "art": dawn_example,
+    "isolines": isolines_example,
 }
 
 parser = argparse.ArgumentParser(
