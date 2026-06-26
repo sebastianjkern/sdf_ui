@@ -79,6 +79,52 @@ class DispatchConfig:
         )
 
 
+class _SingleChannelFloatTexture:
+    """Proxy for single-channel SDF textures.
+
+    Intel iGPU drivers may support only reduced precision single-channel float
+    image formats. The proxy keeps shader-facing texture objects valid while
+    exposing float32 bytes to callers expecting 1-channel float fields.
+    """
+
+    def __init__(self, texture, dtype: str):
+        self._texture = texture
+        self._dtype = dtype
+
+    @property
+    def size(self):
+        return self._texture.size
+
+    @property
+    def components(self):
+        return 1
+
+    @property
+    def filter(self):
+        return self._texture.filter
+
+    @filter.setter
+    def filter(self, value):
+        self._texture.filter = value
+
+    def write(self, data):
+        if self._dtype == "f2":
+            if isinstance(data, (bytes, bytearray, memoryview)):
+                values = np.frombuffer(data, dtype=np.float32)
+                if values.size == self._texture.size[0] * self._texture.size[1]:
+                    data = values.astype(np.float16).tobytes()
+        return self._texture.write(data)
+
+    def read(self):
+        payload = self._texture.read()
+        if self._dtype == "f2":
+            return np.frombuffer(payload, dtype=np.float16).astype(np.float32).tobytes()
+        return payload
+
+    def __getattr__(self, name):
+        return getattr(self._texture, name)
+
+
 class Context:
     """
     Represents a rendering context with functionality for managing shaders and textures.
@@ -94,13 +140,61 @@ class Context:
         self.size = size
         self._closed = False
 
-        self._mgl_ctx = mgl.create_standalone_context()
-        self._shader_library = ShaderLibrary(self._mgl_ctx)
+        self._mgl_ctx = self._create_mgl_context()
+        self._sdf_image_dtype = self._detect_sdf_image_dtype()
+        self._sdf_image_format = "r32f" if self._sdf_image_dtype == "f4" else "r16f"
+        self._shader_library = ShaderLibrary(
+            self._mgl_ctx, sdf_image_format=self._sdf_image_format
+        )
         self._active_render_stats = None
         self.last_render_stats = None
 
         self.dispatch_config = DispatchConfig.from_value(dispatch_config)
         self.dispatch_groups = self.dispatch_config.groups_for_size(size)
+
+    @staticmethod
+    def _create_mgl_context():
+        try:
+            return mgl.create_standalone_context()
+        except Exception as primary_error:
+            logger().warning(
+                "Standalone OpenGL context creation with default backend failed: %s",
+                primary_error,
+            )
+            logger().info("Attempting EGL backend fallback for headless/Wayland environments.")
+            try:
+                return mgl.create_standalone_context(backend="egl")
+            except Exception as fallback_error:
+                logger().error(
+                    "EGL context fallback also failed: %s", fallback_error
+                )
+                raise primary_error
+
+    def _detect_sdf_image_dtype(self):
+        width = max(1, int(self.size[0]))
+        height = max(1, int(self.size[1]))
+        probe_size = (width, height)
+
+        def _can_allocate(size, dtype):
+            try:
+                texture = self._mgl_ctx.texture(size, 1, dtype=dtype)
+            except Exception:
+                return False
+            release = getattr(texture, "release", None)
+            if callable(release):
+                release()
+            return True
+
+        if _can_allocate(probe_size, "f4"):
+            return "f4"
+
+        if _can_allocate(probe_size, "f2"):
+            return "f2"
+
+        raise RuntimeError(
+            "Unable to allocate single-channel float SDF textures on this GPU. "
+            "Expected support for r32f or r16f formats."
+        )
 
     @property
     def local_size(self):
@@ -272,8 +366,42 @@ class Context:
         >>> r32f_texture = context.r32f()
         """
         logger().debug("Created r32f texture...")
-        tex = self._mgl_ctx.texture(self.size, 1, dtype="f4")
-        tex.filter = mgl.LINEAR, mgl.LINEAR
+        size = (int(self.size[0]), int(self.size[1]))
+        sdf_dtype = getattr(self, "_sdf_image_dtype", "f4")
+        allocation_order = [sdf_dtype]
+        if sdf_dtype != "f4":
+            allocation_order.append("f4")
+        if "f2" not in allocation_order:
+            allocation_order.append("f2")
+
+        last_error = None
+        for candidate in allocation_order:
+            try:
+                tex = self._mgl_ctx.texture(size, 1, dtype=candidate)
+            except Exception as exc:
+                last_error = exc
+                continue
+
+            current_dtype = getattr(self, "_sdf_image_dtype", None)
+            if candidate != current_dtype:
+                self._sdf_image_dtype = candidate
+                self._sdf_image_format = (
+                    "r32f" if candidate == "f4" else "r16f"
+                )
+                self._shader_library = ShaderLibrary(
+                    self._mgl_ctx, sdf_image_format=self._sdf_image_format
+                )
+            tex = _SingleChannelFloatTexture(tex, candidate)
+            break
+        else:
+            raise RuntimeError(
+                f"Unable to allocate SDF texture as one of {allocation_order!r}: {last_error}"
+            )
+
+        try:
+            tex.filter = mgl.LINEAR, mgl.LINEAR
+        except Exception:
+            tex.filter = mgl.NEAREST, mgl.NEAREST
         stats = getattr(self, "_active_render_stats", None)
         if stats is not None:
             stats.record_texture_allocation("r32f")
@@ -295,7 +423,8 @@ class Context:
         >>> rgba8_texture = context.rgba8()
         """
         logger().debug("Created rgba8 texture...")
-        tex = self._mgl_ctx.texture(self.size, 4)
+        size = (int(self.size[0]), int(self.size[1]))
+        tex = self._mgl_ctx.texture(size, 4)
         tex.filter = mgl.LINEAR, mgl.LINEAR
         stats = getattr(self, "_active_render_stats", None)
         if stats is not None:

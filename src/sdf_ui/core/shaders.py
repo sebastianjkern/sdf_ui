@@ -11,9 +11,10 @@ class ShaderLibrary:
     Loads, validates, compiles, and caches compute shaders for a ModernGL context.
     """
 
-    def __init__(self, mgl_context, base_path=None):
+    def __init__(self, mgl_context, base_path=None, sdf_image_format="r32f"):
         self._mgl_ctx = mgl_context
         self._base_path = Path(base_path) if base_path else Path(__file__).parent.parent
+        self._sdf_image_format = sdf_image_format
         self._cache = {}
 
     def get(self, shader_name: str):
@@ -34,6 +35,8 @@ class ShaderLibrary:
                 )
 
             code = path.read_text(encoding="utf-8")
+            if self._sdf_image_format != "r32f":
+                code = code.replace("layout (r32f", f"layout ({self._sdf_image_format}")
             self._cache[shader_name] = self._mgl_ctx.compute_shader(code)
             logger().debug(f"Compiled and cached {shader_name} shader...")
 

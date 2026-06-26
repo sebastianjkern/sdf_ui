@@ -13,8 +13,8 @@ layout (rgba8, binding = 1) readonly uniform image2D origTex;
 uniform float offset[SIZE] = float[](0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0);
 uniform float weight[SIZE] = float[](0.2094726562, 0.1832885742, 0.1221923828, 0.0610961914, 0.0222167969, 0.0055541992, 0.0008544922, 0.0000610352);
 
-ivec2 abs(ivec2 x) {
-    return ivec2(abs(x.x), abs(x.y));
+ivec2 abs_i2(ivec2 x) {
+    return ivec2(x.x < 0 ? -x.x : x.x, x.y < 0 ? -x.y : x.y);
 }
 
 void main() {
@@ -30,7 +30,7 @@ void main() {
     int factor = 1;
 
     for (int i = 1; i < SIZE; i++) {
-        col += imageLoad(origTex, abs(texelPos - ivec2(offset[i], 0.0))) * weight[i];
+        col += imageLoad(origTex, abs_i2(texelPos - ivec2(offset[i], 0.0))) * weight[i];
 
         if (texelPos.x + i >= size.x - 1) {
             factor = -1;
