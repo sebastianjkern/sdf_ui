@@ -5,9 +5,9 @@ This list focuses on the improvements that best match `sdf_ui`'s strengths as an
 ## Performance and Core Rendering
 
 - [ ] Add dirty-region or subframe rendering so unchanged parts of the canvas do not need a full dispatch.
-- [ ] Add a scene graph or render graph so repeated subtrees can be cached instead of recomputed every frame.
+- [x] Add scene and training render graphs with reusable subtree caches.
 - [ ] Add bounds-aware shaders and clipping so work can be skipped outside the visible region.
-- [ ] Make dispatch sizing explicit and configurable per target device instead of deriving only from canvas size.
+- [x] Make display dispatch sizing explicit and configurable.
 
 ## Procedural Fields and Patterns
 
@@ -18,21 +18,23 @@ This list focuses on the improvements that best match `sdf_ui`'s strengths as an
 
 ## Shape Composition and Modeling
 
-- [ ] Add half-plane and arc primitives directly instead of forcing them through composition.
-- [ ] Add polygon support, starting with convex polygons and then general polygons.
+- [x] Add half-plane and arc primitives directly.
+- [x] Add convex and general polygon support.
 - [ ] Add stroke-aware primitives so outlines and path widths can be expressed natively.
-- [ ] Add signed distance support for capsules, variable-radius capsules, and rounded segments.
-- [ ] Add first-class transforms for scale, translation, and rotation across shape graphs.
+- [x] Add capsule and rounded-segment primitives.
+- [ ] Add variable-radius capsules.
+- [x] Add transforms for scale, translation, and rotation across shape graphs.
 - [ ] Add a dedicated stroke/combine pipeline for layered shape construction.
 - [ ] Add stronger masked blending modes and improve the current masked-union output.
 - [ ] Add path-level smoothing controls so joins and transitions can be tuned per shape.
 - [ ] Add mask-to-SDF conversion utilities for turning layered masks back into distance fields.
-- [ ] Explore SDF differentiation utilities for field analysis and effect construction.
+- [x] Add SDF differentiation contracts and a GPU training prototype.
 
 ## Text and Typography
 
-- [ ] Cache glyph contours and glyph SDFs by font, size, and character.
-- [ ] Add kerning, baseline handling, and multi-glyph layout for real text runs.
+- [x] Cache glyph contours and glyph SDFs by font, size, and character.
+- [x] Add basic kerning and multi-glyph text runs.
+- [ ] Improve baseline handling and text shaping.
 - [ ] Add line wrapping, alignment, and text box support.
 - [ ] Add font fallback and missing-glyph handling.
 - [ ] Add a custom SDF font pipeline so text rendering does not depend on ad hoc contour extraction.
@@ -47,7 +49,7 @@ This list focuses on the improvements that best match `sdf_ui`'s strengths as an
 ## Shading and Effects
 
 - [ ] Add more blend modes such as screen, darken, lighten, soft light, and richer multiply variants.
-- [ ] Add first-class gradient primitives instead of relying only on composed shading passes.
+- [x] Add linear and radial gradient APIs using composed shading passes.
 - [ ] Add stronger color-space tooling, including explicit sRGB/LAB conversion helpers and previews.
 - [ ] Add more noise variants beyond the current Perlin and film grain shaders.
 - [ ] Add glow, bevel, inner shadow, sharpen, and edge-detect post effects.
@@ -74,7 +76,7 @@ This list focuses on the improvements that best match `sdf_ui`'s strengths as an
 - [ ] Add richer example scripts with parameterized presets and side-by-side comparisons.
 - [ ] Add convenience wrappers for common workflows like icons, badges, and glyphs.
 - [ ] Add a higher-level coloring API for palette-driven scene construction.
-- [ ] Add test coverage for shader dispatch, texture lifetime, and composition correctness.
+- [x] Add test coverage for shader dispatch, texture lifetime, and composition correctness.
 - [ ] Add safer resource lifecycle handling so texture cleanup is easier to reason about.
 - [ ] Normalize naming between shader files, shader constants, and user-facing methods.
 

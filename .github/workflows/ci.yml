@@ -1,0 +1,47 @@
+name: checks
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.12"]
+    env:
+      LIBGL_ALWAYS_SOFTWARE: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install Mesa
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1-mesa-dri libgl1
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --locked --python ${{ matrix.python }}
+      - name: Check formatting
+        run: uv run --locked --no-sync python -m ruff format --check src/sdf_ui/graph src/sdf_ui/learning src/sdf_ui/backends tests/test_consolidation.py
+      - name: Lint
+        run: uv run --locked --no-sync python -m ruff check src tests build_tools
+      - name: Type check
+        run: uv run --locked --no-sync python -m mypy src build_tools
+      - name: Check generated stubs
+        run: uv run --locked --no-sync python build_tools/generate_api_stubs.py --check
+      - name: Test
+        run: uv run --locked --no-sync python -m pytest -q
+      - name: Build documentation
+        run: uv run --locked --no-sync python -m sphinx -W -b html docs /tmp/sdf-ui-docs
+      - name: Build distribution
+        run: uv build
+      - name: Smoke-test the built wheel
+        run: |
+          uv venv --python "${{ matrix.python }}" /tmp/sdf-wheel
+          uv pip install --python /tmp/sdf-wheel/bin/python dist/*.whl
+          cd /tmp
+          /tmp/sdf-wheel/bin/python -c 'import sdf_ui; assert sdf_ui.__file__.startswith("/tmp/sdf-wheel/"); sdf_ui.sdf.circle((1, 1), 1); from sdf_ui.fonts import default_font_path; from pathlib import Path; assert Path(default_font_path()).is_file()'

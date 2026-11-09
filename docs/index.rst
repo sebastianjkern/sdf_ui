@@ -10,6 +10,9 @@ functions and composable render nodes.
 
    core
    api
+   learning
+   shader_differentiation
+   gpu_render_graph
 
 .. rubric:: Quick links
 
