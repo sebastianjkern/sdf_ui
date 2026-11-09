@@ -3,6 +3,7 @@
 __docformat__ = "google"
 
 import math
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Tuple
@@ -12,15 +13,8 @@ import moderngl as mgl
 import numpy as np
 
 from ..log import logger
+from . import texture_utils
 from .shaders import ShaderLibrary
-
-# Re-export the texture bookkeeping helpers so existing imports keep working.
-from .texture_utils import (  # noqa: F401
-    decrease_tex_registry,
-    get_tex_registry,
-    show_texture,
-    tex_registry,
-)
 
 
 def _triple(value, name):
@@ -139,6 +133,7 @@ class Context:
     def __init__(self, size, dispatch_config=None):
         self.size = size
         self._closed = False
+        self._graph_programs = {}
 
         self._mgl_ctx = self._create_mgl_context()
         self._sdf_image_dtype = self._detect_sdf_image_dtype()
@@ -161,13 +156,13 @@ class Context:
                 "Standalone OpenGL context creation with default backend failed: %s",
                 primary_error,
             )
-            logger().info("Attempting EGL backend fallback for headless/Wayland environments.")
+            logger().info(
+                "Attempting EGL backend fallback for headless/Wayland environments."
+            )
             try:
                 return mgl.create_standalone_context(backend="egl")
             except Exception as fallback_error:
-                logger().error(
-                    "EGL context fallback also failed: %s", fallback_error
-                )
+                logger().error("EGL context fallback also failed: %s", fallback_error)
                 raise primary_error
 
     def _detect_sdf_image_dtype(self):
@@ -195,15 +190,6 @@ class Context:
             "Unable to allocate single-channel float SDF textures on this GPU. "
             "Expected support for r32f or r16f formats."
         )
-
-    @property
-    def local_size(self):
-        """Compatibility alias for the compute shader dispatch group count."""
-        return self.dispatch_groups
-
-    @local_size.setter
-    def local_size(self, value):
-        self.dispatch_groups = _triple(value, "local_size")
 
     def __enter__(self):
         """
@@ -236,6 +222,12 @@ class Context:
         if self._closed:
             return
 
+        for graph in list(getattr(self, "_training_graphs", ())):
+            graph.close()
+        programs = getattr(self, "_graph_programs", {})
+        for program in programs.values():
+            program.release()
+        programs.clear()
         self._closed = True
         release = getattr(getattr(self, "_mgl_ctx", None), "release", None)
         if callable(release):
@@ -250,6 +242,61 @@ class Context:
         from .texture import Renderer
 
         return Renderer(self, params=params, cache=cache)
+
+    def render_plan(self, plan, params=None):
+        """Render every named root of a lowered graph with display formats."""
+        from ..backends.plan import execute_display
+
+        return execute_display(plan, self, params=params)
+
+    def differentiate(self, texture, params=None):
+        """Evaluate a supported graph as a differentiable floating-point Tensor.
+
+        This uses the CPU learning backend at this canvas size. GPU display
+        rendering remains available through :meth:`render` with the same scene
+        and learned parameters.
+        """
+        from ..learning.render import DifferentiableRenderer
+
+        return DifferentiableRenderer(self.size, params=params).render(texture)
+
+    def compile(self, outputs, params=None, *, size=None, inputs=None):
+        """Compile named roots or an existing plan for display and training."""
+        from ..graph.runtime import RenderGraph
+
+        return RenderGraph(self, outputs, params=params, size=size, inputs=inputs)
+
+    def create_graph_backend(self):
+        """Create this Canvas's render-graph backend."""
+        from ..backends.opengl import GPUShaderBackend
+
+        return GPUShaderBackend(self)
+
+    def training(self, outputs, params=None, *, size=None, inputs=None):
+        """Create a resource-owning high-level render-graph training session."""
+        from ..graph.session import TrainingSession
+
+        return TrainingSession(self, outputs, params, size=size, inputs=inputs)
+
+    @contextmanager
+    def capture(self, scene, params=None, *, size=None, inputs=None):
+        """Capture an SDF or color scene as an owned floating-point GPU target.
+
+        The scene is evaluated once. Use the returned image inside the ``with``
+        block, for example as an Objective target. Exiting releases the image
+        and its temporary graph without reading pixels back to the CPU.
+        """
+        with self.compile(
+            {"target": scene}, params=params, size=size, inputs=inputs
+        ) as graph:
+            with graph.snapshot("target") as image:
+                yield image
+
+    def inspect_graph(self, outputs, params=None):
+        """Inspect graph lowering without allocating GPU resources."""
+        from ..graph.inspection import inspect_graph
+
+        return inspect_graph(outputs, params=params)
 
     def texture_from_image(self, path):
         """
@@ -385,9 +432,7 @@ class Context:
             current_dtype = getattr(self, "_sdf_image_dtype", None)
             if candidate != current_dtype:
                 self._sdf_image_dtype = candidate
-                self._sdf_image_format = (
-                    "r32f" if candidate == "f4" else "r16f"
-                )
+                self._sdf_image_format = "r32f" if candidate == "f4" else "r16f"
                 self._shader_library = ShaderLibrary(
                     self._mgl_ctx, sdf_image_format=self._sdf_image_format
                 )
@@ -406,8 +451,7 @@ class Context:
         if stats is not None:
             stats.record_texture_allocation("r32f")
 
-        global tex_registry
-        tex_registry += 1
+        texture_utils.register_texture(tex)
 
         return tex
 
@@ -430,21 +474,6 @@ class Context:
         if stats is not None:
             stats.record_texture_allocation("rgba8")
 
-        global tex_registry
-        tex_registry += 1
+        texture_utils.register_texture(tex)
 
         return tex
-
-
-def init_sdf_ui(size):
-    """
-    Initializes the SDF UI with the specified size.
-
-    Args:
-    - size (tuple): The size of the context.
-
-    Example:
-    >>> init_sdf_ui((800, 600))
-    """
-    global _context
-    _context = Context(size)

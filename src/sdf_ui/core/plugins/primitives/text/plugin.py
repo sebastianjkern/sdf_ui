@@ -1,3 +1,5 @@
+from sdf_ui.fonts import default_font_path
+
 __docformat__ = "google"
 
 from functools import lru_cache
@@ -22,7 +24,7 @@ def render_text(renderer, _inputs, params):
     font_size = float(params["size"])
     ox = float(params["ox"])
     oy = float(params["oy"])
-    path = params["path"]
+    path = params["path"] or default_font_path()
     samples = int(params["samples"])
     cache_size = int(params["cache_size"])
     line_height = float(params["line_height"])
@@ -262,7 +264,7 @@ def register_plugins(registry):
                 "size": 64,
                 "ox": 0,
                 "oy": 0,
-                "path": "fonts/georgia_regular.ttf",
+                "path": None,
                 "samples": 16,
                 "cache_size": 128,
                 "line_height": 1.2,

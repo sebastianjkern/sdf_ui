@@ -3,7 +3,8 @@
 __docformat__ = "google"
 
 from .color import ColorSpaceMode, ColorTexture
-from .context import Context, DispatchConfig, decrease_tex_registry, show_texture
+from .context import Context, DispatchConfig
+from .differentiation import ShaderArgument, ShaderDifferentiation
 from .expressions import (
     Expr,
     cos,
@@ -15,6 +16,7 @@ from .expressions import (
     sin,
 )
 from .sdf import SDFTexture
+from .texture_utils import decrease_tex_registry, show_texture
 
 __all__ = [
     "Context",
@@ -25,6 +27,8 @@ __all__ = [
     "ColorTexture",
     "Expr",
     "SDFTexture",
+    "ShaderArgument",
+    "ShaderDifferentiation",
     "cos",
     "param",
     "percent",

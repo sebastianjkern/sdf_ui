@@ -57,6 +57,10 @@ vec2 inverse_transform(vec2 p) {
 }
 
 float distance_scale() {
+    if (transform_kind < 0.5) {
+        return 1.0;
+    }
+
     if (transform_kind < 1.5) {
         return abs(factor);
     }

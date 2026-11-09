@@ -1,30 +1,13 @@
 __docformat__ = "google"
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
-from sdf_ui.core.plugins.common import (
-    ensure_rgb,
-    rgb_texture_from_array,
-    rgba_array,
-    shader,
-)
+from sdf_ui.core.plugins.common import lower_composite, render_rgb_shader, shader
 
 
 def render_alpha_overlay(renderer, inputs, params):
-    import numpy as np
-
-    base = rgba_array(ensure_rgb(renderer, inputs[0])).astype(np.float32) / 255.0
-    top = rgba_array(ensure_rgb(renderer, inputs[1])).astype(np.float32) / 255.0
-
-    alpha = top[..., 3:4] + (1.0 - top[..., 3:4]) * base[..., 3:4]
-    rgb = np.zeros_like(top[..., :3])
-    np.divide(
-        top[..., :3] * top[..., 3:4]
-        + base[..., :3] * (1.0 - top[..., 3:4]) * base[..., 3:4],
-        alpha,
-        out=rgb,
-        where=alpha > 0.0,
+    return render_rgb_shader(
+        renderer, "overlay", inputs, image_uniforms=("tex1", "tex0")
     )
-    return rgb_texture_from_array(renderer.ctx, np.dstack((rgb, alpha[..., 0])) * 255.0)
 
 
 def register_plugins(registry):
@@ -38,6 +21,7 @@ def register_plugins(registry):
             input_uniforms=("tex1", "tex0"),
             mode="RGB",
             render_func=render_alpha_overlay,
+            lowering_func=lower_composite,
             method_of=(TextureKind.COLOR,),
         )
     )

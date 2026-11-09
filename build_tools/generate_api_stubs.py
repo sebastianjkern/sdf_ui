@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import inspect
 import sys
 from pathlib import Path
@@ -35,7 +36,9 @@ def _load_runtime_objects():
     from sdf_ui.core.texture import PostNamespace, TextureNode
 
     registry = PluginRegistry()
-    load_plugins(registry)
+    # Distributed stubs describe builtins, independent of third-party packages
+    # installed in the developer's environment.
+    load_plugins(registry, include_entry_points=False)
 
     return {
         "ColorNamespace": ColorNamespace,
@@ -125,10 +128,32 @@ def _plugin_return_type(texture_kind: Any, plugin: Any) -> str:
 
 
 def _method_return_overrides() -> dict[str, dict[str, str]]:
-    _ensure_root_on_path()
-    from setup import api_stub_manual_method_return_overrides
-
-    return api_stub_manual_method_return_overrides()
+    return {
+        "TextureNode": {
+            "render": "Any",
+            "show": "None",
+            "save": "None",
+            "named": "Any",
+            "cache": "Any",
+            "uncached": "Any",
+        },
+        "SDFTexture": {
+            "__or__": "SDFTexture",
+            "__and__": "SDFTexture",
+            "__sub__": "SDFTexture",
+            "intersect": "SDFTexture",
+            "mask": "ColorTexture",
+        },
+        "ColorTexture": {
+            "over": "ColorTexture",
+            "to_lab": "ColorTexture",
+            "to_rgb": "ColorTexture",
+        },
+        "PostNamespace": {
+            "to_lab": "ColorTexture",
+            "to_rgb": "ColorTexture",
+        },
+    }
 
 
 def _collect_manual_methods(class_name: str, cls: Any) -> list[str]:
@@ -312,10 +337,12 @@ def _render_api_stub(runtime: dict[str, Any]) -> str:
 def _render_core_init_stub() -> str:
     return "\n".join(
         [
-            "from .color import ColorSpaceMode, ColorTexture",
-            "from .context import Context, decrease_tex_registry, show_texture",
-            "from .expressions import Expr, cos, param, percent, percent_of_min, percent_x, percent_y, sin",
-            "from .sdf import SDFTexture",
+            "from .color import ColorSpaceMode as ColorSpaceMode, ColorTexture as ColorTexture",
+            "from .context import Context as Context, DispatchConfig as DispatchConfig",
+            "from .texture_utils import decrease_tex_registry as decrease_tex_registry, show_texture as show_texture",
+            "from .differentiation import ShaderArgument as ShaderArgument, ShaderDifferentiation as ShaderDifferentiation",
+            "from .expressions import Expr as Expr, cos as cos, param as param, percent as percent, percent_of_min as percent_of_min, percent_x as percent_x, percent_y as percent_y, sin as sin",
+            "from .sdf import SDFTexture as SDFTexture",
             "",
         ]
     )
@@ -326,10 +353,10 @@ def _render_root_init_stub() -> str:
         [
             "from typing import Any",
             "",
-            "from . import core",
-            "from .core import ColorTexture, Context, SDFTexture",
+            "from . import core as core, learning as learning",
+            "from .core import ColorTexture as ColorTexture, Context as Context, DispatchConfig as DispatchConfig, SDFTexture as SDFTexture",
             "from .core.api import ColorNamespace, SDFNamespace",
-            "from .core.expressions import Expr, cos, param, percent, percent_of_min, percent_x, percent_y, sin",
+            "from .core.expressions import Expr as Expr, cos as cos, input_value as input_value, param as param, percent as percent, percent_of_min as percent_of_min, percent_x as percent_x, percent_y as percent_y, sin as sin",
             "",
             "Canvas = Context",
             "sdf: SDFNamespace",
@@ -340,7 +367,8 @@ def _render_root_init_stub() -> str:
     )
 
 
-def generate_api_stubs() -> None:
+def generate_api_stubs(*, check: bool = False) -> bool:
+    """Generate tracked stubs, or report stale files without changing them."""
     runtime = _load_runtime_objects()
 
     outputs = {
@@ -352,9 +380,24 @@ def generate_api_stubs() -> None:
         PACKAGE / "__init__.pyi": _render_root_init_stub(),
     }
 
+    stale = []
     for path, content in outputs.items():
-        _write_if_changed(path, content)
+        if not path.exists() or path.read_text(encoding="utf-8") != content:
+            stale.append(path)
+            if not check:
+                _write_if_changed(path, content)
+    if check and stale:
+        for path in stale:
+            print(f"Stale generated stub: {path}", file=sys.stderr)
+        print("Run uv run python build_tools/generate_api_stubs.py", file=sys.stderr)
+    return not stale if check else True
 
 
 if __name__ == "__main__":
-    generate_api_stubs()
+    parser = argparse.ArgumentParser(description="Generate or check public API stubs")
+    parser.add_argument(
+        "--check", action="store_true", help="report stale stubs without writing"
+    )
+    args = parser.parse_args()
+    if not generate_api_stubs(check=args.check) and args.check:
+        raise SystemExit(1)

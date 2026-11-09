@@ -1,12 +1,12 @@
 __docformat__ = "google"
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
-from sdf_ui.core.plugins.common import blur_pass, shader
+from sdf_ui.core.plugins.common import blur_pass, lower_composite, shader
 
 
 def render_blur_9(renderer, inputs, params):
     from sdf_ui.core.color import ColorTexture
-    from sdf_ui.core.context import decrease_tex_registry
+    from sdf_ui.core.texture_utils import decrease_tex_registry
 
     ctx = renderer.ctx
     tex0 = ctx.rgba8()
@@ -20,13 +20,13 @@ def render_blur_9(renderer, inputs, params):
         blur_pass(ctx, "blur_hor_9", tex1, tex0)
 
     tex0.release()
-    decrease_tex_registry()
+    decrease_tex_registry(tex0)
     return ColorTexture(tex=tex1, context=ctx, mode=inputs[0].mode)
 
 
 def render_blur_13(renderer, inputs, params):
     from sdf_ui.core.color import ColorTexture
-    from sdf_ui.core.context import decrease_tex_registry
+    from sdf_ui.core.texture_utils import decrease_tex_registry
 
     ctx = renderer.ctx
     tex0 = ctx.rgba8()
@@ -40,7 +40,7 @@ def render_blur_13(renderer, inputs, params):
         blur_pass(ctx, "blur_hor_13", tex1, tex0)
 
     tex0.release()
-    decrease_tex_registry()
+    decrease_tex_registry(tex0)
     return ColorTexture(tex=tex1, context=ctx, mode=inputs[0].mode)
 
 
@@ -74,6 +74,7 @@ def register_plugins(registry):
                 shader("blur_hor_9", "plugins/postprocessing/blur/blur9_hor.glsl"),
             ),
             render_func=render_blur_9,
+            lowering_func=lower_composite,
             method_of=(TextureKind.COLOR,),
         )
     )
@@ -90,6 +91,7 @@ def register_plugins(registry):
                 shader("blur_hor_13", "plugins/postprocessing/blur/blur13_hor.glsl"),
             ),
             render_func=render_blur_13,
+            lowering_func=lower_composite,
             method_of=(TextureKind.COLOR,),
         )
     )
@@ -102,6 +104,7 @@ def register_plugins(registry):
             params=("n", "base"),
             defaults={"n": 0, "base": 9},
             render_func=render_blur,
+            lowering_func=lower_composite,
             method_of=(TextureKind.COLOR,),
         )
     )

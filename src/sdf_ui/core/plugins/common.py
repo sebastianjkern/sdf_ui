@@ -3,10 +3,15 @@ __docformat__ = "google"
 from .base import ShaderFile
 
 
-def shader(name, path):
+def lower_composite(builder, plugin, inputs, raw, values):
+    """Lower a builtin composite through the shared typed graph builder."""
+    return builder.composite(plugin, inputs, raw, values)
+
+
+def shader(name, path, *, derivative_contract=None, gpu_derivative=None, program=None):
     if path.startswith("plugins/"):
         path = f"core/{path}"
-    return ShaderFile(name, path)
+    return ShaderFile(name, path, derivative_contract, gpu_derivative, program)
 
 
 def build(name, *args, **kwargs):
@@ -20,6 +25,19 @@ def params(*names):
 
 
 def color(value):
+    from sdf_ui.learning.autodiff import Tensor, as_tensor, stack
+
+    if isinstance(value, Tensor) or (
+        isinstance(value, (list, tuple)) and any(isinstance(c, Tensor) for c in value)
+    ):
+        channels = (
+            value
+            if isinstance(value, Tensor)
+            else stack(tuple(as_tensor(c) for c in value))
+        )
+        if channels.shape in {(3,), (4,)} and (abs(channels.numpy()) > 1).any():
+            return channels / 255
+        return channels
     if isinstance(value, (list, tuple)):
         channels = tuple(value)
         if len(channels) in {3, 4} and any(abs(channel) > 1 for channel in channels):
@@ -65,24 +83,6 @@ def render_rgb_shader(
         uniforms=shader_uniforms,
         image_bindings=image_bindings,
     )
-    return ColorTexture(tex=tex, context=ctx, mode=ColorSpaceMode.RGB)
-
-
-def rgba_array(texture):
-    import numpy as np
-
-    width, height = texture.tex.size
-    return np.frombuffer(texture.tex.read(), dtype=np.uint8).reshape((height, width, 4))
-
-
-def rgb_texture_from_array(ctx, pixels):
-    import numpy as np
-
-    from sdf_ui.core.color import ColorSpaceMode, ColorTexture
-
-    tex = ctx.rgba8()
-    data = np.clip(np.rint(pixels), 0, 255).astype(np.uint8)
-    tex.write(data.tobytes())
     return ColorTexture(tex=tex, context=ctx, mode=ColorSpaceMode.RGB)
 
 

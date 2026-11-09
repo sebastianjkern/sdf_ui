@@ -1,14 +1,19 @@
 __docformat__ = "google"
 
+from numbers import Real
+
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.core.plugins.common import shader
 
 
 def _uniforms(params):
+    radius = params["corner_radius"]
+    if isinstance(radius, Real):
+        radius = (radius,) * 4
     return {
         "offset": params["center"],
         "size": params["size"],
-        "corner_radius": params["corner_radius"],
+        "corner_radius": radius,
         "angle": params["angle"],
     }
 

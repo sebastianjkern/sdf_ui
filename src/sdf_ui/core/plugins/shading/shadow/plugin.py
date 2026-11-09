@@ -1,6 +1,7 @@
 __docformat__ = "google"
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
+from sdf_ui.core.plugins.common import lower_composite
 
 
 def render_shadow(renderer, inputs, params):
@@ -27,6 +28,7 @@ def register_plugins(registry):
             params=("distance", "inflate", "transparency"),
             defaults={"distance": 10, "inflate": 0, "transparency": 0.75},
             render_func=render_shadow,
+            lowering_func=lower_composite,
             method_of=(TextureKind.SDF,),
         )
     )

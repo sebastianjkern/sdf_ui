@@ -84,4 +84,3 @@ def register_plugins(registry):
             method_of=(TextureKind.SDF,),
         )
     )
-

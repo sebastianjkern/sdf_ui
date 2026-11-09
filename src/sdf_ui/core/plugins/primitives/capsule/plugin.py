@@ -18,4 +18,3 @@ def register_plugins(registry):
                 public=True,
             )
         )
-

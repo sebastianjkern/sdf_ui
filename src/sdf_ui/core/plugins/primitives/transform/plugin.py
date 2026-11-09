@@ -3,7 +3,7 @@ __docformat__ = "google"
 from math import isfinite
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
-from sdf_ui.core.plugins.common import shader
+from sdf_ui.core.plugins.common import lower_composite, shader
 
 
 def _render_transform(renderer, source, uniforms):
@@ -91,6 +91,7 @@ def register_plugins(registry):
             params=("offset",),
             shader=descriptor,
             render_func=_render_translate,
+            lowering_func=lower_composite,
             public=True,
             method_of=(TextureKind.SDF,),
         )
@@ -105,6 +106,7 @@ def register_plugins(registry):
             defaults={"center": (0.0, 0.0)},
             shader=descriptor,
             render_func=_render_scale,
+            lowering_func=lower_composite,
             public=True,
             method_of=(TextureKind.SDF,),
         )
@@ -119,6 +121,7 @@ def register_plugins(registry):
             defaults={"center": (0.0, 0.0)},
             shader=descriptor,
             render_func=_render_rotate,
+            lowering_func=lower_composite,
             public=True,
             method_of=(TextureKind.SDF,),
         )
@@ -133,6 +136,7 @@ def register_plugins(registry):
             defaults={"center": (0.0, 0.0)},
             shader=descriptor,
             render_func=_render_skew,
+            lowering_func=lower_composite,
             public=True,
             method_of=(TextureKind.SDF,),
         )

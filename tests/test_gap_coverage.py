@@ -154,7 +154,7 @@ def _fake_context(size=(4, 4)):
     ctx = context_mod.Context.__new__(context_mod.Context)
     ctx.size = size
     ctx._closed = False
-    ctx.local_size = (1, 1, 1)
+    ctx.dispatch_groups = (1, 1, 1)
     return ctx
 
 
@@ -211,18 +211,8 @@ def test_context_get_shader_close_and_init_helpers(monkeypatch):
     context_mod.Context.__exit__(ctx, None, None, None)
     context_mod.Context.close(ctx)
 
-    created = []
-
-    class FakeContextFactory:
-        def __init__(self, size):
-            created.append(size)
-
-    monkeypatch.setattr(context_mod, "Context", FakeContextFactory)
-    context_mod.init_sdf_ui((16, 9))
-
     assert library_calls == ["demo"]
     assert release_calls == ["release"]
-    assert created == [(16, 9)]
 
 
 def test_context_texture_allocators_increment_registry(monkeypatch):
@@ -237,7 +227,7 @@ def test_context_texture_allocators_increment_registry(monkeypatch):
         def texture(self, size, components, data=None, dtype=None):
             return FakeTex(size, components, dtype=dtype)
 
-    monkeypatch.setattr(context_mod, "tex_registry", texture_utils_mod.Counter(0))
+    monkeypatch.setattr(texture_utils_mod, "tex_registry", texture_utils_mod.Counter(0))
     monkeypatch.setattr(context_mod, "mgl", SimpleNamespace(LINEAR="linear"))
 
     ctx = _fake_context((8, 8))
@@ -250,7 +240,7 @@ def test_context_texture_allocators_increment_registry(monkeypatch):
     assert rgba8.size == (8, 8)
     assert r32f.filter == ("linear", "linear")
     assert rgba8.filter == ("linear", "linear")
-    assert int(context_mod.tex_registry) == 2
+    assert int(texture_utils_mod.tex_registry) == 2
 
 
 def test_shader_library_caches_compilation_and_reports_missing_files(tmp_path, monkeypatch):
@@ -337,8 +327,10 @@ def test_texture_counter_and_display_helpers(monkeypatch, capsys):
     assert int(counter) == 4
 
     monkeypatch.setattr(texture_utils_mod, "tex_registry", counter)
-    texture_utils_mod.decrease_tex_registry()
-    assert int(texture_utils_mod.tex_registry) == 3
+    resource = _FakeTexture(size=(2, 2), components=4)
+    texture_utils_mod.register_texture(resource)
+    texture_utils_mod.decrease_tex_registry(resource)
+    assert int(texture_utils_mod.tex_registry) == 4
 
     calls = []
 

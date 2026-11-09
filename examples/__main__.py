@@ -95,14 +95,24 @@ def _stats_hooks(enabled):
     original_show = TextureNode.show
     original_save = TextureNode.save
 
-    def show_with_stats(self, ctx=None, params=None, cache=None, conversion=True, size=None):
+    def show_with_stats(
+        self, ctx=None, params=None, cache=None, conversion=True, size=None
+    ):
         result = original_show(
             self, ctx=ctx, params=params, cache=cache, conversion=conversion, size=size
         )
         _print_stats(ctx or self.context)
         return result
 
-    def save_with_stats(self, name="./image.png", ctx=None, params=None, cache=None, conversion=True, size=None):
+    def save_with_stats(
+        self,
+        name="./image.png",
+        ctx=None,
+        params=None,
+        cache=None,
+        conversion=True,
+        size=None,
+    ):
         result = original_save(
             self,
             name=name,

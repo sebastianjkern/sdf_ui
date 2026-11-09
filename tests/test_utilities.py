@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 from PIL import Image
@@ -48,8 +50,18 @@ def test_hex_col_supports_short_and_long_alpha_forms():
     assert hex_col("#000000", alpha=0) == (0.0, 0.0, 0.0, 0.0)
 
 
+def test_default_font_renders_glyph_and_text():
+    from sdf_ui.fonts import default_font_path
+
+    assert Path(default_font_path()).is_file()
+    for scene in (glyph("i", 0.65, 25, 25), text("Hi", size=32)):
+        with Canvas((128, 128)) as ctx:
+            texture = scene.fill("#ffffff", "#000000").render(ctx)
+            assert texture.tex.size == (128, 128)
+
+
 def test_glyph_renders_using_the_bundled_font():
-    font_path = PROJECT_ROOT / "fonts" / "georgia_regular.ttf"
+    font_path = PROJECT_ROOT / "src" / "sdf_ui" / "assets" / "Roboto-Regular.ttf"
     scene = glyph("i", 0.65, 25, 25, path=str(font_path))
 
     with Canvas((128, 128)) as ctx:
@@ -60,7 +72,7 @@ def test_glyph_renders_using_the_bundled_font():
 
 
 def test_glyph_generates_a_filled_signed_field_with_counters():
-    font_path = PROJECT_ROOT / "fonts" / "georgia_regular.ttf"
+    font_path = PROJECT_ROOT / "src" / "sdf_ui" / "assets" / "Roboto-Regular.ttf"
     scene = glyph("o", 0.08, 20, 15, path=str(font_path))
 
     with Canvas((128, 128)) as ctx:
@@ -72,14 +84,12 @@ def test_glyph_generates_a_filled_signed_field_with_counters():
     assert texture.kind == "sdf"
     assert distances[55, 60] > 0
     assert distances[55, 30] < 0
-    assert distances[55, 90] < 0
+    assert distances[55, 96] < 0
 
 
 def test_glyph_fill_preserves_transparent_hex_background():
-    font_path = PROJECT_ROOT / "fonts" / "georgia_regular.ttf"
-    scene = glyph("o", 0.08, 20, 15, path=str(font_path)).fill(
-        "#e9c46a", "#00000000"
-    )
+    font_path = PROJECT_ROOT / "src" / "sdf_ui" / "assets" / "Roboto-Regular.ttf"
+    scene = glyph("o", 0.08, 20, 15, path=str(font_path)).fill("#e9c46a", "#00000000")
 
     with Canvas((128, 128)) as ctx:
         texture = scene.to_rgb().render(ctx)
@@ -92,7 +102,7 @@ def test_glyph_fill_preserves_transparent_hex_background():
 
 
 def test_glyph_fill_normalizes_255_tuple_colors():
-    font_path = PROJECT_ROOT / "fonts" / "georgia_regular.ttf"
+    font_path = PROJECT_ROOT / "src" / "sdf_ui" / "assets" / "Roboto-Regular.ttf"
     scene = glyph("o", 0.08, 20, 15, path=str(font_path)).fill(
         (233, 196, 106, 255), (0, 0, 0, 0)
     )
@@ -111,7 +121,7 @@ def test_glyph_fill_normalizes_255_tuple_colors():
 
 
 def test_text_renders_multiple_glyphs_from_cached_sdf_patches():
-    font_path = PROJECT_ROOT / "fonts" / "georgia_regular.ttf"
+    font_path = PROJECT_ROOT / "src" / "sdf_ui" / "assets" / "Roboto-Regular.ttf"
     _cached_glyph_sdf.cache_clear()
     scene = text(
         "ii",
@@ -137,7 +147,7 @@ def test_text_renders_multiple_glyphs_from_cached_sdf_patches():
 
 
 def test_text_cache_uses_effective_render_size_buckets():
-    font_path = PROJECT_ROOT / "fonts" / "georgia_regular.ttf"
+    font_path = PROJECT_ROOT / "src" / "sdf_ui" / "assets" / "Roboto-Regular.ttf"
     _cached_glyph_sdf.cache_clear()
 
     small = text(
@@ -185,7 +195,7 @@ def test_text_sdf_downsampling_preserves_thin_negative_features():
 
 
 def test_text_newlines_layout_subsequent_lines_below_the_first_line():
-    font_path = PROJECT_ROOT / "fonts" / "georgia_regular.ttf"
+    font_path = PROJECT_ROOT / "src" / "sdf_ui" / "assets" / "Roboto-Regular.ttf"
     scene = text(
         "I\nWWWW",
         size=46,

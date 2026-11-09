@@ -17,7 +17,7 @@ def text_rendering_example():
             size=96,
             ox=72,
             oy=124,
-            path="fonts/georgia_regular.ttf",
+            path=None,
             cache_size=160,
         ).cache("title")
         subtitle = text(
@@ -25,7 +25,7 @@ def text_rendering_example():
             size=42,
             ox=76,
             oy=392,
-            path="fonts/georgia_regular.ttf",
+            path=None,
             cache_size=128,
             line_height=1.25,
         ).cache("subtitle")

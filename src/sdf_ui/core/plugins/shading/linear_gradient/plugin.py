@@ -1,6 +1,7 @@
 __docformat__ = "google"
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
+from sdf_ui.core.plugins.common import lower_composite
 
 
 def render_linear_gradient(renderer, inputs, params):
@@ -36,6 +37,7 @@ def register_plugins(registry):
             TextureKind.COLOR,
             params=("a", "b", "color1", "color2"),
             render_func=render_linear_gradient,
+            lowering_func=lower_composite,
             public=True,
         )
     )

@@ -1,20 +1,13 @@
 __docformat__ = "google"
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
-from sdf_ui.core.plugins.common import (
-    ensure_rgb,
-    rgb_texture_from_array,
-    rgba_array,
-    shader,
-)
+from sdf_ui.core.plugins.common import lower_composite, render_rgb_shader, shader
 
 
 def render_multiply(renderer, inputs, params):
-    import numpy as np
-
-    first = rgba_array(ensure_rgb(renderer, inputs[0])).astype(np.float32) / 255.0
-    second = rgba_array(ensure_rgb(renderer, inputs[1])).astype(np.float32) / 255.0
-    return rgb_texture_from_array(renderer.ctx, first * second * 255.0)
+    return render_rgb_shader(
+        renderer, "multiply", inputs, image_uniforms=("mask1", "mask2")
+    )
 
 
 def register_plugins(registry):
@@ -28,6 +21,7 @@ def register_plugins(registry):
             input_uniforms=("mask1", "mask2"),
             mode="RGB",
             render_func=render_multiply,
+            lowering_func=lower_composite,
             method_of=(TextureKind.COLOR,),
         )
     )

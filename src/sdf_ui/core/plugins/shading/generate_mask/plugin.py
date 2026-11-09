@@ -1,6 +1,7 @@
 __docformat__ = "google"
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
+from sdf_ui.core.plugins.common import lower_composite
 
 
 def render_generate_mask(renderer, inputs, params):
@@ -27,6 +28,7 @@ def register_plugins(registry):
                 "color1": (1.0, 1.0, 1.0, 1.0),
             },
             render_func=render_generate_mask,
+            lowering_func=lower_composite,
             method_of=(TextureKind.SDF,),
         )
     )

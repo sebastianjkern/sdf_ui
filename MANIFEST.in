@@ -1,3 +1,4 @@
 graft src
+graft build_tools
 global-exclude __pycache__
 global-exclude *.py[cod]

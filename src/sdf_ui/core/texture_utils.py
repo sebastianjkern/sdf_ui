@@ -2,8 +2,10 @@
 
 __docformat__ = "google"
 
+import weakref
+
 import moderngl as mgl
-from PIL import Image
+from PIL import Image, ImageOps
 
 from ..log import logger
 
@@ -14,12 +16,9 @@ class Counter:
         self.name = name
         self.max = 0
 
-    def __del__(self):
-        logger().debug(f"Maximum of {self.name} is {self.max}")
-
     def __add__(self, other):
         if not isinstance(other, int):
-            logger().critical("TypeError")
+            raise TypeError("Texture counts require an integer")
 
         self.value += other
         self.max = max(self.max, self.value)
@@ -28,7 +27,7 @@ class Counter:
 
     def __sub__(self, other):
         if not isinstance(other, int):
-            logger().critical("TypeError")
+            raise TypeError("Texture counts require an integer")
 
         self.value -= other
         logger().debug(f"Value of {self.name} is {self.value}")
@@ -42,12 +41,32 @@ class Counter:
 
 
 tex_registry = Counter(0)
+_tracked_textures: dict[int, weakref.finalize] = {}
 
 
-def decrease_tex_registry():
-    logger().debug("Deleted texture...")
+def register_texture(texture):
+    """Track a Canvas allocation without taking ownership of the texture."""
     global tex_registry
-    tex_registry -= 1
+    key = id(texture)
+    if key in _tracked_textures:
+        raise ValueError("Texture is already registered")
+    counter = tex_registry
+
+    def finalize():
+        _tracked_textures.pop(key, None)
+        counter.__sub__(1)
+
+    finalizer = weakref.finalize(texture, finalize)
+    _tracked_textures[key] = finalizer
+    tex_registry += 1
+
+
+def decrease_tex_registry(texture):
+    """Release the diagnostic count only for a tracked Canvas allocation."""
+    logger().debug("Deleted texture...")
+    finalizer = _tracked_textures.get(id(texture))
+    if finalizer is not None:
+        finalizer()
 
 
 def get_tex_registry():
@@ -69,5 +88,5 @@ def show_texture(tex: mgl.Texture):
             )
 
     image = Image.frombytes(mode, tex.size, tex.read(), "raw")
-    image = image.transpose(Image.FLIP_TOP_BOTTOM)
+    image = ImageOps.flip(image)
     image.show()

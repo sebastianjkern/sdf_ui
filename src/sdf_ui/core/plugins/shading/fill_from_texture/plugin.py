@@ -1,7 +1,7 @@
 __docformat__ = "google"
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
-from sdf_ui.core.plugins.common import color, ensure_rgb, shader
+from sdf_ui.core.plugins.common import color, ensure_rgb, lower_composite, shader
 
 
 def render_fill_from_texture(renderer, inputs, params):
@@ -47,6 +47,7 @@ def register_plugins(registry):
             input_uniforms=("sdf", "origTex"),
             mode="RGB",
             render_func=render_fill_from_texture,
+            lowering_func=lower_composite,
             method_of=(TextureKind.SDF,),
         )
     )

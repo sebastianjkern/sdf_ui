@@ -4,6 +4,7 @@ from pathlib import Path
 
 from ..log import logger
 from .plugins.registry import registry
+from .shader_operation import ShaderOperation
 
 
 class ShaderLibrary:
@@ -34,10 +35,19 @@ class ShaderLibrary:
                     f"Shader '{shader_name}' is registered at '{path}', but no file exists there."
                 )
 
-            code = path.read_text(encoding="utf-8")
-            if self._sdf_image_format != "r32f":
-                code = code.replace("layout (r32f", f"layout ({self._sdf_image_format}")
+            operation = getattr(descriptor, "operation", None)
+            if operation is None:
+                operation = ShaderOperation(descriptor.name, descriptor.path)
+            code = operation.forward_source(sdf_format=self._sdf_image_format, base_path=self._base_path)
             self._cache[shader_name] = self._mgl_ctx.compute_shader(code)
             logger().debug(f"Compiled and cached {shader_name} shader...")
 
         return self._cache[shader_name]
+
+    def differentiation(self, shader_name: str):
+        """Return the named pass's executable derivative contract without GL compilation."""
+        descriptors = {descriptor.name: descriptor for descriptor in registry.shader_files()}
+        try:
+            return descriptors[shader_name].differentiation
+        except KeyError as error:
+            raise KeyError(f"Unknown shader '{shader_name}'") from error

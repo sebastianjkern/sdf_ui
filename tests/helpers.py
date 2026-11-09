@@ -4,7 +4,6 @@ import numpy as np
 
 from sdf_ui import Canvas
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = PROJECT_ROOT / "src"
 

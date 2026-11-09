@@ -12,7 +12,7 @@ PLUGIN_PACKAGES = (
 )
 
 
-def load_plugins(registry, packages=PLUGIN_PACKAGES):
+def load_plugins(registry, packages=PLUGIN_PACKAGES, *, include_entry_points=True):
     loaded_modules = set()
     for package_name in packages:
         package = import_module(package_name)
@@ -35,12 +35,10 @@ def load_plugins(registry, packages=PLUGIN_PACKAGES):
             if register is not None:
                 register(registry)
 
-    discovered = entry_points()
-    plugin_entries = (
-        discovered.select(group="sdf_ui.core.plugins")
-        if hasattr(discovered, "select")
-        else discovered.get("sdf_ui.core.plugins", ())
-    )
+    if not include_entry_points:
+        return
+
+    plugin_entries = entry_points().select(group="sdf_ui.core.plugins")
     for entry_point in plugin_entries:
         plugin = entry_point.load()
         register = getattr(

@@ -1,7 +1,7 @@
 __docformat__ = "google"
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
-from sdf_ui.core.plugins.common import shader
+from sdf_ui.core.plugins.common import lower_composite, shader
 
 
 def render_masked_union(renderer, inputs, params):
@@ -41,6 +41,7 @@ def register_plugins(registry):
                 "masked_union", "plugins/primitives/masked_union/shader.glsl"
             ),
             render_func=render_masked_union,
+            lowering_func=lower_composite,
             method_of=(TextureKind.SDF,),
         )
     )

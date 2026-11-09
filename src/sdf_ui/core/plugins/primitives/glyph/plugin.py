@@ -1,3 +1,5 @@
+from sdf_ui.fonts import default_font_path
+
 __docformat__ = "google"
 
 from functools import lru_cache
@@ -14,7 +16,7 @@ def render_glyph(renderer, _inputs, params):
     ctx = renderer.ctx
     width, height = ctx.size
     contours = _flatten_glyph(
-        params["path"],
+        params["path"] or default_font_path(),
         params["char"],
         float(params["scale"]),
         float(params["ox"]),
@@ -203,7 +205,7 @@ def register_plugins(registry):
             PluginFamily.PRIMITIVE,
             TextureKind.SDF,
             params=("char", "scale", "ox", "oy", "path", "samples"),
-            defaults={"path": "fonts/SFUIDisplay-Bold.ttf", "samples": 16},
+            defaults={"path": None, "samples": 16},
             render_func=render_glyph,
         )
     )

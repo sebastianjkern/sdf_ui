@@ -33,7 +33,7 @@ def image_to_sdf(path: str, resize: bool = True, preview: bool = False):
     """
 
     # Read image
-    image = PIL.Image.open(path)
+    image: PIL.Image.Image = PIL.Image.open(path)
     if resize:
         image = image.resize((128, 128))
     pix = numpy.array(image)

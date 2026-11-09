@@ -21,6 +21,35 @@ class PluginFamily:
 class ShaderFile:
     name: str
     path: str
+    derivative_contract: object = None
+    gpu_derivative: Optional[str] = None
+    program: object = None
+
+    @property
+    def operation(self):
+        from ..shader_operation import ShaderOperation
+
+        return ShaderOperation(
+            self.name,
+            self.path,
+            self.differentiation,
+            self.gpu_derivative,
+            self.program,
+        )
+
+    @property
+    def differentiation(self):
+        """Executable unquantized shader derivative contract, when registered."""
+        from ..differentiation import shader_differentiation
+
+        return self.derivative_contract or shader_differentiation(self.name, self.path)
+
+    def backward(self, size, inputs, params, output_gradients):
+        """Evaluate the shader's reference VJP at named texture/uniform values."""
+        contract = self.differentiation
+        if contract is None:
+            raise ValueError(f"Shader '{self.name}' has no differentiation contract")
+        return contract.vjp(size, inputs, params, output_gradients)
 
 
 @dataclass(frozen=True)
@@ -39,6 +68,11 @@ class Plugin:
     public: bool = False
     method_of: tuple = ()
     render_func: Optional[Callable] = None
+    # Optional floating-point implementation. Building it from learning.Tensor
+    # operations records its backward pass without changing the GPU renderer.
+    differentiable_func: Optional[Callable] = None
+    # Return one Port or a tuple of Ports using the shared graph builder.
+    lowering_func: Optional[Callable] = None
 
     def bind(self, args, kwargs):
         if len(args) < len(self.input_kinds):

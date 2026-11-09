@@ -12,7 +12,7 @@ def font_example():
         inflation = 7.5
 
         glyph_shape = glyph(
-            "ä", scale, offset_x, offset_y, path="fonts/georgia_regular.ttf"
+            "ä", scale, offset_x, offset_y, path=None
         ).cache("glyph")
 
         cache = {}

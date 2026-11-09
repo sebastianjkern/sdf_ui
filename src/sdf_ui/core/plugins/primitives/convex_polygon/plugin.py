@@ -3,6 +3,7 @@ __docformat__ = "google"
 from functools import reduce
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
+from sdf_ui.core.plugins.common import lower_composite
 
 
 def _polygon_area(points):
@@ -46,8 +47,8 @@ def register_plugins(registry):
             TextureKind.SDF,
             params=("points",),
             render_func=render_convex_polygon,
+            lowering_func=lower_composite,
             public=True,
             method_of=(TextureKind.SDF,),
         )
     )
-

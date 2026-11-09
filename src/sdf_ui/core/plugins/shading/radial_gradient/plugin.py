@@ -1,6 +1,7 @@
 __docformat__ = "google"
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
+from sdf_ui.core.plugins.common import lower_composite
 
 
 def render_radial_gradient(renderer, inputs, params):
@@ -29,6 +30,7 @@ def register_plugins(registry):
             params=("a", "color1", "color2", "inner", "outer"),
             defaults={"inner": 0, "outer": 100},
             render_func=render_radial_gradient,
+            lowering_func=lower_composite,
             public=True,
         )
     )

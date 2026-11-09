@@ -3,6 +3,7 @@ __docformat__ = "google"
 from math import cos, pi, sin
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
+from sdf_ui.core.plugins.common import lower_composite
 
 
 def render_ngon(renderer, inputs, params):
@@ -35,8 +36,8 @@ def register_plugins(registry):
             params=("center", "radius", "sides", "rotation"),
             defaults={"sides": 6, "rotation": 0.0},
             render_func=render_ngon,
+            lowering_func=lower_composite,
             public=True,
             method_of=(TextureKind.SDF,),
         )
     )
-

@@ -1,11 +1,13 @@
 from pathlib import Path
 
 from sdf_ui import Canvas, color, sdf
+from sdf_ui.fonts import default_font_path
 from sdf_ui.text import text
 
 WIDTH = 1984
 HEIGHT = 794
-FONT = "fonts/roboto/Roboto-Regular (3).ttf"
+
+FONT = default_font_path()
 
 TRANSPARENT = "#00000000"
 FIELD_COLOR = "#10253f"
@@ -20,14 +22,16 @@ TITLE_ACCENT_COLOR = "#d48b2f"
 TITLE_TEXT_COLOR = "#f6f7f9"
 SUBTITLE_TEXT_COLOR = "#dde4ec"
 
+
 def _over(base, *layers):
     for layer in layers:
         base = base.alpha_overlay(layer)
     return base
 
 
-def github_banner_example(output="banner.png"):
+def github_banner_example(output="out/banner.png"):
     output = Path(output)
+    output.parent.mkdir(parents=True, exist_ok=True)
     cache = {}
 
     with Canvas((WIDTH, HEIGHT)) as ctx:
@@ -150,7 +154,7 @@ def github_banner_example(output="banner.png"):
         title = _over(
             color.clear(TRANSPARENT),
             title_sdf.fill(TITLE_ACCENT_COLOR, TRANSPARENT, inflate=1.2),
-            ui_sdf.fill(TITLE_TEXT_COLOR, TRANSPARENT, inflate=1.2)
+            ui_sdf.fill(TITLE_TEXT_COLOR, TRANSPARENT, inflate=1.2),
         ).cache("title")
         subtitle = subtitle_sdf.fill(
             SUBTITLE_TEXT_COLOR, TRANSPARENT, inflate=0.6
@@ -162,18 +166,14 @@ def github_banner_example(output="banner.png"):
             cool_halo,
             grid,
             spark_0,
-
             spark_1_shadow,
             spark_1_fill,
-            
             spark_2_shadow,
             spark_2_fill,
             title,
             subtitle,
-            color.film_grain().transparency(0.025)
+            color.film_grain().transparency(0.025),
         ).to_rgb()
-
-        
 
         with ctx.session(cache=cache) as renderer:
             rendered = renderer.render(scene)

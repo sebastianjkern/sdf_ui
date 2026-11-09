@@ -1,6 +1,7 @@
 __docformat__ = "google"
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
+from sdf_ui.core.plugins.common import lower_composite
 
 
 def render_output(renderer, inputs, params):
@@ -16,5 +17,6 @@ def register_plugins(registry):
             (TextureKind.MULTI_OUTPUT,),
             params=("index", "kind"),
             render_func=render_output,
+            lowering_func=lower_composite,
         )
     )

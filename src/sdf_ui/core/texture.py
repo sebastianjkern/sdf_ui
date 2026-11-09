@@ -10,9 +10,9 @@ from typing import Dict, Optional
 from PIL import Image
 
 from ..util import hex_col
-from .context import Context, decrease_tex_registry
+from .context import Context
 from .plugins.common import build
-from .texture_utils import show_texture
+from .texture_utils import decrease_tex_registry, show_texture
 
 
 def freeze(value):
@@ -158,9 +158,10 @@ class Renderer:
     def _resolve(self, value):
         if isinstance(value, TextureNode) or isinstance(value, MultiOutputResult):
             return self._eval(value)
+        from ..learning.autodiff import Tensor
         from .expressions import Expr, evaluate_expr
 
-        if isinstance(value, Expr) or isinstance(value, str):
+        if isinstance(value, (Expr, Tensor, str)):
             value = evaluate_expr(value, self.ctx, self.params)
         if isinstance(value, tuple):
             return tuple(self._resolve(item) for item in value)
@@ -247,7 +248,7 @@ class TextureNode(ABC):
             except Exception:
                 pass
             else:
-                decrease_tex_registry()
+                decrease_tex_registry(self.tex)
 
     def __getattr__(self, name):
         from sdf_ui.core.plugins.registry import registry
@@ -327,10 +328,6 @@ class TextureNode(ABC):
 
     def uncached(self):
         return self._clone(label=self.label, should_cache=False)
-
-    def _check_type(self, obj):
-        if not isinstance(obj, TextureNode) or obj.kind != self.kind:
-            raise TypeError(f"{obj} should be a {self.kind} texture")
 
     def _render_for_io(self, ctx, params, cache, size):
         if ctx is None and size is not None:

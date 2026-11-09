@@ -1,6 +1,7 @@
 __docformat__ = "google"
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
+from sdf_ui.core.plugins.common import lower_composite
 
 
 def render_parallelogram(renderer, inputs, params):
@@ -29,8 +30,8 @@ def register_plugins(registry):
             params=("center", "size", "skew"),
             defaults={"skew": 0.0},
             render_func=render_parallelogram,
+            lowering_func=lower_composite,
             public=True,
             method_of=(TextureKind.SDF,),
         )
     )
-

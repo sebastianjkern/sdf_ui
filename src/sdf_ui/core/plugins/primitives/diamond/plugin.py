@@ -1,6 +1,7 @@
 __docformat__ = "google"
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
+from sdf_ui.core.plugins.common import lower_composite
 
 
 def render_diamond(renderer, inputs, params):
@@ -26,8 +27,8 @@ def register_plugins(registry):
                 TextureKind.SDF,
                 params=("center", "radii"),
                 render_func=render_diamond,
+                lowering_func=lower_composite,
                 public=True,
                 method_of=(TextureKind.SDF,),
             )
         )
-

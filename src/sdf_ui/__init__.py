@@ -1,9 +1,10 @@
-from . import core
+from . import core, learning
 from .core import ColorTexture, Context, DispatchConfig, SDFTexture
 from .core.api import ColorNamespace, SDFNamespace
 from .core.expressions import (
     Expr,
     cos,
+    input_value,
     param,
     percent,
     percent_of_min,
@@ -28,6 +29,8 @@ __all__ = [
     "cos",
     "Expr",
     "logger",
+    "learning",
+    "input_value",
     "param",
     "percent",
     "percent_of_min",

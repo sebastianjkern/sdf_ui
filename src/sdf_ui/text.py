@@ -3,7 +3,7 @@ __docformat__ = "google"
 from .core.plugins.common import build
 
 
-def glyph(char, scale, ox, oy, path="fonts/SFUIDisplay-Bold.ttf", samples=16):
+def glyph(char, scale, ox, oy, path=None, samples=16):
     """
     Generate the signed distance field (SDF) for a glyph.
 
@@ -35,7 +35,7 @@ def text(
     size=64,
     ox=0,
     oy=0,
-    path="fonts/georgia_regular.ttf",
+    path=None,
     samples=16,
     cache_size=128,
     line_height=1.2,
