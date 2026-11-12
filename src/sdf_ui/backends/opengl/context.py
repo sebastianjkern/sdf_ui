@@ -12,9 +12,9 @@ import cv2
 import moderngl as mgl
 import numpy as np
 
-from ..log import logger
+from ...log import logger
 from . import texture_utils
-from ..backends.opengl.shaders import ShaderLibrary
+from .shaders import ShaderLibrary
 
 
 def _triple(value, name):
@@ -234,18 +234,18 @@ class Context:
             release()
 
     def render(self, texture, params=None, cache=None):
-        from .texture import Renderer
+        from ...core.texture import Renderer
 
         return Renderer(self, params=params, cache=cache).render(texture)
 
     def session(self, params=None, cache=None):
-        from .texture import Renderer
+        from ...core.texture import Renderer
 
         return Renderer(self, params=params, cache=cache)
 
     def render_plan(self, plan, params=None):
         """Render every named root of a lowered graph with display formats."""
-        from ..backends.plan import execute_display
+        from ..plan import execute_display
 
         return execute_display(plan, self, params=params)
 
@@ -256,25 +256,25 @@ class Context:
         rendering remains available through :meth:`render` with the same scene
         and learned parameters.
         """
-        from ..learning.render import DifferentiableRenderer
+        from ...learning.render import DifferentiableRenderer
 
         return DifferentiableRenderer(self.size, params=params).render(texture)
 
     def compile(self, outputs, params=None, *, size=None, inputs=None):
         """Compile named roots or an existing plan for display and training."""
-        from ..graph.runtime import RenderGraph
+        from ...graph.runtime import RenderGraph
 
         return RenderGraph(self, outputs, params=params, size=size, inputs=inputs)
 
     def create_graph_backend(self):
         """Create this Canvas's render-graph backend."""
-        from ..backends.opengl import GPUShaderBackend
+        from .backend import GPUShaderBackend
 
         return GPUShaderBackend(self)
 
     def training(self, outputs, params=None, *, size=None, inputs=None):
         """Create a resource-owning high-level render-graph training session."""
-        from ..graph.session import TrainingSession
+        from ...graph.session import TrainingSession
 
         return TrainingSession(self, outputs, params, size=size, inputs=inputs)
 
@@ -294,7 +294,7 @@ class Context:
 
     def inspect_graph(self, outputs, params=None):
         """Inspect graph lowering without allocating GPU resources."""
-        from ..graph.inspection import inspect_graph
+        from ...graph.inspection import inspect_graph
 
         return inspect_graph(outputs, params=params)
 

@@ -2,7 +2,7 @@
 
 __docformat__ = "google"
 
-from ..log import logger
+from ...log import logger
 from .context import Context
 
 

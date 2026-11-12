@@ -158,7 +158,7 @@ class Plugin:
             raise ValueError(f"Plugin '{self.name}' has no shader or render function")
 
         from sdf_ui.core.color import ColorSpaceMode, ColorTexture
-        from sdf_ui.core.operations import run_shader
+        from sdf_ui.backends.opengl.operations import run_shader
         from sdf_ui.core.sdf import SDFTexture
 
         ctx = renderer.ctx

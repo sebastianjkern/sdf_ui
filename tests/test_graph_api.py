@@ -37,6 +37,9 @@ from sdf_ui.graph import Port
         "sdf_ui.core.shader_expression",
         "sdf_ui.core.shader_operation",
         "sdf_ui.core.shaders",
+        "sdf_ui.core.context",
+        "sdf_ui.core.operations",
+        "sdf_ui.core.texture_utils",
         "sdf_ui.plugins",
         "sdf_ui.shaders",
         "sdf_ui.extensions",
@@ -47,7 +50,7 @@ def test_removed_compatibility_modules_are_not_importable(module):
 
 
 def test_graph_api_is_exposed_only_under_current_namespaces():
-    import sdf_ui.core.context as context
+    import sdf_ui.backends.opengl.context as context
     import sdf_ui.learning as learning
 
     assert not hasattr(learning, "GraphTrainer")

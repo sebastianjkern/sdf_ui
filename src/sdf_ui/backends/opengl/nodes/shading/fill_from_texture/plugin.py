@@ -7,7 +7,7 @@ from .implementation import CONTRACT, INTERFACE, PROGRAM
 
 def render_fill_from_texture(renderer, inputs, params):
     from sdf_ui.core.color import ColorSpaceMode, ColorTexture
-    from sdf_ui.core.operations import run_shader
+    from sdf_ui.backends.opengl.operations import run_shader
 
     ctx = renderer.ctx
     sdf_texture = inputs[0]

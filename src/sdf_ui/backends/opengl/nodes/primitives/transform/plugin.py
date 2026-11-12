@@ -8,7 +8,7 @@ from .implementation import CONTRACT, INTERFACE, PROGRAM
 
 
 def _render_transform(renderer, source, uniforms):
-    from sdf_ui.core.operations import run_shader
+    from sdf_ui.backends.opengl.operations import run_shader
     from sdf_ui.core.sdf import SDFTexture
 
     ctx = renderer.ctx

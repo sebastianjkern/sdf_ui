@@ -10,9 +10,9 @@ from typing import Dict, Optional
 from PIL import Image
 
 from ..util import hex_col
-from .context import Context
+from ..backends.opengl.context import Context
 from ..backends.opengl.nodes.common import build
-from .texture_utils import decrease_tex_registry, show_texture
+from ..backends.opengl.texture_utils import decrease_tex_registry, show_texture
 
 
 def freeze(value):

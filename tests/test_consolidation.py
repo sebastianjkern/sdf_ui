@@ -5,7 +5,7 @@ import pytest
 
 from sdf_ui import Canvas, input_value, sdf
 from sdf_ui.backends import RenderBackend
-from sdf_ui.core import texture_utils
+from sdf_ui.backends.opengl import texture_utils
 from sdf_ui.backends.opengl.nodes.shader_expression import _primal_only
 from sdf_ui.graph import GraphCase, GraphDatasetTrainer
 from sdf_ui.learning import (

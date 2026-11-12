@@ -3,7 +3,6 @@
 __docformat__ = "google"
 
 from .color import ColorSpaceMode, ColorTexture
-from .context import Context, DispatchConfig
 from .expressions import (
     Expr,
     cos,
@@ -15,13 +14,8 @@ from .expressions import (
     sin,
 )
 from .sdf import SDFTexture
-from .texture_utils import decrease_tex_registry, show_texture
 
 __all__ = [
-    "Context",
-    "DispatchConfig",
-    "decrease_tex_registry",
-    "show_texture",
     "ColorSpaceMode",
     "ColorTexture",
     "Expr",

@@ -1,9 +1,9 @@
 Core Modules
 ============
 
-The :mod:`sdf_ui.core` package contains the render-node model, expression
-resolution, shader execution helpers, and the public texture types that the
-high-level API builds on.
+The :mod:`sdf_ui.core` package contains render nodes, expression resolution,
+and the public texture types used to describe scenes. OpenGL shader execution
+helpers live under :mod:`sdf_ui.backends.opengl`.
 
 Package Overview
 ----------------
@@ -20,7 +20,7 @@ Modules
 Context and rendering
 ~~~~~~~~~~~~~~~~~~~~~~
 
-.. automodule:: sdf_ui.core.context
+.. automodule:: sdf_ui.backends.opengl.context
    :members:
    :undoc-members:
    :show-inheritance:
@@ -71,19 +71,19 @@ Dynamic API namespaces
    :show-inheritance:
    :no-index:
 
-Shader execution helpers
-~~~~~~~~~~~~~~~~~~~~~~~~
+OpenGL shader execution
+~~~~~~~~~~~~~~~~~~~~~~~
 
-.. automodule:: sdf_ui.core.operations
+.. automodule:: sdf_ui.backends.opengl.operations
    :members:
    :undoc-members:
    :show-inheritance:
    :no-index:
 
-Texture utilities
-~~~~~~~~~~~~~~~~~
+OpenGL texture utilities
+~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. automodule:: sdf_ui.core.texture_utils
+.. automodule:: sdf_ui.backends.opengl.texture_utils
    :members:
    :undoc-members:
    :show-inheritance:

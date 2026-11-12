@@ -61,7 +61,7 @@ def render_rgb_shader(
     renderer, shader_name, inputs, *, uniforms=None, image_uniforms=()
 ):
     from sdf_ui.core.color import ColorSpaceMode, ColorTexture
-    from sdf_ui.core.operations import run_shader
+    from sdf_ui.backends.opengl.operations import run_shader
     from sdf_ui.backends.opengl.nodes.registry import registry
 
     ctx = renderer.ctx
@@ -111,7 +111,7 @@ def render_rgb_shader(
 
 
 def blur_pass(ctx, shader_name, dest, src):
-    from sdf_ui.core.operations import run_shader
+    from sdf_ui.backends.opengl.operations import run_shader
     from sdf_ui.backends.opengl.nodes.postprocessing.blur.implementation import shader_parts
 
     interface, _, _ = shader_parts(shader_name)

@@ -8,10 +8,10 @@ from PIL import Image
 
 import sdf_ui.anim as anim_mod
 import sdf_ui.ascii as ascii_mod
-import sdf_ui.core.context as context_mod
-import sdf_ui.core.operations as operations_mod
+import sdf_ui.backends.opengl.context as context_mod
+import sdf_ui.backends.opengl.operations as operations_mod
 import sdf_ui.backends.opengl.shaders as shaders_mod
-import sdf_ui.core.texture_utils as texture_utils_mod
+import sdf_ui.backends.opengl.texture_utils as texture_utils_mod
 from sdf_ui import color, sdf
 from sdf_ui.core.color import ColorSpaceMode
 from sdf_ui.core.texture import Renderer, RenderStats

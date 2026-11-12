@@ -338,8 +338,6 @@ def _render_core_init_stub() -> str:
     return "\n".join(
         [
             "from .color import ColorSpaceMode as ColorSpaceMode, ColorTexture as ColorTexture",
-            "from .context import Context as Context, DispatchConfig as DispatchConfig",
-            "from .texture_utils import decrease_tex_registry as decrease_tex_registry, show_texture as show_texture",
             "from .expressions import Expr as Expr, cos as cos, param as param, percent as percent, percent_of_min as percent_of_min, percent_x as percent_x, percent_y as percent_y, sin as sin",
             "from .sdf import SDFTexture as SDFTexture",
             "",
@@ -353,7 +351,8 @@ def _render_root_init_stub() -> str:
             "from typing import Any",
             "",
             "from . import core as core, learning as learning",
-            "from .core import ColorTexture as ColorTexture, Context as Context, DispatchConfig as DispatchConfig, SDFTexture as SDFTexture",
+            "from .backends.opengl.context import Context as Context, DispatchConfig as DispatchConfig",
+            "from .core import ColorTexture as ColorTexture, SDFTexture as SDFTexture",
             "from .core.api import ColorNamespace, SDFNamespace",
             "from .core.expressions import Expr as Expr, cos as cos, input_value as input_value, param as param, percent as percent, percent_of_min as percent_of_min, percent_x as percent_x, percent_y as percent_y, sin as sin",
             "",

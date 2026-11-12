@@ -12,7 +12,7 @@ def blur_shader(name, path):
 
 def render_blur_9(renderer, inputs, params):
     from sdf_ui.core.color import ColorTexture
-    from sdf_ui.core.texture_utils import decrease_tex_registry
+    from sdf_ui.backends.opengl.texture_utils import decrease_tex_registry
 
     ctx = renderer.ctx
     tex0 = ctx.rgba8()
@@ -32,7 +32,7 @@ def render_blur_9(renderer, inputs, params):
 
 def render_blur_13(renderer, inputs, params):
     from sdf_ui.core.color import ColorTexture
-    from sdf_ui.core.texture_utils import decrease_tex_registry
+    from sdf_ui.backends.opengl.texture_utils import decrease_tex_registry
 
     ctx = renderer.ctx
     tex0 = ctx.rgba8()

@@ -7,7 +7,7 @@ import weakref
 import moderngl as mgl
 from PIL import Image, ImageOps
 
-from ..log import logger
+from ...log import logger
 
 
 class Counter:

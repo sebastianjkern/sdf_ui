@@ -8,7 +8,7 @@ import pytest
 import sdf_ui
 from sdf_ui import Canvas, DispatchConfig, color, core, sdf
 from sdf_ui.core.api import ColorNamespace, SDFNamespace
-from sdf_ui.core.context import Context
+from sdf_ui.backends.opengl.context import Context
 from sdf_ui.core.expressions import (
     cos,
     evaluate_expr,
@@ -48,7 +48,7 @@ class FakeContext:
 
 def test_root_exports_the_new_public_api():
     assert Canvas is Context
-    assert DispatchConfig is core.DispatchConfig
+    assert not hasattr(core, "DispatchConfig")
     assert isinstance(sdf, SDFNamespace)
     assert isinstance(color, ColorNamespace)
     assert hasattr(sdf_ui, "core")

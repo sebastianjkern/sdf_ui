@@ -1,5 +1,6 @@
 from . import core, learning
-from .core import ColorTexture, Context, DispatchConfig, SDFTexture
+from .backends.opengl.context import Context, DispatchConfig
+from .core import ColorTexture, SDFTexture
 from .core.api import ColorNamespace, SDFNamespace
 from .core.expressions import (
     Expr,

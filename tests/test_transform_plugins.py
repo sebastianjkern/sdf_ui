@@ -42,7 +42,7 @@ class TransformPluginTests(unittest.TestCase):
             captured["uniforms"] = dict(uniforms or {})
             captured["image_bindings"] = image_bindings
 
-        with patch("sdf_ui.core.operations.run_shader", fake_run_shader):
+        with patch("sdf_ui.backends.opengl.operations.run_shader", fake_run_shader):
             result = registry.get("translate").render(renderer, [source], {"offset": (12, 0)})
 
         self.assertIs(result.tex, renderer.ctx.r32f())
@@ -59,7 +59,7 @@ class TransformPluginTests(unittest.TestCase):
             captured["shader_name"] = shader_name
             captured["uniforms"] = dict(uniforms or {})
 
-        with patch("sdf_ui.core.operations.run_shader", fake_run_shader):
+        with patch("sdf_ui.backends.opengl.operations.run_shader", fake_run_shader):
             result = registry.get("scale").render(
                 renderer,
                 [source],
@@ -81,7 +81,7 @@ class TransformPluginTests(unittest.TestCase):
             captured["shader_name"] = shader_name
             captured["uniforms"] = dict(uniforms or {})
 
-        with patch("sdf_ui.core.operations.run_shader", fake_run_shader):
+        with patch("sdf_ui.backends.opengl.operations.run_shader", fake_run_shader):
             registry.get("rotate").render(
                 renderer,
                 [source],
@@ -102,7 +102,7 @@ class TransformPluginTests(unittest.TestCase):
             captured["shader_name"] = shader_name
             captured["uniforms"] = dict(uniforms or {})
 
-        with patch("sdf_ui.core.operations.run_shader", fake_run_shader):
+        with patch("sdf_ui.backends.opengl.operations.run_shader", fake_run_shader):
             registry.get("skew").render(
                 renderer,
                 [source],

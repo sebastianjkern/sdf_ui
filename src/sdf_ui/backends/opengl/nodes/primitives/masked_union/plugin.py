@@ -7,7 +7,7 @@ from .implementation import CONTRACT, INTERFACE, PROGRAM
 
 def render_masked_union(renderer, inputs, params):
     from sdf_ui.core.color import ColorSpaceMode, ColorTexture
-    from sdf_ui.core.operations import run_shader
+    from sdf_ui.backends.opengl.operations import run_shader
     from sdf_ui.core.sdf import SDFTexture
 
     ctx = renderer.ctx
