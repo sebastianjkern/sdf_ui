@@ -40,7 +40,7 @@ Issues = "https://github.com/sebastianjkern/sdf_ui/issues"
 where = ["src"]
 
 [tool.setuptools.package-data]
-sdf_ui = ["**/*.pyi", "py.typed", "core/plugins/**/*.glsl", "assets/*.ttf", "assets/*.txt"]
+sdf_ui = ["**/*.pyi", "py.typed", "backends/opengl/nodes/**/*.glsl", "assets/*.ttf", "assets/*.txt"]
 
 [tool.setuptools.exclude-package-data]
 "*" = ["*.pyc", "*.pyo", "__pycache__/*"]

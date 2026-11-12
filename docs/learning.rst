@@ -48,10 +48,10 @@ Declare parameters once and keep the scene structure stable::
             "circle.png", ctx=canvas, params=weights
         )
 
-``Parameter`` is a named trainable tensor. ``ParameterStore`` is a mapping
-accepted by both rendering backends and layout methods. Its ``parameters()``
-method supplies leaves to an optimizer. ``assign(value)`` preserves a
-parameter's shape and advances its version.
+``Parameter`` is a named graph weight. ``ParameterStore`` is a mapping accepted
+by graph rendering and layout methods. Weights are trainable by default; pass
+``trainable=False`` to ``define`` or ``bind`` to keep a value fixed during
+optimization. ``assign(value)`` preserves shape and advances its version.
 
 Parameter-store checkpoints are versioned and contain raw values plus names,
 shapes, and scalar bounds. Loading validates the complete schema before changing
@@ -218,7 +218,7 @@ Learning from scalar rewards
 
 Reinforcement learning backpropagates through a policy's action log
 probabilities. The renderer and reward callback need not be differentiable.
-You can evaluate geometry, render any GPU plugin, or reward a completed task.
+You can evaluate geometry, render supported built-in shader operations, or reward a completed task.
 
 ::
 
@@ -297,21 +297,9 @@ Supported differentiable operations include ``circle``/``disc``,
 ``clear``/``clear_color``, ``to_rgb``, ``to_lab``, ``alpha_overlay``,
 ``transparency``, and ``multiply``. Transform gradients use clamped bilinear
 sampling of the source field, matching the display transform semantics.
-Additional standalone shaders and explicit composite adapters are exposed
-through their shader contracts. Query ``renderer.supported_operations()`` for
-the current public operation set. See :doc:`shader_differentiation` for complete
-shader coverage and the distinction between reference VJPs and GPU execution.
-
-Custom plugins can supply ``Plugin.differentiable_func``::
-
-    def differentiable_operation(renderer, inputs, params):
-        # Use Tensor operations so their derivatives are recorded.
-        return inputs[0] * params["gain"]
-
-The callback receives resolved parameters and floating-point tensor inputs.
-Its output must have the plugin's declared texture shape. The default GPU
-``render_func``/shader remains independent. Registering a custom floating-point
-implementation lets it participate in the same backward pass as built-ins.
+Query ``renderer.supported_operations()`` for the supported operation set. See
+:doc:`shader_differentiation` for built-in shader coverage and the distinction
+between reference VJPs and GPU execution.
 
 Checkpoints and numerical behavior
 ----------------------------------
@@ -332,5 +320,4 @@ and parameter mutation between forward and backward raise errors. Backward
 requires a scalar output or an explicitly supplied output gradient.
 
 The reference backend uses float64 arrays for gradient accuracy and performs
-no GPU acceleration. Start with modest image sizes for pixel training. An
-accelerated backend can later implement the same parameter and plugin contracts.
+no GPU acceleration. Start with modest image sizes for pixel training.

@@ -7,7 +7,7 @@ import pytest
 
 from sdf_ui import Canvas, param, sdf
 from sdf_ui.backends.opengl import GPUImage
-from sdf_ui.core.differentiation import ShaderDifferentiation
+from sdf_ui.backends.opengl.nodes.differentiation import ShaderDifferentiation
 from sdf_ui.graph import GraphTrainer
 from sdf_ui.learning import (
     Adam,
@@ -318,10 +318,10 @@ def test_closed_canvas_closes_registered_graph_and_default_optimizer():
 def test_explicit_custom_shader_contract_runs_through_the_full_native_stack(
     canvas, tmp_path, monkeypatch, shared_program
 ):
-    from sdf_ui.core.differentiation import ShaderArgument, ShaderDifferentiation
-    from sdf_ui.core.plugins.base import Plugin, PluginFamily, ShaderFile, TextureKind
-    from sdf_ui.core.plugins.registry import registry
-    from sdf_ui.plugins import ShaderProgram
+    from sdf_ui.backends.opengl.nodes.differentiation import ShaderArgument, ShaderDifferentiation
+    from sdf_ui.backends.opengl.nodes.base import Plugin, PluginFamily, ShaderFile, TextureKind
+    from sdf_ui.backends.opengl.nodes.registry import registry
+    from sdf_ui.backends.opengl.nodes.shader_expression import ShaderProgram
 
     name = "test_native_graph_gain"
     path = tmp_path / "gain.glsl"

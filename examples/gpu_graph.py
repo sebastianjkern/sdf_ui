@@ -22,7 +22,7 @@ def train(output, steps=150, resume=None):
     parameters.define("x", 19.0)
     parameters.define("y", 16.0)
     parameters.define("radius", 5.0)
-    parameters.define("color", [0.3, 0.6, 0.5, 1.0])
+    parameters.define("color", [0.3, 0.6, 0.5, 1.0], trainable=False)
     radius = param("radius").softplus()
     field = sdf.circle((param("x"), param("y")), radius)
     image = field.fill(param("color"), "#15212b").to_rgb()

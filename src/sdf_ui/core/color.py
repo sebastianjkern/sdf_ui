@@ -2,7 +2,7 @@
 
 __docformat__ = "google"
 
-from .plugins.common import build
+from ..backends.opengl.nodes.common import build
 from .texture import PostNamespace, TextureNode
 
 

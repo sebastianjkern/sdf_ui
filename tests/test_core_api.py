@@ -19,8 +19,8 @@ from sdf_ui.core.expressions import (
     percent_y,
     sin,
 )
-from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
-from sdf_ui.core.plugins.registry import PluginRegistry, registry
+from sdf_ui.backends.opengl.nodes.base import Plugin, PluginFamily, TextureKind
+from sdf_ui.backends.opengl.nodes.registry import PluginRegistry, registry
 from sdf_ui.core.texture import (
     MultiOutputResult,
     PostNamespace,

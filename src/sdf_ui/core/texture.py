@@ -11,7 +11,7 @@ from PIL import Image
 
 from ..util import hex_col
 from .context import Context
-from .plugins.common import build
+from ..backends.opengl.nodes.common import build
 from .texture_utils import decrease_tex_registry, show_texture
 
 
@@ -142,7 +142,7 @@ class Renderer:
         else:
             self.stats.cache_skips += 1
 
-        from sdf_ui.core.plugins.registry import registry
+        from sdf_ui.backends.opengl.nodes.registry import registry
 
         plugin = registry.get(node.op)
         inputs = tuple(self.render(input_) for input_ in node.inputs)
@@ -251,7 +251,7 @@ class TextureNode(ABC):
                 decrease_tex_registry(self.tex)
 
     def __getattr__(self, name):
-        from sdf_ui.core.plugins.registry import registry
+        from sdf_ui.backends.opengl.nodes.registry import registry
 
         if name in registry.method_names_for(self.kind):
 
@@ -262,7 +262,7 @@ class TextureNode(ABC):
         raise AttributeError(f"{type(self).__name__!s} has no attribute '{name}'")
 
     def __dir__(self):
-        from sdf_ui.core.plugins.registry import registry
+        from sdf_ui.backends.opengl.nodes.registry import registry
 
         names = set(super().__dir__())
         names.update(registry.method_names_for(self.kind))
@@ -366,7 +366,7 @@ class PostNamespace:
         return self.texture.to_rgb()
 
     def __getattr__(self, name):
-        from sdf_ui.core.plugins.registry import registry
+        from sdf_ui.backends.opengl.nodes.registry import registry
 
         try:
             plugin = registry.get(name)
@@ -384,7 +384,7 @@ class PostNamespace:
         return method
 
     def __dir__(self):
-        from sdf_ui.core.plugins.registry import registry
+        from sdf_ui.backends.opengl.nodes.registry import registry
 
         names = set(super().__dir__())
         names.update(

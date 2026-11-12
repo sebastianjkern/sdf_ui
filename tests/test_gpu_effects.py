@@ -8,11 +8,11 @@ import pytest
 from sdf_ui import Canvas
 from sdf_ui.backends.opengl.backend import GPUShaderBackend
 from sdf_ui.backends.opengl.glsl import PRELUDE
-from sdf_ui.core.plugins.base import PluginFamily
-from sdf_ui.core.plugins.registry import registry
+from sdf_ui.backends.opengl.nodes.base import PluginFamily
+from sdf_ui.backends.opengl.nodes.registry import registry
 from sdf_ui.learning import shader_derivatives, shader_effects
 from sdf_ui.learning.shader_effects import DEFAULTS
-from sdf_ui.shaders.effects import SOURCES
+from sdf_ui.backends.opengl.shader_sources.effects import SOURCES
 
 NAMES = (
     "overlay",

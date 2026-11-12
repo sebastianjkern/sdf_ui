@@ -4,7 +4,6 @@ __docformat__ = "google"
 
 from .color import ColorSpaceMode, ColorTexture
 from .context import Context, DispatchConfig
-from .differentiation import ShaderArgument, ShaderDifferentiation
 from .expressions import (
     Expr,
     cos,
@@ -27,8 +26,6 @@ __all__ = [
     "ColorTexture",
     "Expr",
     "SDFTexture",
-    "ShaderArgument",
-    "ShaderDifferentiation",
     "cos",
     "param",
     "percent",

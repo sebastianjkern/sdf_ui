@@ -5,7 +5,7 @@ from hashlib import sha256
 
 import numpy as np
 
-from ...core.plugins.registry import registry
+from ...backends.opengl.nodes.registry import registry
 from ...learning.shader_derivatives import ShaderGradients
 from ..base import Image, shape_size
 from .glsl import REDUCE

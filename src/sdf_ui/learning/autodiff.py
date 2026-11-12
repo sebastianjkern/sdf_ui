@@ -419,12 +419,15 @@ class Tensor:
 
 
 class Parameter(Tensor):
-    """A named trainable leaf; assignments preserve shape and increment version."""
+    """A named graph weight; assignments preserve shape and increment version."""
 
-    def __init__(self, name: str, initial: Any):
+    def __init__(self, name: str, initial: Any, *, trainable: bool = True):
         if not isinstance(name, str) or not name.strip():
             raise ValueError("parameter name must be a nonempty string")
-        super().__init__(initial, requires_grad=True)
+        if not isinstance(trainable, bool):
+            raise TypeError("trainable must be a bool")
+        super().__init__(initial, requires_grad=trainable)
+        self._trainable = trainable
         self.name = name
         self._version = 0
         self._versions = {self: self._version}
@@ -432,6 +435,10 @@ class Parameter(Tensor):
     @property
     def version(self) -> int:
         return self._version
+
+    @property
+    def trainable(self) -> bool:
+        return self._trainable
 
     def assign(self, value: Any) -> "Parameter":
         data = _array(value, "parameter value")
@@ -599,6 +606,8 @@ class _Optimizer(ABC):
             raise ValueError("optimizer requires at least one parameter")
         if not all(isinstance(p, Parameter) for p in self.parameters):
             raise TypeError("optimizers require Parameter objects")
+        if not all(p.trainable for p in self.parameters):
+            raise ValueError("optimizers accept trainable parameters only")
         names = [p.name for p in self.parameters]
         if len(set(names)) != len(names):
             raise ValueError("optimizer parameter names must be unique")

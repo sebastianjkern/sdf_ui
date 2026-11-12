@@ -8,6 +8,17 @@ import pytest
 from sdf_ui.learning import SGD, Adam, Parameter, Tensor, maximum, minimum, stack, where
 
 
+def test_fixed_parameter_stays_out_of_autodiff_and_optimizers():
+    trainable = Parameter("trainable", 2.0)
+    fixed = Parameter("fixed", 3.0, trainable=False)
+    loss = trainable * fixed
+    loss.backward()
+    assert trainable.grad.item() == 3.0
+    assert fixed.grad is None
+    with pytest.raises(ValueError, match="trainable parameters only"):
+        SGD([fixed], lr=0.1)
+
+
 def check_gradient(fn, values, tolerance=2e-5):
     parameters = [Parameter(f"p{i}", value) for i, value in enumerate(values)]
     output = fn(*parameters)

@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 
 from sdf_ui import Canvas, sdf
-from sdf_ui.core.plugins.registry import registry
+from sdf_ui.backends.opengl.nodes.registry import registry
 from tests.helpers import rgba_array
 
 

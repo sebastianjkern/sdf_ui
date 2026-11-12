@@ -14,7 +14,7 @@ import numpy as np
 
 from ..log import logger
 from . import texture_utils
-from .shaders import ShaderLibrary
+from ..backends.opengl.shaders import ShaderLibrary
 
 
 def _triple(value, name):

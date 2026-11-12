@@ -9,7 +9,7 @@ import pytest
 
 from sdf_ui import Canvas
 from sdf_ui.backends.opengl.backend import GPUShaderBackend
-from sdf_ui.core.plugins.registry import registry
+from sdf_ui.backends.opengl.nodes.registry import registry
 from tests.test_gpu_effects import DEFAULTS
 from tests.test_gpu_effects import NAMES as EFFECTS
 from tests.test_gpu_effects import _case as effects_case

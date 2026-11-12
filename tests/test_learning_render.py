@@ -9,8 +9,8 @@ from PIL import Image
 
 from sdf_ui import Canvas, color, param, percent_of_min, sdf, sin
 from sdf_ui.core.color import ColorTexture
-from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
-from sdf_ui.core.plugins.registry import registry
+from sdf_ui.backends.opengl.nodes.base import Plugin, PluginFamily, TextureKind
+from sdf_ui.backends.opengl.nodes.registry import registry
 from sdf_ui.core.sdf import SDFTexture
 from sdf_ui.learning.autodiff import Adam, Parameter, Tensor
 from sdf_ui.learning.render import DifferentiableRenderer, UnsupportedGradientError

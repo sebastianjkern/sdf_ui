@@ -15,16 +15,10 @@ from sdf_ui.graph import (
     lower_graph,
 )
 from sdf_ui.learning import Objective, ParameterStore
-from sdf_ui.plugins import (
-    Plugin,
-    PluginFamily,
-    Port,
-    ShaderArgument,
-    ShaderDifferentiation,
-    ShaderFile,
-    TextureKind,
-    registry,
-)
+from sdf_ui.backends.opengl.nodes.base import Plugin, PluginFamily, ShaderFile, TextureKind
+from sdf_ui.backends.opengl.nodes.differentiation import ShaderArgument, ShaderDifferentiation
+from sdf_ui.backends.opengl.nodes.registry import registry
+from sdf_ui.graph import Port
 
 
 @pytest.mark.parametrize(
@@ -39,6 +33,13 @@ from sdf_ui.plugins import (
         "sdf_ui.learning.gpu_shading",
         "sdf_ui.learning.gpu_effects",
         "sdf_ui.core.shape_programs",
+        "sdf_ui.core.differentiation",
+        "sdf_ui.core.shader_expression",
+        "sdf_ui.core.shader_operation",
+        "sdf_ui.core.shaders",
+        "sdf_ui.plugins",
+        "sdf_ui.shaders",
+        "sdf_ui.extensions",
     ],
 )
 def test_removed_compatibility_modules_are_not_importable(module):

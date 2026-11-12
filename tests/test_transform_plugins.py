@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from sdf_ui import sdf
-from sdf_ui.core.plugins.registry import registry
+from sdf_ui.backends.opengl.nodes.registry import registry
 
 
 class TransformPluginTests(unittest.TestCase):

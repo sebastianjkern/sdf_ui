@@ -18,7 +18,7 @@ from PIL import Image
 
 from ..core.color import ColorSpaceMode
 from ..core.expressions import Expr, evaluate_expr
-from ..core.plugins.registry import registry
+from ..backends.opengl.nodes.registry import registry
 from ..core.texture import MultiOutputResult, TextureNode
 from ..util import hex_col
 from .autodiff import Tensor, as_tensor, maximum, minimum, stack, where

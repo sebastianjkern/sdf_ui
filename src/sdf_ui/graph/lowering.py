@@ -17,8 +17,8 @@ from typing import Callable, Mapping, Optional, Tuple
 import numpy as np
 
 from ..core.expressions import Expr
-from ..core.plugins.base import ShaderFile
-from ..core.plugins.registry import registry
+from ..backends.opengl.nodes.base import ShaderFile
+from ..backends.opengl.nodes.registry import registry
 from ..core.texture import MultiOutputResult, TextureNode
 from ..learning.autodiff import Tensor
 from ..learning.render import DifferentiableRenderer, _tensor

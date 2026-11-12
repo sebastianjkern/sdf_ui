@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from sdf_ui import color, sdf
-from sdf_ui.core.plugins.registry import registry
+from sdf_ui.backends.opengl.nodes.registry import registry
 
 
 def _node(kind: str):

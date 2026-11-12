@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 from sdf_ui import Canvas, param, sdf
-from sdf_ui.core.plugins.registry import registry
+from sdf_ui.backends.opengl.nodes.registry import registry
 from sdf_ui.learning import (
     Adam,
     Bounds,

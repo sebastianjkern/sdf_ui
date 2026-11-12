@@ -6,8 +6,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from sdf_ui.core.plugins.base import PluginFamily
-from sdf_ui.core.plugins.registry import registry
+from sdf_ui.backends.opengl.nodes.base import PluginFamily
+from sdf_ui.backends.opengl.nodes.registry import registry
 from sdf_ui.learning.autodiff import Parameter, Tensor
 from sdf_ui.learning.shader_effects import DEFAULTS, RULES
 

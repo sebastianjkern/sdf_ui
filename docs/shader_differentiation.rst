@@ -17,7 +17,7 @@ Inspect and execute a contract
 ::
 
     import numpy as np
-    from sdf_ui.core.plugins.registry import registry
+    from sdf_ui.backends.opengl.nodes.registry import registry
 
     shader = registry.get("circle").shader
     contract = shader.differentiation
@@ -130,7 +130,7 @@ Host-side polygon, text, and glyph callbacks are not standalone shader operation
 materialize them as inputs when using a compiled graph.
 
 For standalone shapes, the authoritative runtime math lives in
-``sdf_ui.shaders``. ``ShaderProgram`` emits a primal-only forward shader and a
+``sdf_ui.backends.opengl.shader_sources``. ``ShaderProgram`` emits a primal-only forward shader and a
 backward shader from the same typed dual arithmetic
 program. The original GLSL files still supply port declarations and serve as
 an independent forward conformance reference. When changing a shape, update its

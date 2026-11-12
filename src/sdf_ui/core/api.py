@@ -2,15 +2,15 @@
 
 __docformat__ = "google"
 
-from .plugins.base import TextureKind
-from .plugins.common import build
+from ..backends.opengl.nodes.base import TextureKind
+from ..backends.opengl.nodes.common import build
 
 
 class _OperationNamespace:
     kind = None
 
     def __getattr__(self, name):
-        from .plugins.registry import registry
+        from ..backends.opengl.nodes.registry import registry
 
         try:
             plugin = registry.get(name)
@@ -25,7 +25,7 @@ class _OperationNamespace:
         return factory
 
     def __dir__(self):
-        from .plugins.registry import registry
+        from ..backends.opengl.nodes.registry import registry
 
         names = set(super().__dir__())
         names.update(

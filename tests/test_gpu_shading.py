@@ -7,11 +7,11 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from sdf_ui.core.plugins.registry import registry
+from sdf_ui.backends.opengl.nodes.registry import registry
 from sdf_ui.learning.autodiff import Tensor
 from sdf_ui.learning.shader_derivatives import shader_vjp
 from sdf_ui.learning.shader_shading import RULES
-from sdf_ui.shaders.shading import SOURCES
+from sdf_ui.backends.opengl.shader_sources.shading import SOURCES
 
 
 def _contract(name):
@@ -101,7 +101,7 @@ def test_sources_cover_exact_shader_descriptors_and_rgba_api():
     descriptors = {
         s.name
         for s in registry.shader_files()
-        if s.path.startswith("core/plugins/shading/")
+        if s.path.startswith("backends/opengl/nodes/shading/")
     }
     assert set(SOURCES) == descriptors == set(RULES)
     for source in SOURCES.values():

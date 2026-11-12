@@ -13,27 +13,27 @@ Bézier roots are numerical branch decisions, with analytic envelope gradients
 through the selected curve points, rather than numerical differentiation.
 """
 
-from ..core.plugins.primitives.circle.implementation import reference as _circle
-from ..core.plugins.primitives.abs.implementation import reference as _abs
-from ..core.plugins.primitives.union.implementation import reference as _union
-from ..core.plugins.primitives.intersection.implementation import reference as _intersection
-from ..core.plugins.primitives.subtract.implementation import reference as _subtract
-from ..core.plugins.primitives.interpolate.implementation import reference as _interpolate
-from ..core.plugins.primitives.ring.implementation import reference as _ring
-from ..core.plugins.primitives.line.implementation import reference as _line
-from ..core.plugins.primitives.capsule.implementation import reference as _capsule
-from ..core.plugins.primitives.half_plane.implementation import reference as _half_plane
-from ..core.plugins.primitives.ellipse.implementation import reference as _ellipse
-from ..core.plugins.primitives.smooth_union.implementation import reference as _smooth_min
-from ..core.plugins.primitives.grid.implementation import reference as _grid
-from ..core.plugins.primitives.rect.implementation import reference as _rect
-from ..core.plugins.primitives.masked_union.implementation import reference as _masked_union
-from ..core.plugins.primitives.arc.implementation import reference as _arc
-from ..core.plugins.primitives.sector.implementation import reference as _sector
-from ..core.plugins.primitives.repeat.implementation import reference as _repeat
-from ..core.plugins.primitives.transform.implementation import reference as _transform
-from ..core.plugins.primitives.triangle.implementation import reference as _triangle
-from ..core.plugins.primitives.bezier.implementation import reference as _bezier
+from ..backends.opengl.nodes.primitives.circle.implementation import reference as _circle
+from ..backends.opengl.nodes.primitives.abs.implementation import reference as _abs
+from ..backends.opengl.nodes.primitives.union.implementation import reference as _union
+from ..backends.opengl.nodes.primitives.intersection.implementation import reference as _intersection
+from ..backends.opengl.nodes.primitives.subtract.implementation import reference as _subtract
+from ..backends.opengl.nodes.primitives.interpolate.implementation import reference as _interpolate
+from ..backends.opengl.nodes.primitives.ring.implementation import reference as _ring
+from ..backends.opengl.nodes.primitives.line.implementation import reference as _line
+from ..backends.opengl.nodes.primitives.capsule.implementation import reference as _capsule
+from ..backends.opengl.nodes.primitives.half_plane.implementation import reference as _half_plane
+from ..backends.opengl.nodes.primitives.ellipse.implementation import reference as _ellipse
+from ..backends.opengl.nodes.primitives.smooth_union.implementation import reference as _smooth_min
+from ..backends.opengl.nodes.primitives.grid.implementation import reference as _grid
+from ..backends.opengl.nodes.primitives.rect.implementation import reference as _rect
+from ..backends.opengl.nodes.primitives.masked_union.implementation import reference as _masked_union
+from ..backends.opengl.nodes.primitives.arc.implementation import reference as _arc
+from ..backends.opengl.nodes.primitives.sector.implementation import reference as _sector
+from ..backends.opengl.nodes.primitives.repeat.implementation import reference as _repeat
+from ..backends.opengl.nodes.primitives.transform.implementation import reference as _transform
+from ..backends.opengl.nodes.primitives.triangle.implementation import reference as _triangle
+from ..backends.opengl.nodes.primitives.bezier.implementation import reference as _bezier
 
 __all__ = ["RULES"]
 RULES = {

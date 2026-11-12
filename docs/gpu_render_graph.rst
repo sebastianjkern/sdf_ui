@@ -25,8 +25,8 @@ reference implementation::
             field_pixels = execution.read("field")
 
 The display executor stores color passes in RGBA8, while the training and CPU
-reference paths use floating-point values. The original ``Canvas.render`` and
-CPU ``render`` methods remain available for opaque legacy plugin callbacks.
+reference paths use floating-point values. ``Canvas.render`` and CPU rendering
+remain available for ordinary rendering of supported built-in operations.
 CPU plan execution requires symbolic inputs rather than materialized GPU textures.
 
 Small scalar/vector parameter expressions and geometric losses use the existing
@@ -394,34 +394,8 @@ Saving/loading a checkpoint may explicitly read GPU target snapshots to compare
 their contents; ``trainer.step`` never reads activation images. External input
 textures and dataset generation remain application-owned.
 
-Custom shaders
---------------
-
-The full stack accepts explicit custom ``ShaderFile`` contracts. Supply a
-``ShaderDifferentiation`` with named inputs, uniform shapes, and outputs; pass it
-as ``ShaderFile(..., derivative_contract=contract, gpu_derivative=body)``.
-``body`` is GLSL defining ``void evaluate(ivec2 pos, out D o[8])`` using the shared
-dual arithmetic helpers, ``U_uniform`` parameter macros, and ``ld``/``load4``
-image reads. The emitter handles VJP seeding, pixel scatter, and reductions.
-An optional ``contract.reference`` callable provides CPU conformance/VJP tests.
-Register that descriptor with an ordinary shader-backed Plugin.
-
-For a shared forward/backward program, import ``ShaderProgram`` from
-``sdf_ui.plugins`` and instead use
-``ShaderFile(name, path, derivative_contract=contract, program=ShaderProgram(name, body))``.
-The same dual-number ``evaluate`` body supplies both passes; ``path`` supplies
-the independent GLSL reference and any uniform initializers. A program body
-must not use tangent values to make primal branch decisions. Supplying both a
-shared program and a separate GPU derivative is rejected.
-
-Composite plugins can also supply ``lowering_func(builder, plugin, inputs, raw,
-values)`` on their Plugin descriptor. The callback returns a port or a tuple of
-ports and uses ``builder.emit`` and ``builder.convert`` to compose passes;
-``values(resolve)`` resolves the captured parameter bindings for each execution.
-The same callback is used when creating plans for all three executors.
-
-Opaque Python render callbacks need explicit lowering. A CPU differentiable hook
-alone does not become a GPU implementation. There is no silent renderer fallback.
+Built-in shader nodes use shared dual-number programs to emit forward and
+backward passes. The emitter handles VJP seeding, pixel scatter, and reductions.
 The native emitter currently supports up to 128 unique sampled scalar image
 inputs per output pixel and reports overflow. Shader math uses piecewise
 derivatives at feature switches and finite subgradient conventions at origins.
@@ -449,15 +423,16 @@ precision or CPU fallback is intentionally absent from this execution path.
 
 Tests cover all builtin GPU VJPs against the CPU oracle, original FP32 forward
 values, sampling borders/ties, full graph gradients, multi-root objectives,
-custom shaders, materialized texture inputs, optimizer convergence/checkpoints,
+materialized texture inputs, optimizer convergence/checkpoints,
 bounded caches, and training with CPU image paths/readback disabled.
 
 Unified execution and inspection
 --------------------------------
 
-``ParameterStore.bind(name, initial)`` creates a parameter and returns a reusable
-scene expression. A subsequent ``bind(name)`` returns another reference to the
-same parameter. ``canvas.compile(outputs, parameters)`` accepts named roots or
+``ParameterStore.bind(name, initial, trainable=True)`` creates a graph weight
+and returns a reusable scene expression. Set ``trainable=False`` for fixed
+weights. A subsequent ``bind(name)`` returns another reference to the same
+weight. ``canvas.compile(outputs, parameters)`` accepts named roots or
 an existing plan. The compiled graph renders all roots with an explicit backend::
 
     radius = weights.bind("radius", 4.0)
@@ -488,9 +463,11 @@ selectors and fixed topology need recompilation to change. Inspection checks
 shader sources and derivative availability, but GPU driver compilation and
 runtime numerical behavior are verified only when the graph is compiled or run.
 
-The extension API is available under ``sdf_ui.plugins``. Graph execution types
-are available under ``sdf_ui.graph``; OpenGL device types are under
-``sdf_ui.backends.opengl``.
+Built-in shader operations and their registry are internal implementation
+details under ``sdf_ui.backends.opengl.nodes``. Graph execution types are available
+under ``sdf_ui.graph``; OpenGL device types are under
+``sdf_ui.backends.opengl``. Defining or registering custom shader plugins is
+not part of the public API.
 
 Benchmarking
 ------------

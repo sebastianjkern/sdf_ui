@@ -29,16 +29,16 @@ def _load_runtime_objects():
 
     from sdf_ui.core.api import ColorNamespace, SDFNamespace
     from sdf_ui.core.color import ColorTexture
-    from sdf_ui.core.plugins.base import TextureKind
-    from sdf_ui.core.plugins.loader import load_plugins
-    from sdf_ui.core.plugins.registry import PluginRegistry
+    from sdf_ui.backends.opengl.nodes.base import TextureKind
+    from sdf_ui.backends.opengl.nodes.loader import load_plugins
+    from sdf_ui.backends.opengl.nodes.registry import PluginRegistry
     from sdf_ui.core.sdf import SDFTexture
     from sdf_ui.core.texture import PostNamespace, TextureNode
 
     registry = PluginRegistry()
     # Distributed stubs describe builtins, independent of third-party packages
     # installed in the developer's environment.
-    load_plugins(registry, include_entry_points=False)
+    load_plugins(registry)
 
     return {
         "ColorNamespace": ColorNamespace,
@@ -340,7 +340,6 @@ def _render_core_init_stub() -> str:
             "from .color import ColorSpaceMode as ColorSpaceMode, ColorTexture as ColorTexture",
             "from .context import Context as Context, DispatchConfig as DispatchConfig",
             "from .texture_utils import decrease_tex_registry as decrease_tex_registry, show_texture as show_texture",
-            "from .differentiation import ShaderArgument as ShaderArgument, ShaderDifferentiation as ShaderDifferentiation",
             "from .expressions import Expr as Expr, cos as cos, param as param, percent as percent, percent_of_min as percent_of_min, percent_x as percent_x, percent_y as percent_y, sin as sin",
             "from .sdf import SDFTexture as SDFTexture",
             "",

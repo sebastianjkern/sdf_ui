@@ -7,10 +7,10 @@ import numpy as np
 import pytest
 
 from sdf_ui import color, param, sdf
-from sdf_ui.core.differentiation import ShaderDifferentiation
+from sdf_ui.backends.opengl.nodes.differentiation import ShaderDifferentiation
 from sdf_ui.core.expressions import evaluate_expr
-from sdf_ui.core.plugins.base import Plugin, PluginFamily, ShaderFile, TextureKind
-from sdf_ui.core.plugins.registry import registry
+from sdf_ui.backends.opengl.nodes.base import Plugin, PluginFamily, ShaderFile, TextureKind
+from sdf_ui.backends.opengl.nodes.registry import registry
 from sdf_ui.core.sdf import SDFTexture
 from sdf_ui.core.texture import MultiOutputResult
 from sdf_ui.graph.lowering import GraphPlan, Pass, Port, lower_graph

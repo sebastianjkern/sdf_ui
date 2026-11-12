@@ -4,8 +4,8 @@ import pytest
 
 from sdf_ui import Canvas, param, sdf
 from sdf_ui.core.color import ColorTexture
-from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
-from sdf_ui.core.plugins.registry import registry
+from sdf_ui.backends.opengl.nodes.base import Plugin, PluginFamily, TextureKind
+from sdf_ui.backends.opengl.nodes.registry import registry
 from sdf_ui.graph import GraphTrainer, lower_graph
 from sdf_ui.learning import (
     DifferentiableRenderer,

@@ -9,15 +9,15 @@ modulo cell indices use NumPy booleans/integers and piecewise derivatives.
 Noise uses fixed float32 pixel coordinates and has no trainable uniforms.
 """
 
-from ..core.plugins.shading.fill.implementation import reference as _fill
-from ..core.plugins.shading.clear_color.implementation import reference as _clear_color
-from ..core.plugins.shading.outline.implementation import reference as _outline
-from ..core.plugins.shading.fill_from_texture.implementation import reference as _fill_from_texture
-from ..core.plugins.shading.partial_derivative.implementation import reference as _partial_derivative
-from ..core.plugins.shading.isolines.implementation import reference as _isolines
-from ..core.plugins.shading.film_grain.implementation import reference as _film_grain
-from ..core.plugins.shading.perlin_noise.implementation import reference as _perlin_noise
-from ..core.plugins.shading.light.reference import reference as _light
+from ..backends.opengl.nodes.shading.fill.implementation import reference as _fill
+from ..backends.opengl.nodes.shading.clear_color.implementation import reference as _clear_color
+from ..backends.opengl.nodes.shading.outline.implementation import reference as _outline
+from ..backends.opengl.nodes.shading.fill_from_texture.implementation import reference as _fill_from_texture
+from ..backends.opengl.nodes.shading.partial_derivative.implementation import reference as _partial_derivative
+from ..backends.opengl.nodes.shading.isolines.implementation import reference as _isolines
+from ..backends.opengl.nodes.shading.film_grain.implementation import reference as _film_grain
+from ..backends.opengl.nodes.shading.perlin_noise.implementation import reference as _perlin_noise
+from ..backends.opengl.nodes.shading.light.reference import reference as _light
 
 __all__ = ["RULES"]
 

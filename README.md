@@ -79,17 +79,14 @@ Factories such as `sdf.circle(...)` and `color.clear(...)` do not render right a
 small expression graph of `TextureNode` objects that can be composed, cached, and rendered later
 against a `Canvas`.
 
-At render time, the node graph is resolved by the renderer and dispatched through the plugin
-registry. Each primitive, shading step, layer operation, or postprocessing effect is registered as
-plugin metadata plus shader code, which keeps the runtime extensible without forcing the public API
-to be hardcoded in one giant module.
+At render time, the node graph is resolved by the renderer and dispatched through an internal
+registry of built-in shader operations. Those operations are not a user extension API.
 
 To keep editor support and static analysis usable for library users, the public typed API is
-generated from plugin metadata and the resulting stubs are tracked in the repository. New plugins can extend the runtime
-surface while shipped `.pyi` stubs still provide autocomplete and type checking for the supported
-entry points.
+generated from built-in operation metadata and the resulting stubs are tracked in the repository.
+Shipped `.pyi` stubs provide autocomplete and type checking for supported entry points.
 
-After changing plugin metadata, run `uv run python build_tools/generate_api_stubs.py` and
+After changing built-in operation metadata, run `uv run python build_tools/generate_api_stubs.py` and
 commit the resulting stubs. Run `uv run python build_tools/generate_api_stubs.py --check`
 to check for stale stubs without modifying files. For development, install
 [uv](https://docs.astral.sh/uv/getting-started/installation/), run `uv sync`,
@@ -98,8 +95,8 @@ files. If an older checkout configured `core.hooksPath` to `.githooks`, remove
 that local setting with `git config --local --unset core.hooksPath` before
 installing the hook.
 
-That architecture is a good fit for experimentation: new primitives, shading passes, post effects,
-and composition operators can be added as plugins without redesigning the public API each time.
+Built-in primitives, shading passes, post effects, and composition operators are shader-backed
+graph nodes implemented by the OpenGL backend.
 
 ### Learning layouts and graphics
 
@@ -137,7 +134,7 @@ operations raise an explicit error. Reward-based policy learning can use the
 full GPU renderer because its reward callback does not need pixel gradients.
 
 See [the learning guide](docs/learning.rst) for geometry optimization, continuous
-and discrete policies, custom differentiable plugins, checkpoints, and runnable
+and discrete policies, graph training, checkpoints, and runnable
 examples.
 
 For a larger procedural layout example, run

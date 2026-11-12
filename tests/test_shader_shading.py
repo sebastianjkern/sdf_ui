@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from sdf_ui.core.plugins.registry import registry
+from sdf_ui.backends.opengl.nodes.registry import registry
 from sdf_ui.learning.autodiff import Parameter, Tensor
 from sdf_ui.learning.shader_shading import RULES
 
@@ -124,7 +124,7 @@ def test_rules_cover_exact_standalone_shader_descriptors():
     descriptors = {
         descriptor.name
         for descriptor in registry.shader_files()
-        if descriptor.path.startswith("core/plugins/shading/")
+        if descriptor.path.startswith("backends/opengl/nodes/shading/")
     }
     assert set(RULES) == descriptors
     for name, rule in RULES.items():
@@ -268,7 +268,7 @@ def gl_context():
 
 
 def _gl_run(context, name, inputs, params, *, size, floating):
-    root = Path(__file__).resolve().parents[1] / "src/sdf_ui/core/plugins/shading"
+    root = Path(__file__).resolve().parents[1] / "src/sdf_ui/backends/opengl/nodes/shading"
     source = (root / name / "shader.glsl").read_text()
     if floating:
         source = source.replace("layout (rgba8,", "layout (rgba32f,")

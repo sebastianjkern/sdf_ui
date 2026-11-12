@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from .environment import RenderEnvironment as RenderEnvironment
     from .inspection import inspect_graph as inspect_graph
     from .lowering import GraphPlan as GraphPlan
+    from .lowering import Port as Port
     from .lowering import lower_graph as lower_graph
     from .runtime import (
         GraphExecution as GraphExecution,
@@ -35,6 +36,7 @@ _EXPORTS = {
     "NamedRenderEnvironment": "environment",
     "NamedValues": "environment",
     "GraphPlan": "lowering",
+    "Port": "lowering",
     "lower_graph": "lowering",
     "RenderGraph": "runtime",
     "GraphExecution": "runtime",

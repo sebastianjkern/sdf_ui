@@ -10,7 +10,7 @@ import sdf_ui.anim as anim_mod
 import sdf_ui.ascii as ascii_mod
 import sdf_ui.core.context as context_mod
 import sdf_ui.core.operations as operations_mod
-import sdf_ui.core.shaders as shaders_mod
+import sdf_ui.backends.opengl.shaders as shaders_mod
 import sdf_ui.core.texture_utils as texture_utils_mod
 from sdf_ui import color, sdf
 from sdf_ui.core.color import ColorSpaceMode

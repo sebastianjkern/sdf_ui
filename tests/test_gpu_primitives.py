@@ -10,11 +10,11 @@ import pytest
 from sdf_ui import Canvas
 from sdf_ui.backends.opengl.backend import GPUShaderBackend
 from sdf_ui.backends.opengl.glsl import derivative_source
-from sdf_ui.core.plugins.registry import registry
-from sdf_ui.core.shader_expression import ShaderProgram
+from sdf_ui.backends.opengl.nodes.registry import registry
+from sdf_ui.backends.opengl.nodes.shader_expression import ShaderProgram
 from sdf_ui.learning.shader_derivatives import shader_vjp
 from sdf_ui.learning.shader_primitives import RULES
-from sdf_ui.shaders.primitives import SOURCES
+from sdf_ui.backends.opengl.shader_sources.primitives import SOURCES
 
 SIZE = (7, 5)
 CASES = [
@@ -131,7 +131,7 @@ def test_sources_cover_all_21_actual_primitive_descriptor_names():
     descriptors = {
         descriptor.name
         for descriptor in registry.shader_files()
-        if descriptor.path.startswith("core/plugins/primitives/")
+        if descriptor.path.startswith("backends/opengl/nodes/primitives/")
     }
     assert set(SOURCES) == descriptors == set(RULES)
     assert len(SOURCES) == 21
@@ -148,7 +148,7 @@ def test_all_shape_descriptors_compile_forward_and_backward_from_one_program():
     descriptors = {
         descriptor.name: descriptor
         for descriptor in registry.shader_files()
-        if descriptor.path.startswith("core/plugins/primitives/")
+        if descriptor.path.startswith("backends/opengl/nodes/primitives/")
     }
     for name, descriptor in descriptors.items():
         operation = descriptor.operation

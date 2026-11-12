@@ -130,6 +130,10 @@ class RenderGraph:
         return self._parameters
 
     @property
+    def trainable_parameters(self):
+        return tuple(parameter for parameter in self._parameters if parameter.trainable)
+
+    @property
     def inputs(self):
         return MappingProxyType(self._inputs)
 
@@ -893,19 +897,19 @@ class GraphTrainer:
         graph._check()
         if not isinstance(objective, Objective):
             raise TypeError("GraphTrainer requires an Objective")
-        if not graph.parameters:
+        if not graph.trainable_parameters:
             raise ValueError("Graph has no registered trainable parameters")
         self.graph = graph
         self.objective = objective
         self._owns_optimizer = optimizer is None
         self.optimizer = (
-            graph.backend.create_optimizer(graph.parameters, lr=lr)
+            graph.backend.create_optimizer(graph.trainable_parameters, lr=lr)
             if optimizer is None
             else optimizer
         )
         actual = tuple(getattr(self.optimizer, "parameters", ()))
-        if len(actual) != len(graph.parameters) or {id(p) for p in actual} != {
-            id(p) for p in graph.parameters
+        if len(actual) != len(graph.trainable_parameters) or {id(p) for p in actual} != {
+            id(p) for p in graph.trainable_parameters
         }:
             if self._owns_optimizer:
                 self.optimizer.close()
@@ -934,7 +938,7 @@ class GraphTrainer:
         self.optimizer.zero_grad()
         with self.graph.run(self.objective) as execution:
             execution.backward()
-            if not any(p.grad is not None for p in self.graph.parameters):
+            if not any(p.grad is not None for p in self.graph.trainable_parameters):
                 raise ValueError("Objective has no gradient path to graph parameters")
             self.optimizer.step()
             self.steps += 1

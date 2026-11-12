@@ -1,6 +1,6 @@
 """Scalar dual arithmetic shared by native GLSL derivative kernels."""
 
-from ...core.dual_glsl import PRELUDE
+from .dual_glsl import PRELUDE
 from ..base import shape_size
 
 

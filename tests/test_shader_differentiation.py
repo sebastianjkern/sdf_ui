@@ -5,9 +5,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from sdf_ui.core.plugins.base import ShaderFile
-from sdf_ui.core.plugins.registry import registry
-from sdf_ui.core.shaders import ShaderLibrary
+from sdf_ui.backends.opengl.nodes.base import ShaderFile
+from sdf_ui.backends.opengl.nodes.registry import registry
+from sdf_ui.backends.opengl.shaders import ShaderLibrary
 from sdf_ui.learning import Parameter
 
 
@@ -19,7 +19,7 @@ def test_all_shader_files_have_contracts_and_executable_rules():
     shaders = {shader.name: shader for shader in registry.shader_files()}
     root = Path(__file__).resolve().parents[1] / "src/sdf_ui"
     assert {
-        str(path.relative_to(root)) for path in (root / "core/plugins").rglob("*.glsl")
+        str(path.relative_to(root)) for path in (root / "backends/opengl/nodes").rglob("*.glsl")
     } == {shader.path for shader in shaders.values()}
     for name, shader in shaders.items():
         contract = shader.differentiation
@@ -137,7 +137,7 @@ def test_shader_library_exposes_contract_without_compiling_gl():
         unknown.backward((3, 2), {}, {}, np.ones((2, 3)))
     # Names and paths do not infer contracts: ownership must be explicit.
     assert (
-        ShaderFile("circle", "core/plugins/primitives/rect/shader.glsl").differentiation
+        ShaderFile("circle", "backends/opengl/nodes/primitives/rect/shader.glsl").differentiation
         is None
     )
 

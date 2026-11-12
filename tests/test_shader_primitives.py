@@ -7,12 +7,12 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from sdf_ui.core.plugins.registry import registry
+from sdf_ui.backends.opengl.nodes.registry import registry
 from sdf_ui.learning.autodiff import Parameter, Tensor
 from sdf_ui.learning.shader_primitives import RULES
 
 SIZE = (7, 5)
-PRIMITIVES = Path(__file__).resolve().parents[1] / "src/sdf_ui/core/plugins/primitives"
+PRIMITIVES = Path(__file__).resolve().parents[1] / "src/sdf_ui/backends/opengl/nodes/primitives"
 
 
 def _context(size=SIZE):
