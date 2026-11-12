@@ -2,6 +2,7 @@ __docformat__ = "google"
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.core.plugins.common import lower_composite, render_rgb_shader, shader
+from .implementation import CONTRACT, INTERFACE, PROGRAM
 
 
 def render_multiply(renderer, inputs, params):
@@ -17,7 +18,7 @@ def register_plugins(registry):
             PluginFamily.LAYER,
             TextureKind.COLOR,
             (TextureKind.COLOR, TextureKind.COLOR),
-            shader=shader("multiply", "plugins/layer/multiply/shader.glsl"),
+            shader=shader("multiply", "plugins/layer/multiply/shader.glsl", derivative_contract=CONTRACT, program=PROGRAM, interface=INTERFACE),
             input_uniforms=("mask1", "mask2"),
             mode="RGB",
             render_func=render_multiply,

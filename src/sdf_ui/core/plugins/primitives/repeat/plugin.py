@@ -2,6 +2,7 @@ __docformat__ = "google"
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.core.plugins.common import shader
+from .implementation import CONTRACT, INTERFACE, PROGRAM
 
 
 def register_plugins(registry):
@@ -13,7 +14,7 @@ def register_plugins(registry):
             (TextureKind.SDF,),
             params=("s",),
             defaults={"s": 15.0},
-            shader=shader("repeat", "plugins/primitives/repeat/shader.glsl"),
+            shader=shader("repeat", "plugins/primitives/repeat/shader.glsl", derivative_contract=CONTRACT, program=PROGRAM, interface=INTERFACE),
             input_uniforms=("sdf0",),
             make_uniforms=lambda p: {"repeat": p["s"]},
             method_of=(TextureKind.SDF,),

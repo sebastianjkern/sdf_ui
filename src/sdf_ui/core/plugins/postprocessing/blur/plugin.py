@@ -2,6 +2,12 @@ __docformat__ = "google"
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.core.plugins.common import blur_pass, lower_composite, shader
+from .implementation import shader_parts
+
+
+def blur_shader(name, path):
+    interface, contract, program = shader_parts(name)
+    return shader(name, path, derivative_contract=contract, program=program, interface=interface)
 
 
 def render_blur_9(renderer, inputs, params):
@@ -70,8 +76,8 @@ def register_plugins(registry):
             params=("n",),
             defaults={"n": 0},
             extra_shaders=(
-                shader("blur_ver_9", "plugins/postprocessing/blur/blur9_vert.glsl"),
-                shader("blur_hor_9", "plugins/postprocessing/blur/blur9_hor.glsl"),
+                blur_shader("blur_ver_9", "plugins/postprocessing/blur/blur9_vert.glsl"),
+                blur_shader("blur_hor_9", "plugins/postprocessing/blur/blur9_hor.glsl"),
             ),
             render_func=render_blur_9,
             lowering_func=lower_composite,
@@ -87,8 +93,8 @@ def register_plugins(registry):
             params=("n",),
             defaults={"n": 0},
             extra_shaders=(
-                shader("blur_ver_13", "plugins/postprocessing/blur/blur13_vert.glsl"),
-                shader("blur_hor_13", "plugins/postprocessing/blur/blur13_hor.glsl"),
+                blur_shader("blur_ver_13", "plugins/postprocessing/blur/blur13_vert.glsl"),
+                blur_shader("blur_hor_13", "plugins/postprocessing/blur/blur13_hor.glsl"),
             ),
             render_func=render_blur_13,
             lowering_func=lower_composite,

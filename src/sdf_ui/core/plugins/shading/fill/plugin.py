@@ -1,7 +1,10 @@
 __docformat__ = "google"
 
-from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
+from sdf_ui.core.plugins.base import (
+    ImageBinding, Plugin, PluginFamily, ShaderInterface, TextureKind, Uniform,
+)
 from sdf_ui.core.plugins.common import color, shader
+from .implementation import CONTRACT, PROGRAM
 
 
 def _uniforms(params):
@@ -28,7 +31,20 @@ def register_plugins(registry):
                 "inner": -1.5,
                 "outer": 0.0,
             },
-            shader=shader("fill", "plugins/shading/fill/shader.glsl"),
+            shader=shader(
+                "fill", "plugins/shading/fill/shader.glsl",
+                derivative_contract=CONTRACT,
+                program=PROGRAM,
+                interface=ShaderInterface(
+                    output=ImageBinding("destTex", 0, write=True),
+                    inputs=(ImageBinding("sdf", 1, read=True),),
+                    uniforms=(
+                        Uniform("inflate", "float"), Uniform("color", "vec4"),
+                        Uniform("background", "vec4"), Uniform("first", "float"),
+                        Uniform("second", "float"),
+                    ),
+                ),
+            ),
             input_uniforms=("sdf",),
             make_uniforms=_uniforms,
             method_of=(TextureKind.SDF,),

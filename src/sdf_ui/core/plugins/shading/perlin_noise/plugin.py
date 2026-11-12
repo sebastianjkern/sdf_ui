@@ -2,10 +2,11 @@ __docformat__ = "google"
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.core.plugins.common import shader
+from .implementation import CONTRACT, INTERFACE, PROGRAM
 
 
 def register_plugins(registry):
-    descriptor = shader("perlin_noise", "plugins/shading/perlin_noise/shader.glsl")
+    descriptor = shader("perlin_noise", "plugins/shading/perlin_noise/shader.glsl", derivative_contract=CONTRACT, program=PROGRAM, interface=INTERFACE)
     registry.register(
         Plugin(
             "noise",

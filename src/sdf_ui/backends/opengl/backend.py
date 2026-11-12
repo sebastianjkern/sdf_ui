@@ -216,9 +216,8 @@ class GPUShaderBackend:
         return self.programs[key]
 
     def defaults(self, name):
-        from ...learning.shader_effects import DEFAULTS
-
-        return DEFAULTS.get(name, {})
+        contract = self.contract(name)
+        return getattr(contract, "defaults", None) or {}
 
     def uniforms(self, name, params):
         """Validate and snapshot raw uniforms, resetting omitted GLSL values."""

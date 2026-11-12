@@ -4,6 +4,7 @@ from numbers import Real
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.core.plugins.common import shader
+from .implementation import CONTRACT, INTERFACE, PROGRAM
 
 
 def _uniforms(params):
@@ -19,7 +20,7 @@ def _uniforms(params):
 
 
 def register_plugins(registry):
-    descriptor = shader("rect", "plugins/primitives/rect/shader.glsl")
+    descriptor = shader("rect", "plugins/primitives/rect/shader.glsl", derivative_contract=CONTRACT, program=PROGRAM, interface=INTERFACE)
     registry.register(
         Plugin(
             "rect",

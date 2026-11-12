@@ -4,6 +4,7 @@ from math import isfinite
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.core.plugins.common import lower_composite, shader
+from .implementation import CONTRACT, INTERFACE, PROGRAM
 
 
 def _render_transform(renderer, source, uniforms):
@@ -13,14 +14,16 @@ def _render_transform(renderer, source, uniforms):
     ctx = renderer.ctx
     tex = ctx.r32f()
 
-    shader_uniforms = {"destTex": 0, "sdf": 1}
+    output, input_ = INTERFACE.output, INTERFACE.inputs[0]
+    shader_uniforms = {output.name: output.unit, input_.name: input_.unit}
     shader_uniforms.update(uniforms)
 
     run_shader(
         ctx,
         "transform",
         uniforms=shader_uniforms,
-        image_bindings=((tex, 0, False, True), (source.tex, 1, True, False)),
+        image_bindings=((tex, output.unit, output.read, output.write),
+                        (source.tex, input_.unit, input_.read, input_.write)),
     )
     return SDFTexture(tex=tex, context=ctx)
 
@@ -81,7 +84,7 @@ def _render_skew(renderer, inputs, params):
 
 
 def register_plugins(registry):
-    descriptor = shader("transform", "plugins/primitives/transform/shader.glsl")
+    descriptor = shader("transform", "plugins/primitives/transform/shader.glsl", derivative_contract=CONTRACT, program=PROGRAM, interface=INTERFACE)
     registry.register(
         Plugin(
             "translate",

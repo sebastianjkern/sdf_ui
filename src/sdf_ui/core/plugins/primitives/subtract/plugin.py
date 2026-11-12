@@ -2,6 +2,7 @@ __docformat__ = "google"
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.core.plugins.common import shader
+from .implementation import CONTRACT, INTERFACE, PROGRAM
 
 
 def register_plugins(registry):
@@ -11,7 +12,7 @@ def register_plugins(registry):
             PluginFamily.PRIMITIVE,
             TextureKind.SDF,
             (TextureKind.SDF, TextureKind.SDF),
-            shader=shader("subtract", "plugins/primitives/subtract/shader.glsl"),
+            shader=shader("subtract", "plugins/primitives/subtract/shader.glsl", derivative_contract=CONTRACT, program=PROGRAM, interface=INTERFACE),
             input_uniforms=("sdf0", "sdf1"),
             method_of=(TextureKind.SDF,),
         )

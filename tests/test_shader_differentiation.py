@@ -1,12 +1,10 @@
 """Every registered shader has an executable and auditable derivative contract."""
 
-from importlib import import_module
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-from sdf_ui.core.differentiation import shader_rule_module
 from sdf_ui.core.plugins.base import ShaderFile
 from sdf_ui.core.plugins.registry import registry
 from sdf_ui.core.shaders import ShaderLibrary
@@ -28,8 +26,21 @@ def test_all_shader_files_have_contracts_and_executable_rules():
         assert contract is not None, name
         assert contract.name == name and contract.path == shader.path
         assert contract.outputs and contract.notes
-        module = import_module("sdf_ui.learning." + shader_rule_module(name))
-        assert callable(module.RULES[name])
+        assert shader.interface is not None, name
+        assert shader.program is not None, name
+        assert callable(contract.reference), name
+        assert [item.name for item in (shader.interface.output, *shader.interface.extra_outputs)] == [
+            item.name for item in contract.outputs
+        ]
+        assert [item.name for item in shader.interface.inputs] == [
+            item.name for item in contract.inputs
+        ]
+        assert [item.name for item in shader.interface.uniforms] == [
+            item.name for item in contract.parameters
+        ]
+        assert [item.unit for item in (
+            shader.interface.output, *shader.interface.extra_outputs, *shader.interface.inputs
+        )] == list(range(len(contract.outputs) + len(contract.inputs)))
         assert set(contract.zero_gradient_parameters) <= {
             p.name for p in contract.parameters
         }
@@ -124,7 +135,7 @@ def test_shader_library_exposes_contract_without_compiling_gl():
     assert unknown.differentiation is None
     with pytest.raises(ValueError, match="no differentiation"):
         unknown.backward((3, 2), {}, {}, np.ones((2, 3)))
-    # A third-party file cannot silently inherit builtin semantics by its name.
+    # Names and paths do not infer contracts: ownership must be explicit.
     assert (
         ShaderFile("circle", "core/plugins/primitives/rect/shader.glsl").differentiation
         is None

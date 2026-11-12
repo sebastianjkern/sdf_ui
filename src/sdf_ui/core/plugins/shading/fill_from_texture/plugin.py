@@ -2,6 +2,7 @@ __docformat__ = "google"
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.core.plugins.common import color, ensure_rgb, lower_composite, shader
+from .implementation import CONTRACT, INTERFACE, PROGRAM
 
 
 def render_fill_from_texture(renderer, inputs, params):
@@ -17,16 +18,16 @@ def render_fill_from_texture(renderer, inputs, params):
         ctx,
         "fill_from_texture",
         uniforms={
-            "destTex": 0,
-            "origTex": 1,
-            "sdf": 2,
+            INTERFACE.output.name: INTERFACE.output.unit,
+            INTERFACE.inputs[0].name: INTERFACE.inputs[0].unit,
+            INTERFACE.inputs[1].name: INTERFACE.inputs[1].unit,
             "background": color(params["background"]),
             "inflate": params["inflate"],
         },
         image_bindings=(
-            (tex, 0, False, True),
-            (color_texture.tex, 1, True, False),
-            (sdf_texture.tex, 2, True, False),
+            (tex, INTERFACE.output.unit, INTERFACE.output.read, INTERFACE.output.write),
+            (color_texture.tex, INTERFACE.inputs[0].unit, INTERFACE.inputs[0].read, INTERFACE.inputs[0].write),
+            (sdf_texture.tex, INTERFACE.inputs[1].unit, INTERFACE.inputs[1].read, INTERFACE.inputs[1].write),
         ),
     )
     return ColorTexture(tex=tex, context=ctx, mode=ColorSpaceMode.RGB)
@@ -42,7 +43,8 @@ def register_plugins(registry):
             params=("background", "inflate"),
             defaults={"background": (0.0, 0.0, 0.0, 0.0), "inflate": 0},
             shader=shader(
-                "fill_from_texture", "plugins/shading/fill_from_texture/shader.glsl"
+                "fill_from_texture", "plugins/shading/fill_from_texture/shader.glsl",
+                derivative_contract=CONTRACT, program=PROGRAM, interface=INTERFACE,
             ),
             input_uniforms=("sdf", "origTex"),
             mode="RGB",

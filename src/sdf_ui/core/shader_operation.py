@@ -2,10 +2,7 @@
 
 import re
 from dataclasses import dataclass
-from importlib import import_module
 from pathlib import Path
-
-from .differentiation import shader_differentiation, shader_rule_module
 
 
 @dataclass(frozen=True)
@@ -42,18 +39,6 @@ class ShaderOperation:
                     "A shared shader program requires a differentiation contract"
                 )
             return self.program
-        if (
-            self.contract is not None
-            and self.gpu_derivative is None
-            and shader_rule_module(self.name) is not None
-            and self.contract is shader_differentiation(self.name, self.path)
-        ):
-            from .shader_expression import ShaderProgram
-
-            module = import_module(
-                "sdf_ui.shaders." + shader_rule_module(self.name)[len("shader_") :]
-            )
-            return ShaderProgram(self.name, module.SOURCES[self.name])
         return None
 
     def forward_source(
@@ -85,18 +70,8 @@ class ShaderOperation:
         if self.contract.reference is not None:
             if not callable(self.contract.reference):
                 raise TypeError("Shader reference implementation must be callable")
-            return self.contract.reference, {}
-        module_name = shader_rule_module(self.name)
-        if module_name is None:
-            raise ValueError(f"No reference derivative for shader '{self.name}'")
-        module = import_module("sdf_ui.learning." + module_name)
-        try:
-            rule = module.RULES[self.name]
-        except KeyError as error:
-            raise ValueError(
-                f"Missing derivative rule for shader '{self.name}'"
-            ) from error
-        return rule, getattr(module, "DEFAULTS", {}).get(self.name, {})
+            return self.contract.reference, getattr(self.contract, "defaults", None) or {}
+        raise ValueError(f"Shader '{self.name}' has no extension-owned reference rule")
 
     @staticmethod
     def workgroup_size(source):
@@ -130,11 +105,8 @@ class ShaderOperation:
             raise ValueError(f"Shader '{self.name}' has no differentiation contract")
         body = self.gpu_derivative
         expression = self.expression()
-        if expression is not None and self.program is None:
-            from .shader_expression import REVERSE_EXPRESSIONS
-
-            if self.name in REVERSE_EXPRESSIONS:
-                return REVERSE_EXPRESSIONS[self.name].reverse_source(self.contract)
+        if expression is not None and expression.reverse_expression is not None:
+            return expression.reverse_expression.reverse_source(self.contract)
         if body is None and expression is not None:
             body = expression.body
         if body is None:

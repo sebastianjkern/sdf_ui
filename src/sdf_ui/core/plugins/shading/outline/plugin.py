@@ -2,6 +2,7 @@ __docformat__ = "google"
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.core.plugins.common import color, shader
+from .implementation import CONTRACT, INTERFACE, PROGRAM
 
 
 def register_plugins(registry):
@@ -13,7 +14,10 @@ def register_plugins(registry):
             (TextureKind.SDF,),
             params=("fg_color", "bg_color", "inflate"),
             defaults={"bg_color": (0.0, 0.0, 0.0, 0.0), "inflate": 0.0},
-            shader=shader("outline", "plugins/shading/outline/shader.glsl"),
+            shader=shader(
+                "outline", "plugins/shading/outline/shader.glsl",
+                derivative_contract=CONTRACT, program=PROGRAM, interface=INTERFACE,
+            ),
             input_uniforms=("sdf",),
             make_uniforms=lambda p: {
                 "background": color(p["bg_color"]),

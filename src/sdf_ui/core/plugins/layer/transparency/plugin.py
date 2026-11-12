@@ -2,6 +2,7 @@ __docformat__ = "google"
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.core.plugins.common import params, shader
+from .implementation import CONTRACT, INTERFACE, PROGRAM
 
 
 def register_plugins(registry):
@@ -12,7 +13,7 @@ def register_plugins(registry):
             TextureKind.COLOR,
             (TextureKind.COLOR,),
             params=("alpha",),
-            shader=shader("transparency", "plugins/layer/transparency/shader.glsl"),
+            shader=shader("transparency", "plugins/layer/transparency/shader.glsl", derivative_contract=CONTRACT, program=PROGRAM, interface=INTERFACE),
             input_uniforms=("tex0",),
             make_uniforms=params("alpha"),
             method_of=(TextureKind.COLOR,),

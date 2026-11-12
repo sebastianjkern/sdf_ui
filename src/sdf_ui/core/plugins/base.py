@@ -18,12 +18,63 @@ class PluginFamily:
 
 
 @dataclass(frozen=True)
+class ImageBinding:
+    """An extension-owned image uniform and its OpenGL image unit."""
+
+    name: str
+    unit: int
+    read: bool = False
+    write: bool = False
+
+    def __post_init__(self):
+        if not isinstance(self.name, str) or not self.name:
+            raise ValueError("Image binding needs a uniform name")
+        if isinstance(self.unit, bool) or not isinstance(self.unit, int) or self.unit < 0:
+            raise ValueError("Image binding unit must be a nonnegative integer")
+        if not self.read and not self.write:
+            raise ValueError("Image binding must be readable or writable")
+
+
+@dataclass(frozen=True)
+class Uniform:
+    """A named shader parameter and its GLSL value type."""
+
+    name: str
+    glsl_type: str
+
+
+@dataclass(frozen=True)
+class ShaderInterface:
+    """Shader-owned image layout and parameter declarations."""
+
+    output: ImageBinding
+    inputs: tuple = ()
+    uniforms: tuple = ()
+    extra_outputs: tuple = ()
+
+    def __post_init__(self):
+        object.__setattr__(self, "inputs", tuple(self.inputs))
+        object.__setattr__(self, "uniforms", tuple(self.uniforms))
+        object.__setattr__(self, "extra_outputs", tuple(self.extra_outputs))
+        images = (self.output, *self.extra_outputs, *self.inputs)
+        if len({item.unit for item in images}) != len(images):
+            raise ValueError("Shader image units must be unique")
+        names = [item.name for item in (*images, *self.uniforms)]
+        if len(set(names)) != len(names):
+            raise ValueError("Shader uniform names must be unique")
+        if (any(not item.write for item in (self.output, *self.extra_outputs))
+                or any(not item.read for item in self.inputs)):
+            raise ValueError("Shader output must be writable and inputs readable")
+
+
+@dataclass(frozen=True)
 class ShaderFile:
     name: str
     path: str
     derivative_contract: object = None
     gpu_derivative: Optional[str] = None
     program: object = None
+    interface: Optional[ShaderInterface] = None
 
     @property
     def operation(self):
@@ -39,10 +90,8 @@ class ShaderFile:
 
     @property
     def differentiation(self):
-        """Executable unquantized shader derivative contract, when registered."""
-        from ..differentiation import shader_differentiation
-
-        return self.derivative_contract or shader_differentiation(self.name, self.path)
+        """Return only the contract declared by this shader extension."""
+        return self.derivative_contract
 
     def backward(self, size, inputs, params, output_gradients):
         """Evaluate the shader's reference VJP at named texture/uniform values."""
@@ -122,16 +171,23 @@ class Plugin:
                 f"Plugin '{self.name}' cannot use the default renderer for result '{self.result}'"
             )
 
-        uniforms = {"destTex": 0}
+        interface = self.shader.interface
+        if interface is None:
+            raise ValueError(
+                f"Shader extension '{self.shader.name}' must declare its image and uniform interface"
+            )
+        if len(interface.inputs) != len(inputs):
+            raise ValueError(f"Shader '{self.shader.name}' has invalid input count")
+        output = interface.output
+        image_inputs = interface.inputs
+        uniforms = {output.name: output.unit}
         if self.make_uniforms is not None:
             uniforms.update(self.make_uniforms(params))
 
-        image_bindings = [(tex, 0, False, True)]
-        for location, (uniform_name, texture) in enumerate(
-            zip(self.input_uniforms, inputs), start=1
-        ):
-            uniforms[uniform_name] = location
-            image_bindings.append((texture.tex, location, True, False))
+        image_bindings = [(tex, output.unit, output.read, output.write)]
+        for binding, texture in zip(image_inputs, inputs):
+            uniforms[binding.name] = binding.unit
+            image_bindings.append((texture.tex, binding.unit, binding.read, binding.write))
 
         run_shader(
             ctx, self.shader.name, uniforms=uniforms, image_bindings=image_bindings

@@ -2,6 +2,7 @@ __docformat__ = "google"
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.core.plugins.common import lower_composite, render_rgb_shader, shader
+from .implementation import CONTRACT, INTERFACE, PROGRAM
 
 
 def render_alpha_overlay(renderer, inputs, params):
@@ -17,7 +18,7 @@ def register_plugins(registry):
             PluginFamily.LAYER,
             TextureKind.COLOR,
             (TextureKind.COLOR, TextureKind.COLOR),
-            shader=shader("overlay", "plugins/layer/alpha_overlay/shader.glsl"),
+            shader=shader("overlay", "plugins/layer/alpha_overlay/shader.glsl", derivative_contract=CONTRACT, program=PROGRAM, interface=INTERFACE),
             input_uniforms=("tex1", "tex0"),
             mode="RGB",
             render_func=render_alpha_overlay,

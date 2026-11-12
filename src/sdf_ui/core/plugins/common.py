@@ -8,10 +8,11 @@ def lower_composite(builder, plugin, inputs, raw, values):
     return builder.composite(plugin, inputs, raw, values)
 
 
-def shader(name, path, *, derivative_contract=None, gpu_derivative=None, program=None):
+def shader(name, path, *, derivative_contract=None, gpu_derivative=None, program=None,
+           interface=None):
     if path.startswith("plugins/"):
         path = f"core/{path}"
-    return ShaderFile(name, path, derivative_contract, gpu_derivative, program)
+    return ShaderFile(name, path, derivative_contract, gpu_derivative, program, interface)
 
 
 def build(name, *args, **kwargs):
@@ -62,20 +63,44 @@ def render_rgb_shader(
 ):
     from sdf_ui.core.color import ColorSpaceMode, ColorTexture
     from sdf_ui.core.operations import run_shader
+    from sdf_ui.core.plugins.registry import registry
 
     ctx = renderer.ctx
     tex = ctx.rgba8()
     rgb_inputs = tuple(ensure_rgb(renderer, texture) for texture in inputs)
 
-    shader_uniforms = {"destTex": 0}
+    descriptor = next(
+        (item for item in registry.shader_files() if item.name == shader_name), None
+    )
+    interface = None if descriptor is None else descriptor.interface
+    output = interface.output if interface is not None else None
+    declared_inputs = (
+        {binding.name: binding for binding in interface.inputs}
+        if interface is not None else {}
+    )
+    shader_uniforms = {
+        output.name if output is not None else "destTex":
+        output.unit if output is not None else 0
+    }
     shader_uniforms.update(uniforms or {})
 
-    image_bindings = [(tex, 0, False, True)]
+    image_bindings = [
+        (tex, output.unit, output.read, output.write)
+        if output is not None else (tex, 0, False, True)
+    ]
     for location, (uniform_name, texture) in enumerate(
         zip(image_uniforms, rgb_inputs), start=1
     ):
-        shader_uniforms[uniform_name] = location
-        image_bindings.append((texture.tex, location, True, False))
+        binding = declared_inputs.get(uniform_name)
+        if interface is not None and binding is None:
+            raise ValueError(f"Shader '{shader_name}' has no input '{uniform_name}'")
+        unit = location if binding is None else binding.unit
+        shader_uniforms[uniform_name] = unit
+        image_bindings.append((
+            texture.tex, unit,
+            True if binding is None else binding.read,
+            False if binding is None else binding.write,
+        ))
 
     run_shader(
         ctx,
@@ -88,13 +113,17 @@ def render_rgb_shader(
 
 def blur_pass(ctx, shader_name, dest, src):
     from sdf_ui.core.operations import run_shader
+    from sdf_ui.core.plugins.postprocessing.blur.implementation import shader_parts
+
+    interface, _, _ = shader_parts(shader_name)
+    output, source = interface.output, interface.inputs[0]
 
     run_shader(
         ctx,
         shader_name,
-        uniforms={"destTex": 0, "origTex": 1},
+        uniforms={output.name: output.unit, source.name: source.unit},
         image_bindings=(
-            (dest, 0, False, True),
-            (src.tex if hasattr(src, "tex") else src, 1, True, False),
+            (dest, output.unit, output.read, output.write),
+            (src.tex if hasattr(src, "tex") else src, source.unit, source.read, source.write),
         ),
     )

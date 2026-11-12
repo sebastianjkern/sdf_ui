@@ -2,6 +2,7 @@ __docformat__ = "google"
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.core.plugins.common import shader
+from .implementation import CONTRACT, INTERFACE, PROGRAM
 
 
 def register_plugins(registry):
@@ -12,7 +13,8 @@ def register_plugins(registry):
             TextureKind.COLOR,
             (TextureKind.SDF,),
             shader=shader(
-                "partial_derivative", "plugins/shading/partial_derivative/shader.glsl"
+                "partial_derivative", "plugins/shading/partial_derivative/shader.glsl",
+                derivative_contract=CONTRACT, program=PROGRAM, interface=INTERFACE,
             ),
             input_uniforms=("sdf",),
             mode="RGB",

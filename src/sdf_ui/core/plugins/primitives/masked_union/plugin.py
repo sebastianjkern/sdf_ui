@@ -2,6 +2,7 @@ __docformat__ = "google"
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.core.plugins.common import lower_composite, shader
+from .implementation import CONTRACT, INTERFACE, PROGRAM
 
 
 def render_masked_union(renderer, inputs, params):
@@ -13,15 +14,15 @@ def render_masked_union(renderer, inputs, params):
     tex = ctx.r32f()
     mask = ctx.rgba8()
 
+    bindings = (INTERFACE.output, *INTERFACE.extra_outputs, *INTERFACE.inputs)
+    textures = (tex, mask, inputs[0].tex, inputs[1].tex)
     run_shader(
         ctx,
         "masked_union",
-        uniforms={"destTex": 0, "maskTex": 1, "sdf0": 2, "sdf1": 3},
-        image_bindings=(
-            (tex, 0, False, True),
-            (mask, 1, False, True),
-            (inputs[0].tex, 2, True, False),
-            (inputs[1].tex, 3, True, False),
+        uniforms={binding.name: binding.unit for binding in bindings},
+        image_bindings=tuple(
+            (texture, binding.unit, binding.read, binding.write)
+            for texture, binding in zip(textures, bindings)
         ),
     )
 
@@ -38,7 +39,8 @@ def register_plugins(registry):
             TextureKind.MULTI_OUTPUT,
             (TextureKind.SDF, TextureKind.SDF),
             shader=shader(
-                "masked_union", "plugins/primitives/masked_union/shader.glsl"
+                "masked_union", "plugins/primitives/masked_union/shader.glsl",
+                derivative_contract=CONTRACT, program=PROGRAM, interface=INTERFACE,
             ),
             render_func=render_masked_union,
             lowering_func=lower_composite,

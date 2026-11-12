@@ -2,6 +2,7 @@ __docformat__ = "google"
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.core.plugins.common import color, shader
+from .implementation import CONTRACT, INTERFACE, PROGRAM
 
 _HEIGHT_PROFILES = {
     "smooth": 0.0,
@@ -17,7 +18,6 @@ _HEIGHT_PROFILES = {
     "quarter_circle": 4.0,
     "circle_in": 5.0,
 }
-
 
 def _height_profile(value):
     if isinstance(value, str):
@@ -97,7 +97,7 @@ def register_plugins(registry):
                 "inner": -1.5,
                 "outer": 1.5,
             },
-            shader=shader("light", "plugins/shading/light/shader.glsl"),
+            shader=shader("light", "plugins/shading/light/shader.glsl", derivative_contract=CONTRACT, program=PROGRAM, interface=INTERFACE),
             input_uniforms=("sdf",),
             make_uniforms=_uniforms,
             mode="RGB",

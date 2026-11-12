@@ -2,10 +2,14 @@ __docformat__ = "google"
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.core.plugins.common import colors, shader
+from .implementation import CONTRACT, INTERFACE, PROGRAM
 
 
 def register_plugins(registry):
-    descriptor = shader("clear_color", "plugins/shading/clear_color/shader.glsl")
+    descriptor = shader(
+        "clear_color", "plugins/shading/clear_color/shader.glsl",
+        derivative_contract=CONTRACT, program=PROGRAM, interface=INTERFACE,
+    )
     registry.register(
         Plugin(
             "clear",

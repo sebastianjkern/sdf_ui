@@ -2,6 +2,7 @@ __docformat__ = "google"
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.core.plugins.common import lower_composite, render_rgb_shader, shader
+from .implementation import CONTRACT, INTERFACE, PROGRAM
 
 
 def render_layer_mask(renderer, inputs, params):
@@ -11,7 +12,7 @@ def render_layer_mask(renderer, inputs, params):
 
 
 def register_plugins(registry):
-    descriptor = shader("layer_mask", "plugins/layer/layer_mask/shader.glsl")
+    descriptor = shader("layer_mask", "plugins/layer/layer_mask/shader.glsl", derivative_contract=CONTRACT, program=PROGRAM, interface=INTERFACE)
     registry.register(
         Plugin(
             "layer_mask",

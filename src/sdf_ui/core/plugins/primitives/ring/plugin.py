@@ -2,10 +2,14 @@ __docformat__ = "google"
 
 from sdf_ui.core.plugins.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.core.plugins.common import params, shader
+from .implementation import CONTRACT, INTERFACE, PROGRAM
 
 
 def register_plugins(registry):
-    descriptor = shader("ring", "plugins/primitives/ring/shader.glsl")
+    descriptor = shader(
+        "ring", "plugins/primitives/ring/shader.glsl",
+        derivative_contract=CONTRACT, program=PROGRAM, interface=INTERFACE,
+    )
     for name in ("ring", "annulus"):
         registry.register(
             Plugin(

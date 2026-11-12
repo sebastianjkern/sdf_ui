@@ -337,68 +337,6 @@ void main(){{
 """
 
 
-CIRCLE = Expression(
-    "sub",
-    (
-        Expression(
-            "length2",
-            (
-                Expression(
-                    "sub2", (Expression("position"), Expression("uniform", ("offset",)))
-                ),
-            ),
-        ),
-        Expression("uniform", ("radius",)),
-    ),
-)
-
-_A, _B, _T = (
-    Expression("load", (0,)),
-    Expression("load", (1,)),
-    Expression("uniform", ("t",)),
-)
-REVERSE_EXPRESSIONS = {
-    "circle": CIRCLE,
-    "abs": Expression("abs", (_A,)),
-    "union": Expression("min", (_A, _B)),
-    "intersection": Expression("max", (_A, _B)),
-    "subtract": Expression("max", (_A, Expression("neg", (_B,)))),
-    "interpolation": Expression("mix", (_A, _B, _T)),
-    "ring": Expression(
-        "sub",
-        (
-            Expression(
-                "abs",
-                (
-                    Expression(
-                        "sub",
-                        (
-                            Expression(
-                                "length2",
-                                (
-                                    Expression(
-                                        "sub2",
-                                        (
-                                            Expression("position"),
-                                            Expression("uniform", ("center",)),
-                                        ),
-                                    ),
-                                ),
-                            ),
-                            Expression("uniform", ("radius",)),
-                        ),
-                    ),
-                ),
-            ),
-            Expression(
-                "mul",
-                (Expression("uniform", ("thickness",)), Expression("literal", (0.5,))),
-            ),
-        ),
-    ),
-}
-
-
 @dataclass(frozen=True)
 class ShaderProgram:
     """A shared typed shader program compiled to primal and local VJP GLSL.
@@ -410,6 +348,7 @@ class ShaderProgram:
 
     name: str
     body: str
+    reverse_expression: object = None
 
     def forward(
         self, contract, *, sdf_format="r32f", color_format="rgba8", original_source=""
