@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "2D Rendering engine based on Signed Distance Functions"
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
@@ -17,7 +17,7 @@ dependencies = [
     "TTFQuery>=2.0.0b1",
     "numpy>=1.22.3",
     "opencv-python>=4.5.1.48",
-    "pillow>=8.1.0",
+    "pillow>=13.0.0",
     "moderngl>=5.6.4",
     "console"
 ]
