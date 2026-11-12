@@ -2,7 +2,7 @@
 
 ## Clean-sheet graph architecture
 
-- [ ] Move each shader's image bindings, uniform metadata, and forward/backward knowledge into its owning extension; verify existing rendering and gradients before committing subgoal 1.
+- [x] Move each shader's image bindings, uniform metadata, and forward/backward knowledge into its owning extension; audit all 55 descriptors and verify shader behavior/gradients. GPU primitive and shading suites pass when Canvas is forced to EGL (171 and 65 passed); the default GLX path exits with X11 `GLXMakeCurrent` `BadAccess` in this Wayland environment.
 - [ ] Establish a clear hexagonal architecture with shader and loss adapters around the core, while keeping rendering in the core; verify and commit subgoal 2.
 - [ ] Reimplement the graph and NumPy learning around graph nodes, including losses over intermediate values; verify and commit subgoal 3.
 

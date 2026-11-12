@@ -8,11 +8,14 @@ uniform float time = 1.0;
 
 float noise(vec2 p)
 {
-    vec2 K1 = vec2(
-        23.14069263277926, // e^pi (Gelfond's constant)
-        2.665144142690225 // 2^sqrt(2) (Gelfond–Schneider constant)
-    );
-    return fract(cos(dot(p, K1)) * 12345.6789);
+    uvec2 pixel = uvec2(p);
+    uint value = pixel.x * 0x9E3779B9u + pixel.y * 0x85EBCA6Bu;
+    value ^= value >> 16;
+    value *= 0x7FEB352Du;
+    value ^= value >> 15;
+    value *= 0x846CA68Bu;
+    value ^= value >> 16;
+    return float(value & 0x00FFFFFFu) / 16777216.0;
 }
 
 void main() {

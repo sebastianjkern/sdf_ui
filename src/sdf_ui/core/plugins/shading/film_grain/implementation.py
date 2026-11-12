@@ -10,15 +10,14 @@ def reference(context, inputs, params):
     import numpy as np
     from sdf_ui.learning.autodiff import Tensor
 
-    x, y = context.x.data.astype(np.float32), context.y.data.astype(np.float32)
-    # GLSL's dot product rounds once after the sum (commonly via FMA). Match
-    # that float32 result before evaluating its implementation-dependent cos.
-    angle = (
-        x.astype(np.float64) * np.float32(23.14069263277926)
-        + y.astype(np.float64) * np.float32(2.665144142690225)
-    ).astype(np.float32)
-    value = np.cos(angle) * np.float32(12345.6789)
-    value = value - np.floor(value)
+    x, y = context.x.data.astype(np.uint32), context.y.data.astype(np.uint32)
+    value = x * np.uint32(0x9E3779B9) + y * np.uint32(0x85EBCA6B)
+    value ^= value >> np.uint32(16)
+    value *= np.uint32(0x7FEB352D)
+    value ^= value >> np.uint32(15)
+    value *= np.uint32(0x846CA68B)
+    value ^= value >> np.uint32(16)
+    value = (value & np.uint32(0x00FFFFFF)).astype(np.float64) / 16777216.0
     return Tensor(np.stack((value, value, value, np.ones_like(value)), axis=-1))
 
 
@@ -33,13 +32,18 @@ CONTRACT = ShaderDifferentiation(
     reference=reference,
 )
 BODY = """
-float shadingNoise(vec2 p) {
-    vec2 K1 = vec2(23.14069263277926, 2.665144142690225);
-    return fract(cos(dot(p, K1)) * 12345.6789);
+float shadingNoise(uvec2 p) {
+    uint value = p.x * 0x9E3779B9u + p.y * 0x85EBCA6Bu;
+    value ^= value >> 16;
+    value *= 0x7FEB352Du;
+    value ^= value >> 15;
+    value *= 0x846CA68Bu;
+    value ^= value >> 16;
+    return float(value & 0x00FFFFFFu) / 16777216.0;
 }
 void evaluate(ivec2 pos, out D o[8]) {
-    // Pixel coordinates are fixed and the native time uniform is unused.
-    D grain = c(shadingNoise(vec2(pos)));
+    // Integer hashing avoids renderer-dependent large-argument cosine results.
+    D grain = c(shadingNoise(uvec2(pos)));
     shadingOutput(D4(grain, grain, grain, c(1.0)), o);
 }
 """
