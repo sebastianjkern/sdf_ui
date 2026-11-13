@@ -7,12 +7,16 @@ from dataclasses import dataclass, field
 from time import perf_counter
 from typing import Dict, Optional
 
-from PIL import Image
+from PIL import Image, ImageOps
 
+from ..gpu.context import Context
+from ..gpu.nodes.common import build
 from ..util import hex_col
-from ..backends.opengl.context import Context
-from ..backends.opengl.nodes.common import build
-from ..backends.opengl.texture_utils import decrease_tex_registry, show_texture
+
+
+def _texture_bytes(texture):
+    read_bytes = getattr(texture, "read_bytes", None)
+    return read_bytes() if callable(read_bytes) else texture.read()
 
 
 def freeze(value):
@@ -142,7 +146,7 @@ class Renderer:
         else:
             self.stats.cache_skips += 1
 
-        from sdf_ui.backends.opengl.nodes.registry import registry
+        from sdf_ui.gpu.nodes.registry import registry
 
         plugin = registry.get(node.op)
         inputs = tuple(self.render(input_) for input_ in node.inputs)
@@ -244,14 +248,14 @@ class TextureNode(ABC):
     def __del__(self):
         if getattr(self, "tex", None) is not None:
             try:
-                self.tex.release()
+                close = getattr(self.tex, "close", None)
+                if callable(close):
+                    close()
             except Exception:
                 pass
-            else:
-                decrease_tex_registry(self.tex)
 
     def __getattr__(self, name):
-        from sdf_ui.backends.opengl.nodes.registry import registry
+        from sdf_ui.gpu.nodes.registry import registry
 
         if name in registry.method_names_for(self.kind):
 
@@ -262,7 +266,7 @@ class TextureNode(ABC):
         raise AttributeError(f"{type(self).__name__!s} has no attribute '{name}'")
 
     def __dir__(self):
-        from sdf_ui.backends.opengl.nodes.registry import registry
+        from sdf_ui.gpu.nodes.registry import registry
 
         names = set(super().__dir__())
         names.update(registry.method_names_for(self.kind))
@@ -281,7 +285,7 @@ class TextureNode(ABC):
                 and hasattr(texture, "to_rgb")
             ):
                 texture = texture.to_rgb().render(texture.context)
-            show_texture(texture.tex)
+            ImageOps.flip(Image.fromarray(texture.tex.read())).show()
 
         self._with_rendered_texture(
             _show, ctx=ctx, params=params, cache=cache, size=size
@@ -305,11 +309,11 @@ class TextureNode(ABC):
                 ):
                     texture = texture.to_rgb().render(texture.context)
                 image = Image.frombytes(
-                    "RGBA", texture.tex.size, texture.tex.read(), "raw"
+                    "RGBA", texture.tex.size, _texture_bytes(texture.tex), "raw"
                 )
             else:
                 image = Image.frombytes(
-                    "F", texture.tex.size, texture.tex.read(), "raw"
+                    "F", texture.tex.size, _texture_bytes(texture.tex), "raw"
                 )
                 image = image.convert("L")
 
@@ -366,7 +370,7 @@ class PostNamespace:
         return self.texture.to_rgb()
 
     def __getattr__(self, name):
-        from sdf_ui.backends.opengl.nodes.registry import registry
+        from sdf_ui.gpu.nodes.registry import registry
 
         try:
             plugin = registry.get(name)
@@ -384,7 +388,7 @@ class PostNamespace:
         return method
 
     def __dir__(self):
-        from sdf_ui.backends.opengl.nodes.registry import registry
+        from sdf_ui.gpu.nodes.registry import registry
 
         names = set(super().__dir__())
         names.update(

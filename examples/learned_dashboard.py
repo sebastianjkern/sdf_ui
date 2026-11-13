@@ -383,10 +383,7 @@ def run(
                 "training_image_readbacks": training_readbacks,
                 "first_training_loss": history[0]["loss"] if history else None,
                 "last_training_loss": history[-1]["loss"] if history else None,
-                "device": {
-                    key: canvas._mgl_ctx.info.get(key)
-                    for key in ("GL_VENDOR", "GL_RENDERER", "GL_VERSION")
-                },
+                "device": canvas.device_info,
             }
             (output / "metrics.json").write_text(
                 json.dumps(report, indent=2), encoding="utf-8"

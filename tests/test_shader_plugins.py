@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from sdf_ui import Canvas, color, param, sdf
-from sdf_ui.backends.opengl.nodes.base import Plugin, PluginFamily, TextureKind
+from sdf_ui.gpu.nodes.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.learning import (
     Adam,
     Bounds,

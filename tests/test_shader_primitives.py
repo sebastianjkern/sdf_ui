@@ -1,18 +1,17 @@
-"""Raw GLSL uniform contracts, analytic VJPs, and direct compute-shader parity."""
+"""Shader uniform contracts and analytic primitive vector-Jacobian products."""
 
-import re
 from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
-from sdf_ui.backends.opengl.nodes.registry import registry
+from sdf_ui.gpu.nodes.registry import registry
 from sdf_ui.learning.autodiff import Parameter, Tensor
 from sdf_ui.learning.shaders.primitives import RULES
 
 SIZE = (7, 5)
-PRIMITIVES = Path(__file__).resolve().parents[1] / "src/sdf_ui/backends/opengl/nodes/primitives"
+PRIMITIVES = Path(__file__).resolve().parents[1] / "src/sdf_ui/gpu/nodes/primitives"
 
 
 def _context(size=SIZE):
@@ -269,96 +268,3 @@ def test_finite_subgradients_at_degenerate_norms(name, params):
 def test_singular_transforms_fail_explicitly(params):
     with pytest.raises(ValueError, match="non-zero|singular"):
         RULES["transform"](_context(), dict(sdf=Tensor(np.ones((5, 7)))), params)
-
-
-@pytest.fixture(scope="module")
-def gl_context():
-    import moderngl
-
-    try:
-        context = moderngl.create_standalone_context(require=430)
-    except Exception:
-        try:
-            context = moderngl.create_standalone_context(require=430, backend="egl")
-        except Exception as exc:
-            pytest.skip(f"OpenGL 4.3 context unavailable: {exc}")
-    yield context
-    context.release()
-
-
-def _gl_evaluate(gl, name, inputs, params, size=SIZE):
-    """Dispatch the actual shader directly, independent of plugin mappings."""
-    folder = {"smooth_min": "smooth_union", "interpolation": "interpolate"}.get(
-        name, name
-    )
-    code = (PRIMITIVES / folder / "shader.glsl").read_text()
-    program = gl.compute_shader(code)
-    textures, outputs = [], []
-    try:
-        images = re.findall(
-            r"layout\s*\(\s*(\w+),\s*binding\s*=\s*(\d+)\s*\)\s*"
-            r"(writeonly|readonly)\s+uniform\s+image2D\s+(\w+)",
-            code,
-        )
-        for image_format, binding, access, key in images:
-            components, dtype = (4, "f1") if image_format == "rgba8" else (1, "f4")
-            source = inputs.get(key)
-            image_size = size if source is None else (source.shape[1], source.shape[0])
-            payload = None if source is None else source.astype("f4").tobytes()
-            texture = gl.texture(image_size, components, payload, dtype=dtype)
-            textures.append(texture)
-            writing = access == "writeonly"
-            texture.bind_to_image(int(binding), read=not writing, write=writing)
-            program[key].value = int(binding)
-            if writing:
-                outputs.append((texture, components, dtype))
-        for key, value in params.items():
-            if key in program:
-                program[key].value = value
-        program.run((size[0] + 15) // 16, (size[1] + 15) // 16, 1)
-        gl.memory_barrier()
-        result = []
-        for texture, components, dtype in outputs:
-            shape = (size[1], size[0]) + ((components,) if components > 1 else ())
-            value = np.frombuffer(
-                texture.read(), dtype="u1" if dtype == "f1" else "f4"
-            ).reshape(shape)
-            result.append(value / 255.0 if dtype == "f1" else value)
-        return tuple(result)
-    finally:
-        for texture in textures:
-            texture.release()
-        program.release()
-
-
-PARITY_CASES = (
-    CASES
-    + [
-        (name, dict(center=(2.31, 1.73), radius=2.17, start_angle=5.43, end_angle=7.71))
-        for name in ("arc", "sector")
-    ]
-    + [
-        (
-            "transform",
-            dict(transform_kind=2.5, center=(2.31, 1.73), skew=(0.173, -0.117)),
-        ),
-        ("grid", dict(grid_size=(-3.17, 2.61), offset=(0.27, -0.43), angle=0.173)),
-        ("smooth_min", dict(smoothness=-1.0)),
-    ]
-)
-
-
-@pytest.mark.parametrize("name,params", PARITY_CASES)
-def test_direct_glsl_parity(gl_context, name, params):
-    inputs = _inputs(name)
-    expected = _outputs(
-        RULES[name](
-            _context(), {key: Tensor(value) for key, value in inputs.items()}, params
-        )
-    )
-    actual = _gl_evaluate(gl_context, name, inputs, params)
-    assert len(actual) == len(expected)
-    for reference, gpu in zip(expected, actual):
-        assert reference.shape == gpu.shape
-        tolerance = 0.5 / 255.0 + 1e-6 if gpu.ndim == 3 else 3e-5
-        np.testing.assert_allclose(reference.data, gpu, atol=tolerance, rtol=2e-5)

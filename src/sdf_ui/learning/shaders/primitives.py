@@ -13,55 +13,55 @@ Bézier roots are numerical branch decisions, with analytic envelope gradients
 through the selected curve points, rather than numerical differentiation.
 """
 
-from ...backends.opengl.nodes.primitives.abs.implementation import reference as _abs
-from ...backends.opengl.nodes.primitives.arc.implementation import reference as _arc
-from ...backends.opengl.nodes.primitives.bezier.implementation import (
+from ...gpu.nodes.primitives.abs.implementation import reference as _abs
+from ...gpu.nodes.primitives.arc.implementation import reference as _arc
+from ...gpu.nodes.primitives.bezier.implementation import (
     reference as _bezier,
 )
-from ...backends.opengl.nodes.primitives.capsule.implementation import (
+from ...gpu.nodes.primitives.capsule.implementation import (
     reference as _capsule,
 )
-from ...backends.opengl.nodes.primitives.circle.implementation import (
+from ...gpu.nodes.primitives.circle.implementation import (
     reference as _circle,
 )
-from ...backends.opengl.nodes.primitives.ellipse.implementation import (
+from ...gpu.nodes.primitives.ellipse.implementation import (
     reference as _ellipse,
 )
-from ...backends.opengl.nodes.primitives.grid.implementation import reference as _grid
-from ...backends.opengl.nodes.primitives.half_plane.implementation import (
+from ...gpu.nodes.primitives.grid.implementation import reference as _grid
+from ...gpu.nodes.primitives.half_plane.implementation import (
     reference as _half_plane,
 )
-from ...backends.opengl.nodes.primitives.interpolate.implementation import (
+from ...gpu.nodes.primitives.interpolate.implementation import (
     reference as _interpolate,
 )
-from ...backends.opengl.nodes.primitives.intersection.implementation import (
+from ...gpu.nodes.primitives.intersection.implementation import (
     reference as _intersection,
 )
-from ...backends.opengl.nodes.primitives.line.implementation import reference as _line
-from ...backends.opengl.nodes.primitives.masked_union.implementation import (
+from ...gpu.nodes.primitives.line.implementation import reference as _line
+from ...gpu.nodes.primitives.masked_union.implementation import (
     reference as _masked_union,
 )
-from ...backends.opengl.nodes.primitives.rect.implementation import reference as _rect
-from ...backends.opengl.nodes.primitives.repeat.implementation import (
+from ...gpu.nodes.primitives.rect.implementation import reference as _rect
+from ...gpu.nodes.primitives.repeat.implementation import (
     reference as _repeat,
 )
-from ...backends.opengl.nodes.primitives.ring.implementation import reference as _ring
-from ...backends.opengl.nodes.primitives.sector.implementation import (
+from ...gpu.nodes.primitives.ring.implementation import reference as _ring
+from ...gpu.nodes.primitives.sector.implementation import (
     reference as _sector,
 )
-from ...backends.opengl.nodes.primitives.smooth_union.implementation import (
+from ...gpu.nodes.primitives.smooth_union.implementation import (
     reference as _smooth_min,
 )
-from ...backends.opengl.nodes.primitives.subtract.implementation import (
+from ...gpu.nodes.primitives.subtract.implementation import (
     reference as _subtract,
 )
-from ...backends.opengl.nodes.primitives.transform.implementation import (
+from ...gpu.nodes.primitives.transform.implementation import (
     reference as _transform,
 )
-from ...backends.opengl.nodes.primitives.triangle.implementation import (
+from ...gpu.nodes.primitives.triangle.implementation import (
     reference as _triangle,
 )
-from ...backends.opengl.nodes.primitives.union.implementation import reference as _union
+from ...gpu.nodes.primitives.union.implementation import reference as _union
 
 __all__ = ["RULES"]
 RULES = {

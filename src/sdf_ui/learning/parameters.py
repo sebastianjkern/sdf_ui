@@ -51,11 +51,15 @@ class ParameterStore(Mapping):
         if name not in self:
             if initial is _UNSET:
                 raise KeyError(f"Unknown parameter '{name}'; supply an initial value")
-            self.define(name, initial, trainable=True if trainable is None else trainable)
+            self.define(
+                name, initial, trainable=True if trainable is None else trainable
+            )
         elif initial is not _UNSET:
             raise ValueError(f"Parameter '{name}' already exists")
         elif trainable is not None and self[name].trainable != trainable:
-            raise ValueError(f"Parameter '{name}' already has a different trainable setting")
+            raise ValueError(
+                f"Parameter '{name}' already has a different trainable setting"
+            )
         return param(name)
 
     def scalar(self, name, *, initial, min=None, max=None):

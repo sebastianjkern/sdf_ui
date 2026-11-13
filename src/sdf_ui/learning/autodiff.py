@@ -77,7 +77,7 @@ class Tensor:
         self.grad = None  # type: Optional[np.ndarray]
         self._parents = ()  # type: Tuple[Tensor, ...]
         self._pullback = None  # type: Optional[Callable]
-        self._versions = {}  # type: Dict[Parameter, int]
+        self._versions: dict["Parameter", int] = {}
 
     @classmethod
     def _result(

@@ -1,13 +1,12 @@
-"""Raw shader values, piecewise input/uniform gradients, and direct GL parity."""
+"""Raw shader values and piecewise input/uniform gradients."""
 
-from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
-from sdf_ui.backends.opengl.nodes.base import PluginFamily
-from sdf_ui.backends.opengl.nodes.registry import registry
+from sdf_ui.gpu.nodes.base import PluginFamily
+from sdf_ui.gpu.nodes.registry import registry
 from sdf_ui.learning.autodiff import Parameter, Tensor
 from sdf_ui.learning.shaders.effects import DEFAULTS, RULES
 
@@ -284,83 +283,3 @@ def test_blur_rejects_wrong_uniform_array_shapes(name):
     for key in ("offset", "weight"):
         with pytest.raises(ValueError, match="offsets and weights"):
             _run(name, context, inputs, {key: [0.2]})
-
-
-@pytest.fixture(scope="module")
-def gl_context():
-    import moderngl
-
-    try:
-        context = moderngl.create_standalone_context(require=430, backend="egl")
-    except Exception as exc:
-        pytest.skip("OpenGL 4.3 EGL context unavailable: {}".format(exc))
-    try:
-        yield context
-    finally:
-        context.release()
-
-
-def _gl_run(context, name, size, inputs, params, *, floating):
-    descriptor = next(item for item in registry.shader_files() if item.name == name)
-    source = (Path(__file__).parents[1] / "src/sdf_ui" / descriptor.path).read_text()
-    # Float image formats isolate arithmetic parity from rgba8 storage effects.
-    if floating:
-        source = source.replace("rgba8", "rgba32f")
-    shader = context.compute_shader(source)
-    dtype = "f4" if floating else "f1"
-    textures = []
-    try:
-        dest = context.texture(size, 4, dtype=dtype)
-        textures.append(dest)
-        dest.bind_to_image(0, read=False, write=True)
-        shader["destTex"].value = 0
-        for binding, (key, value) in enumerate(inputs.items(), start=1):
-            payload = (
-                value.astype(np.float32)
-                if floating
-                else np.rint(value * 255).astype(np.uint8)
-            )
-            tex = context.texture(size, 4, data=payload.tobytes(), dtype=dtype)
-            textures.append(tex)
-            tex.bind_to_image(binding, read=True, write=False)
-            shader[key].value = binding
-        for key, value in params.items():
-            shader[key].value = tuple(value) if np.ndim(value) else float(value)
-        shader.run((size[0] + 15) // 16, (size[1] + 15) // 16, 1)
-        context.memory_barrier()
-        array = np.frombuffer(dest.read(), dtype=np.float32 if floating else np.uint8)
-        return array.reshape(size[1], size[0], 4).astype(float) / (
-            1 if floating else 255
-        )
-    finally:
-        for texture in reversed(textures):
-            texture.release()
-        shader.release()
-
-
-@pytest.mark.parametrize("name", NAMES)
-@pytest.mark.parametrize(
-    "floating", [False, True], ids=["raw-rgba8", "float-arithmetic"]
-)
-def test_direct_glsl_parity_without_plugin_host_paths(gl_context, name, floating):
-    size = (19, 17)  # partial compute workgroups exercise shader bounds guards
-    context, inputs, _ = _case(name, size)
-    if not floating:
-        inputs = {key: np.rint(value * 255) / 255 for key, value in inputs.items()}
-    params = {"alpha": 0.37} if name == "transparency" else {}
-    expected = _run(name, context, inputs, params).numpy()
-    actual = _gl_run(gl_context, name, size, inputs, params, floating=floating)
-    if not floating:
-        expected = np.clip(expected, 0, 1)
-    np.testing.assert_allclose(actual, expected, atol=3e-5 if floating else 1.01 / 255)
-
-
-@pytest.mark.parametrize("name", BLURS)
-def test_direct_glsl_fractional_negative_blur_offsets_at_valid_loads(gl_context, name):
-    size = (23, 21)
-    context, inputs, params = _case(name, size)
-    # Custom offsets exercise integer casts and an i-based sign flip with all
-    # sampled coordinates valid in this crop. CPU-only tests cover zero OOB.
-    expected = _run(name, context, inputs, params).numpy()
-    actual = _gl_run(gl_context, name, size, inputs, params, floating=True)
-    np.testing.assert_allclose(actual[8:-8, 8:-8], expected[8:-8, 8:-8], atol=3e-6)

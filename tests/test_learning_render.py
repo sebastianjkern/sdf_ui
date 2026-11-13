@@ -1,4 +1,4 @@
-"""Float render values, reusable tapes, numerical gradients, and GL parity."""
+"""Float render values, reusable tapes, numerical gradients, and GPU parity."""
 
 import gc
 import weakref
@@ -8,10 +8,10 @@ import pytest
 from PIL import Image
 
 from sdf_ui import Canvas, color, param, percent_of_min, sdf, sin
-from sdf_ui.backends.opengl.nodes.base import Plugin, PluginFamily, TextureKind
-from sdf_ui.backends.opengl.nodes.registry import registry
 from sdf_ui.core.color import ColorTexture
 from sdf_ui.core.sdf import SDFTexture
+from sdf_ui.gpu.nodes.base import Plugin, PluginFamily, TextureKind
+from sdf_ui.gpu.nodes.registry import registry
 from sdf_ui.learning.autodiff import Parameter, Tensor
 from sdf_ui.learning.optimizers import Adam
 from sdf_ui.learning.render import DifferentiableRenderer, UnsupportedGradientError
@@ -448,11 +448,11 @@ def test_save_converts_lab_to_rgb_flips_and_preserves_gradients(tmp_path):
 
 
 @pytest.fixture
-def gl_canvas():
+def gpu_canvas():
     try:
         canvas = Canvas((21, 17))
     except Exception as exc:
-        pytest.skip(f"OpenGL context unavailable: {exc}")
+        pytest.skip(f"GPU context unavailable: {exc}")
     with canvas:
         yield canvas
 
@@ -467,9 +467,9 @@ def gl_canvas():
         sdf.rect((8.2, 7.3), (4.1, 3.2), 0.5).rotate(0.23, (9.1, 7.2)),
     ],
 )
-def test_sdf_and_transform_gpu_parity(gl_canvas, scene):
-    floating = DifferentiableRenderer(gl_canvas.size).render(scene).numpy()
-    gpu = gl_canvas.render(scene)
+def test_sdf_and_transform_gpu_parity(gpu_canvas, scene):
+    floating = DifferentiableRenderer(gpu_canvas.size).render(scene).numpy()
+    gpu = gpu_canvas.render(scene)
     values = np.frombuffer(gpu.tex.read(), dtype=np.float32).reshape(floating.shape)
     np.testing.assert_allclose(floating, values, atol=0.04, rtol=0.002)
 
@@ -487,9 +487,9 @@ def test_sdf_and_transform_gpu_parity(gl_canvas, scene):
         color.clear((0.2, 0.4, 0.6, 0.8)).multiply(color.clear((0.6, 0.3, 0.4, 0.3))),
     ],
 )
-def test_color_gpu_parity_with_rgba8_quantization_tolerance(gl_canvas, scene):
-    floating = DifferentiableRenderer(gl_canvas.size).render(scene).numpy()
-    gpu = gl_canvas.render(scene)
+def test_color_gpu_parity_with_rgba8_quantization_tolerance(gpu_canvas, scene):
+    floating = DifferentiableRenderer(gpu_canvas.size).render(scene).numpy()
+    gpu = gpu_canvas.render(scene)
     values = (
         np.frombuffer(gpu.tex.read(), dtype=np.uint8).reshape(floating.shape) / 255.0
     )

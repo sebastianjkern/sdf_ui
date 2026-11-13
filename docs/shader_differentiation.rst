@@ -17,7 +17,7 @@ Inspect and execute a contract
 ::
 
     import numpy as np
-    from sdf_ui.backends.opengl.nodes.registry import registry
+    from sdf_ui.gpu.nodes.registry import registry
 
     shader = registry.get("circle").shader
     contract = shader.differentiation
@@ -49,7 +49,7 @@ both arrays as a tuple or a mapping with ``destTex`` and ``maskTex`` keys. Both
 seeds contribute to the same source adjoints.
 
 The local VJP recomputes the reference forward expression. It requires no
-OpenGL context and currently runs on CPU. It is suitable for gradient checking
+WebGPU context and currently runs on CPU. It is suitable for gradient checking
 and optimization. The native GPU executor consumes the same typed contracts.
 
 Coverage and mathematical choices
@@ -119,30 +119,19 @@ Multiple pixel, field, and geometry loss roots contribute before a single
 optimizer update. Programs and bounded forward values are cached separately
 from execution tapes, with explicit barriers between dependent GPU operations.
 
-Each ShaderFile exposes a ShaderOperation that supplies forward source, typed
-contracts, the CPU reference rule, and GPU backward source to the executors.
-All 43 standalone primitive, shading, layer, and postprocessing shader operations
-use shared dual-number programs to emit both forward GLSL and backward code.
-This representation covers piecewise choices, image sampling, and multi-output
-primitives. Composite shapes lower into those operations. The CPU reference
-remains independently implemented.
+Each shader descriptor exposes typed inputs, uniforms, outputs, and an
+independent CPU reference rule. The GPU graph executes the checked-in WGSL
+kernels in ``sdf_ui.gpu/shaders``. Composite shapes lower into those shader
+operations, and the CPU reference remains independently implemented.
 Host-side polygon, text, and glyph callbacks are not standalone shader operations;
 materialize them as inputs when using a compiled graph.
 
-For standalone shapes, the authoritative runtime math lives in
-``sdf_ui.backends.opengl.shader_sources``. ``ShaderProgram`` emits a primal-only forward shader and a
-backward shader from the same typed dual arithmetic
-program. The original GLSL files still supply port declarations and serve as
-an independent forward conformance reference. When changing a shape, update its
-shared program, the GLSL reference and the independent CPU rule, then run the
-primitive conformance tests. The representation is a GLSL-based typed program,
-not a general compiler that differentiates arbitrary GLSL.
-Circle, ring, absolute value, union, intersection, subtraction, and interpolation use
-generated reverse-mode VJPs, while other operations currently use seeded local
-directional derivatives. The CPU formulas remain independent, so reference and finite-difference tests
-can detect formula drift. The backward emitter skips inactive output pixels and
-known zero-gradient parameter components. A compiler generating reverse-mode
-kernels for the remaining operations and pass fusion could improve throughput further. For example, Slang supports generated and custom derivatives
+The shader-expression helpers are retained for source-side formula checks, but
+they do not dispatch GPU work. When changing an operation, update its WGSL
+kernel, interface, differentiation contract, and independent CPU rule. The
+current WGSL kernels use hand-authored local vector-Jacobian products, while the
+CPU formulas remain independent so reference and finite-difference checks can
+detect drift.
 (`Slang autodiff documentation
 <https://docs.shader-slang.org/en/latest/external/slang/docs/user-guide/07-autodiff.html>`_).
 A compiler integration would require a separate compatibility decision. Opaque

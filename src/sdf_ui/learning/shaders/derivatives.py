@@ -6,7 +6,7 @@ from types import MappingProxyType
 
 import numpy as np
 
-from ...backends.opengl.shader_operation import ShaderOperation
+from ...gpu.shader_operation import ShaderOperation
 from ..autodiff import Tensor
 
 

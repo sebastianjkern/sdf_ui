@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from sdf_ui import color, sdf
-from sdf_ui.backends.opengl.nodes.registry import registry
+from sdf_ui.gpu.nodes.registry import registry
 
 
 def _node(kind: str):
@@ -23,8 +23,18 @@ def _node(kind: str):
         ("smooth_union", ("sdf", "color"), {}, "input 1 should be sdf"),
         ("masked_union", ("sdf", "color"), {}, "input 1 should be sdf"),
         ("interpolate", ("sdf", "color"), {}, "input 1 should be sdf"),
-        ("fill", ("color",), {"fg_color": (255, 255, 255, 255)}, "input 0 should be sdf"),
-        ("outline", ("color",), {"fg_color": (255, 255, 255, 255)}, "input 0 should be sdf"),
+        (
+            "fill",
+            ("color",),
+            {"fg_color": (255, 255, 255, 255)},
+            "input 0 should be sdf",
+        ),
+        (
+            "outline",
+            ("color",),
+            {"fg_color": (255, 255, 255, 255)},
+            "input 0 should be sdf",
+        ),
         ("fill_from_texture", ("sdf", "sdf"), {}, "input 1 should be color"),
         ("generate_mask", ("color",), {}, "input 0 should be sdf"),
         ("shadow", ("color",), {}, "input 0 should be sdf"),

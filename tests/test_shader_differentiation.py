@@ -5,9 +5,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from sdf_ui.backends.opengl.nodes.base import ShaderFile
-from sdf_ui.backends.opengl.nodes.registry import registry
-from sdf_ui.backends.opengl.shaders import ShaderLibrary
+from sdf_ui.gpu.nodes.base import ShaderFile
+from sdf_ui.gpu.nodes.registry import registry
 from sdf_ui.learning import Parameter
 
 
@@ -19,7 +18,7 @@ def test_all_shader_files_have_contracts_and_executable_rules():
     shaders = {shader.name: shader for shader in registry.shader_files()}
     root = Path(__file__).resolve().parents[1] / "src/sdf_ui"
     assert {
-        str(path.relative_to(root)) for path in (root / "backends/opengl/nodes").rglob("*.glsl")
+        str(path.relative_to(root)) for path in (root / "gpu/nodes").rglob("*.glsl")
     } == {shader.path for shader in shaders.values()}
     for name, shader in shaders.items():
         contract = shader.differentiation
@@ -29,18 +28,24 @@ def test_all_shader_files_have_contracts_and_executable_rules():
         assert shader.interface is not None, name
         assert shader.program is not None, name
         assert callable(contract.reference), name
-        assert [item.name for item in (shader.interface.output, *shader.interface.extra_outputs)] == [
-            item.name for item in contract.outputs
-        ]
+        assert [
+            item.name
+            for item in (shader.interface.output, *shader.interface.extra_outputs)
+        ] == [item.name for item in contract.outputs]
         assert [item.name for item in shader.interface.inputs] == [
             item.name for item in contract.inputs
         ]
         assert [item.name for item in shader.interface.uniforms] == [
             item.name for item in contract.parameters
         ]
-        assert [item.unit for item in (
-            shader.interface.output, *shader.interface.extra_outputs, *shader.interface.inputs
-        )] == list(range(len(contract.outputs) + len(contract.inputs)))
+        assert [
+            item.unit
+            for item in (
+                shader.interface.output,
+                *shader.interface.extra_outputs,
+                *shader.interface.inputs,
+            )
+        ] == list(range(len(contract.outputs) + len(contract.inputs)))
         assert set(contract.zero_gradient_parameters) <= {
             p.name for p in contract.parameters
         }
@@ -126,18 +131,16 @@ def test_fixed_noise_has_no_trainable_shader_arguments(name):
     assert all(np.all(value == 0) for value in result.parameters.values())
 
 
-def test_shader_library_exposes_contract_without_compiling_gl():
-    library = ShaderLibrary(None)
-    assert library.differentiation("circle") is descriptor("circle").differentiation
-    with pytest.raises(KeyError, match="Unknown shader"):
-        library.differentiation("unknown")
+def test_shader_file_exposes_only_its_explicit_differentiation_contract():
+    shader = next(item for item in registry.shader_files() if item.name == "circle")
+    assert shader.differentiation is descriptor("circle").differentiation
     unknown = ShaderFile("custom", "custom.glsl")
     assert unknown.differentiation is None
     with pytest.raises(ValueError, match="no differentiation"):
         unknown.backward((3, 2), {}, {}, np.ones((2, 3)))
     # Names and paths do not infer contracts: ownership must be explicit.
     assert (
-        ShaderFile("circle", "backends/opengl/nodes/primitives/rect/shader.glsl").differentiation
+        ShaderFile("circle", "gpu/nodes/primitives/rect/shader.glsl").differentiation
         is None
     )
 

@@ -19,35 +19,35 @@ connected zero derivatives for every input channel, including constant alpha=1.
 
 from functools import partial
 
-from ...backends.opengl.nodes.layer.alpha_overlay.implementation import (
+from ...gpu.nodes.layer.alpha_overlay.implementation import (
     reference as _overlay,
 )
-from ...backends.opengl.nodes.layer.layer_mask.implementation import (
+from ...gpu.nodes.layer.layer_mask.implementation import (
     reference as _layer_mask,
 )
-from ...backends.opengl.nodes.layer.multiply.implementation import (
+from ...gpu.nodes.layer.multiply.implementation import (
     reference as _multiply,
 )
-from ...backends.opengl.nodes.layer.transparency.implementation import (
+from ...gpu.nodes.layer.transparency.implementation import (
     reference as _transparency,
 )
-from ...backends.opengl.nodes.postprocessing.blur.implementation import DEFAULTS
-from ...backends.opengl.nodes.postprocessing.blur.implementation import (
+from ...gpu.nodes.postprocessing.blur.implementation import DEFAULTS
+from ...gpu.nodes.postprocessing.blur.implementation import (
     reference as _blur,
 )
-from ...backends.opengl.nodes.postprocessing.dither_1bit.implementation import (
+from ...gpu.nodes.postprocessing.dither_1bit.implementation import (
     reference as _dither_1bit,
 )
-from ...backends.opengl.nodes.postprocessing.dithering.implementation import (
+from ...gpu.nodes.postprocessing.dithering.implementation import (
     reference as _dithering,
 )
-from ...backends.opengl.nodes.postprocessing.invert.implementation import (
+from ...gpu.nodes.postprocessing.invert.implementation import (
     reference as _invert,
 )
-from ...backends.opengl.nodes.postprocessing.to_lab.implementation import (
+from ...gpu.nodes.postprocessing.to_lab.implementation import (
     reference as _to_lab,
 )
-from ...backends.opengl.nodes.postprocessing.to_rgb.implementation import (
+from ...gpu.nodes.postprocessing.to_rgb.implementation import (
     reference as _to_rgb,
 )
 

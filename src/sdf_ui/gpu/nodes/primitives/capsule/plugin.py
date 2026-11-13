@@ -1,0 +1,22 @@
+__docformat__ = "google"
+
+from sdf_ui.gpu.nodes.base import Plugin, PluginFamily, TextureKind
+from sdf_ui.gpu.nodes.common import params, shader
+
+from .implementation import CONTRACT, INTERFACE, PROGRAM
+
+
+def register_plugins(registry):
+    descriptor = shader("capsule", "primitives/capsule/shader.glsl", derivative_contract=CONTRACT, program=PROGRAM, interface=INTERFACE)
+    for name in ("capsule", "segment"):
+        registry.register(
+            Plugin(
+                name,
+                PluginFamily.PRIMITIVE,
+                TextureKind.SDF,
+                params=("a", "b", "radius"),
+                shader=descriptor,
+                make_uniforms=params("a", "b", "radius"),
+                public=True,
+            )
+        )

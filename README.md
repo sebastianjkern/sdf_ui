@@ -23,11 +23,15 @@ This makes the renderer especially interesting for procedural 2D scenes, repeate
 
 ### Installation:
 
-The project requires Python 3.10 or newer and can be installed with pip:
+The project requires Python 3.11 or newer and can be installed with pip:
 
 ```bash
 pip install git+https://github.com/sebastianjkern/sdf_ui
 ```
+
+The GPU renderer targets desktop Windows 10+, macOS 10.13+, and recent Linux
+distributions with Vulkan support. Linux users may need Mesa or vendor Vulkan
+drivers; WSL is not currently supported by `wgpu-py`.
 
 For interactive work, prefer `Canvas.render(...)`, the built-in `.save(...)` method on render nodes, or a cached `Canvas.session(...)`.
 
@@ -96,7 +100,8 @@ that local setting with `git config --local --unset core.hooksPath` before
 installing the hook.
 
 Built-in primitives, shading passes, post effects, and composition operators are shader-backed
-graph nodes implemented by the OpenGL backend.
+graph nodes implemented by the WebGPU backend. The public `Canvas` uses `wgpu-py` and targets
+Windows, macOS, and Linux desktop systems.
 
 ### Learning layouts and graphics
 
@@ -125,7 +130,7 @@ print(weights.value("radius"))  # approximately 9
 
 The CPU reference backend evaluates a documented subset of the existing render
 operations as floating-point tensors. It has its own per-execution tape and
-does not backpropagate through OpenGL or quantized display textures. Unsupported
+does not backpropagate through WebGPU or quantized display textures. Unsupported
 operations raise an explicit error. Reward-based policy learning can use the
 full GPU renderer because its reward callback does not need pixel gradients.
 
@@ -244,7 +249,7 @@ ___
 ### Ideas for further development
 
 - [x] Black and white to sdf conversion using go (solved via reverse sdf)
-- [x] Fill with images (trough moderngl texture api)
+- [x] Fill with images through GPU texture uploads
 - [x] Text rendering (Stroke rendering of single letters already possible)
 - [x] Freeform Gradients (Overlay of Different gradients, possible trough half transparent fills of sdfs)
 

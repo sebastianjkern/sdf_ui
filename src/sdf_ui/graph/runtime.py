@@ -10,9 +10,9 @@ from types import MappingProxyType
 import numpy as np
 from PIL import Image
 
-from ..backends.base import Image as BackendImage
-from ..backends.base import shape_size
 from ..core.expressions import Expr, evaluate_expr
+from ..core.image import Image as BackendImage
+from ..core.image import shape_size
 from ..learning.autodiff import Parameter, Tensor
 from ..learning.objective import Objective
 from ..learning.render import _tensor
@@ -450,7 +450,7 @@ class RenderGraph:
             raise ValueError(
                 "Display rendering requires the Canvas size; use training or reference rendering for this graph"
             )
-        from ..backends.plan import execute_display
+        from ..gpu.plan import execute_display
 
         sources = [
             self.backend.display_image(image, getattr(node, "mode", None))
@@ -465,8 +465,8 @@ class RenderGraph:
         )
 
     def _render_reference(self):
-        from ..backends.plan import execute_reference
         from ..learning.render import DifferentiableRenderer
+        from .execution import execute_reference
 
         sources = [image.read() for image in self._sources]
         renderer = DifferentiableRenderer(self.size, self.params)

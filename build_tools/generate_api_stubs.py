@@ -27,13 +27,13 @@ def _ensure_root_on_path() -> None:
 def _load_runtime_objects():
     _ensure_src_on_path()
 
-    from sdf_ui.backends.opengl.nodes.base import TextureKind
-    from sdf_ui.backends.opengl.nodes.loader import load_plugins
-    from sdf_ui.backends.opengl.nodes.registry import PluginRegistry
     from sdf_ui.core.api import ColorNamespace, SDFNamespace
     from sdf_ui.core.color import ColorTexture
     from sdf_ui.core.sdf import SDFTexture
     from sdf_ui.core.texture import PostNamespace, TextureNode
+    from sdf_ui.gpu.nodes.base import TextureKind
+    from sdf_ui.gpu.nodes.loader import load_plugins
+    from sdf_ui.gpu.nodes.registry import PluginRegistry
 
     registry = PluginRegistry()
     # Distributed stubs describe builtins, independent of third-party packages
@@ -344,7 +344,7 @@ def _render_root_init_stub() -> str:
             "from typing import Any",
             "",
             "from . import core as core, learning as learning",
-            "from .backends.opengl.context import Context as Context, DispatchConfig as DispatchConfig",
+            "from .gpu.context import Context as Context, DispatchConfig as DispatchConfig",
             "from .core import ColorTexture as ColorTexture, SDFTexture as SDFTexture",
             "from .core.api import ColorNamespace, SDFNamespace",
             "from .core.expressions import Expr as Expr, cos as cos, input_value as input_value, param as param, percent as percent, percent_of_min as percent_of_min, percent_x as percent_x, percent_y as percent_y, sin as sin",

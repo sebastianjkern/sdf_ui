@@ -1,4 +1,4 @@
-"""Measure synchronized graph execution on the active OpenGL device.
+"""Measure synchronized graph execution on the active WebGPU device.
 
 Run from a checkout: python -m examples.benchmark_graph --size 64 --steps 20
 """
@@ -33,31 +33,28 @@ def benchmark(size=64, warmup=3, steps=20):
             for parameter in graph.parameters:
                 parameter.zero_grad()
             graph.clear_cache()
-            canvas._mgl_ctx.finish()
+            canvas.queue.on_submitted_work_done_sync()
             start = perf_counter()
             with graph.run(objective) as execution:
-                canvas._mgl_ctx.finish()
+                canvas.queue.on_submitted_work_done_sync()
                 forward = perf_counter() - start
                 start = perf_counter()
                 execution.backward()
-                canvas._mgl_ctx.finish()
+                canvas.queue.on_submitted_work_done_sync()
                 backward = perf_counter() - start
             if iteration >= warmup:
                 timings["forward_loss_ms"].append(forward * 1000)
                 timings["backward_ms"].append(backward * 1000)
         with GraphTrainer(graph, objective, lr=0.001) as trainer:
             for iteration in range(warmup + steps):
-                canvas._mgl_ctx.finish()
+                canvas.queue.on_submitted_work_done_sync()
                 start = perf_counter()
                 trainer.step()
-                canvas._mgl_ctx.finish()
+                canvas.queue.on_submitted_work_done_sync()
                 if iteration >= warmup:
                     timings["training_step_ms"].append((perf_counter() - start) * 1000)
         return {
-            "device": {
-                key: canvas._mgl_ctx.info.get(key)
-                for key in ("GL_VENDOR", "GL_RENDERER", "GL_VERSION")
-            },
+            "device": canvas.device_info,
             "size": [size, size],
             "warmup": warmup,
             "steps": steps,
@@ -70,7 +67,7 @@ def benchmark(size=64, warmup=3, steps=20):
                 }
                 for key, values in timings.items()
             },
-            "notes": "Host wall time with GL synchronization; forward includes loss seeding, backward includes scalar gradient transfer.",
+            "notes": "Host wall time with WebGPU queue synchronization; forward includes loss seeding, backward includes scalar gradient transfer.",
         }
 
 

@@ -2,7 +2,7 @@
 
 __docformat__ = "google"
 
-from ..backends.opengl.nodes.common import build
+from ..gpu.nodes.common import build
 from .texture import TextureNode
 
 

@@ -221,8 +221,7 @@ def test_outline_shadow_light_and_partial_derivative_render_distinct_features():
     )
     light_pixels = rgba_array(
         render(
-            sdf.circle((16, 16), 10)
-            .light(
+            sdf.circle((16, 16), 10).light(
                 (80, 180, 220, 255),
                 (0, 0, 0, 255),
                 light_dir=(-0.7, -0.7, 0.8),

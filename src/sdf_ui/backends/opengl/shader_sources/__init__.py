@@ -1,1 +1,0 @@
-"""Shared shader operation programs."""

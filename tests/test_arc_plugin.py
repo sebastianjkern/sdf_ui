@@ -1,7 +1,7 @@
 import unittest
 
 from sdf_ui import Canvas, sdf
-from sdf_ui.backends.opengl.nodes.registry import registry
+from sdf_ui.gpu.nodes.registry import registry
 from tests.helpers import rgba_array
 
 
@@ -15,11 +15,15 @@ class ArcPluginTests(unittest.TestCase):
 
     def test_arc_renders_a_visible_curve(self):
         with Canvas((96, 96)) as ctx:
-            image = sdf.arc((48, 48), 28, 0.0, 3.1415926535).fill(
-                (255, 255, 255, 255),
-                (0, 0, 0, 255),
-                2,
-            ).render(ctx)
+            image = (
+                sdf.arc((48, 48), 28, 0.0, 3.1415926535)
+                .fill(
+                    (255, 255, 255, 255),
+                    (0, 0, 0, 255),
+                    2,
+                )
+                .render(ctx)
+            )
             pixels = rgba_array(image).copy()
 
         center = pixels[48, 48, 0]
@@ -31,11 +35,15 @@ class ArcPluginTests(unittest.TestCase):
 
     def test_arc_handles_wrapped_angle_ranges(self):
         with Canvas((96, 96)) as ctx:
-            image = sdf.arc((48, 48), 28, 5.5, 0.8).fill(
-                (255, 255, 255, 255),
-                (0, 0, 0, 255),
-                2,
-            ).render(ctx)
+            image = (
+                sdf.arc((48, 48), 28, 5.5, 0.8)
+                .fill(
+                    (255, 255, 255, 255),
+                    (0, 0, 0, 255),
+                    2,
+                )
+                .render(ctx)
+            )
             pixels = rgba_array(image).copy()
 
         right_edge = pixels[48, 76, 0]

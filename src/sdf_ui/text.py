@@ -1,6 +1,6 @@
 __docformat__ = "google"
 
-from .backends.opengl.nodes.common import build
+from .gpu.nodes.common import build
 
 
 def glyph(char, scale, ox, oy, path=None, samples=16):

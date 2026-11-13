@@ -1,11 +1,11 @@
-import moderngl
 import numpy as np
 import pytest
 
 from sdf_ui import Canvas, param, sdf
 from sdf_ui.core.color import ColorTexture
-from sdf_ui.backends.opengl.nodes.base import Plugin, PluginFamily, TextureKind
-from sdf_ui.backends.opengl.nodes.registry import registry
+from sdf_ui.gpu.image import GPUImage
+from sdf_ui.gpu.nodes.base import Plugin, PluginFamily, TextureKind
+from sdf_ui.gpu.nodes.registry import registry
 from sdf_ui.graph import GraphTrainer, lower_graph
 from sdf_ui.learning import (
     DifferentiableRenderer,
@@ -45,7 +45,7 @@ def test_display_layer_shaders_match_reference_without_readback(monkeypatch):
         )
         for scene, goal in zip(scenes, expected):
             with monkeypatch.context() as guarded:
-                guarded.setattr(moderngl.Texture, "read", fail)
+                guarded.setattr(GPUImage, "read", fail)
                 result = canvas.render(scene)
             pixels = np.frombuffer(result.tex.read(), np.uint8).reshape(6, 8, 4)
             np.testing.assert_allclose(pixels, np.rint(goal * 255), atol=1)

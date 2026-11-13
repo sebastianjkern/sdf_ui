@@ -8,13 +8,9 @@ from PIL import Image
 
 import sdf_ui.anim as anim_mod
 import sdf_ui.ascii as ascii_mod
-import sdf_ui.backends.opengl.context as context_mod
-import sdf_ui.backends.opengl.operations as operations_mod
-import sdf_ui.backends.opengl.shaders as shaders_mod
-import sdf_ui.backends.opengl.texture_utils as texture_utils_mod
 from sdf_ui import color, sdf
 from sdf_ui.core.color import ColorSpaceMode
-from sdf_ui.core.texture import Renderer, RenderStats
+from sdf_ui.core.texture import Renderer
 from sdf_ui.text import glyph
 from sdf_ui.util import collinear, rgb_col
 
@@ -59,7 +55,9 @@ def test_ascii_validation_rejects_invalid_requests():
 def test_ascii_grayscale_conversion_prints_rows(capsys):
     image = Image.new("L", (2, 2), color=0)
 
-    ascii_mod.convert_image_to_ascii(image, cols=1, scale=1.0, more_levels=False, invert=False, enhance=False)
+    ascii_mod.convert_image_to_ascii(
+        image, cols=1, scale=1.0, more_levels=False, invert=False, enhance=False
+    )
 
     assert capsys.readouterr().out.strip() == "@"
 
@@ -107,7 +105,9 @@ def test_print_texture_routes_to_the_expected_converter(monkeypatch):
     monkeypatch.setattr(ascii_mod, "convert_image_to_ascii", fake_grayscale)
     monkeypatch.setattr(ascii_mod, "convert_image_to_ascii_colored", fake_colored)
 
-    texture = SimpleNamespace(tex=_FakeTexture(size=(2, 2), components=4, payload=b"\x00" * 16))
+    texture = SimpleNamespace(
+        tex=_FakeTexture(size=(2, 2), components=4, payload=b"\x00" * 16)
+    )
 
     ascii_mod.print_texture(texture, colored=False)
     ascii_mod.print_texture(texture, colored=True)
@@ -139,7 +139,9 @@ def test_convert_to_video_writes_all_frames_and_logs(monkeypatch, tmp_path):
     monkeypatch.setattr(anim_mod.cv2, "imread", fake_imread)
     monkeypatch.setattr(anim_mod.cv2, "VideoWriter", FakeWriter)
     monkeypatch.setattr(anim_mod.cv2, "destroyAllWindows", lambda: None)
-    monkeypatch.setattr(anim_mod, "logger", lambda: SimpleNamespace(info=log_messages.append))
+    monkeypatch.setattr(
+        anim_mod, "logger", lambda: SimpleNamespace(info=log_messages.append)
+    )
 
     output_name = str(tmp_path / "movie")
     anim_mod.convert_to_video(output_name, ["frame1.png", "frame2.png"])
@@ -148,205 +150,6 @@ def test_convert_to_video_writes_all_frames_and_logs(monkeypatch, tmp_path):
     assert all(frame.shape == (10, 20, 3) for frame in written)
     assert releases == [output_name + ".mp4"]
     assert log_messages == ["Finished writing video"]
-
-
-def _fake_context(size=(4, 4)):
-    ctx = context_mod.Context.__new__(context_mod.Context)
-    ctx.size = size
-    ctx._closed = False
-    ctx.dispatch_groups = (1, 1, 1)
-    return ctx
-
-
-def test_context_texture_loading_flips_and_converts(monkeypatch):
-    captured = {}
-
-    class FakeMGLContext:
-        def texture(self, size, components, data):
-            captured["size"] = size
-            captured["components"] = components
-            captured["data"] = np.array(data, copy=True)
-            return SimpleNamespace(size=size, components=components, data=data)
-
-    source = np.array(
-        [
-            [[1, 2, 3], [4, 5, 6]],
-            [[7, 8, 9], [10, 11, 12]],
-        ],
-        dtype=np.uint8,
-    )
-
-    monkeypatch.setattr(context_mod.cv2, "imread", lambda _path: source.copy())
-    monkeypatch.setattr(context_mod.cv2, "cvtColor", lambda arr, _code: arr[..., ::-1])
-
-    ctx = _fake_context()
-    ctx._mgl_ctx = FakeMGLContext()
-
-    texture = context_mod.Context.texture_from_image(ctx, "ignored.png")
-
-    assert captured["size"] == (2, 2)
-    assert captured["components"] == 3
-    assert captured["data"].tolist() == [
-        [[9, 8, 7], [12, 11, 10]],
-        [[3, 2, 1], [6, 5, 4]],
-    ]
-    assert texture.size == (2, 2)
-
-
-def test_context_get_shader_close_and_init_helpers(monkeypatch):
-    library_calls = []
-    release_calls = []
-
-    class FakeLibrary:
-        def get(self, shader_name):
-            library_calls.append(shader_name)
-            return f"shader:{shader_name}"
-
-    ctx = _fake_context()
-    ctx._shader_library = FakeLibrary()
-    ctx._mgl_ctx = SimpleNamespace(release=lambda: release_calls.append("release"))
-
-    assert context_mod.Context.get_shader(ctx, "demo") == "shader:demo"
-    assert context_mod.Context.__enter__(ctx) is ctx
-    context_mod.Context.__exit__(ctx, None, None, None)
-    context_mod.Context.close(ctx)
-
-    assert library_calls == ["demo"]
-    assert release_calls == ["release"]
-
-
-def test_context_texture_allocators_increment_registry(monkeypatch):
-    class FakeTex:
-        def __init__(self, size, components, dtype=None):
-            self.size = size
-            self.components = components
-            self.dtype = dtype
-            self.filter = None
-
-    class FakeMGLContext:
-        def texture(self, size, components, data=None, dtype=None):
-            return FakeTex(size, components, dtype=dtype)
-
-    monkeypatch.setattr(texture_utils_mod, "tex_registry", texture_utils_mod.Counter(0))
-    monkeypatch.setattr(context_mod, "mgl", SimpleNamespace(LINEAR="linear"))
-
-    ctx = _fake_context((8, 8))
-    ctx._mgl_ctx = FakeMGLContext()
-
-    r32f = context_mod.Context.r32f(ctx)
-    rgba8 = context_mod.Context.rgba8(ctx)
-
-    assert r32f.size == (8, 8)
-    assert rgba8.size == (8, 8)
-    assert r32f.filter == ("linear", "linear")
-    assert rgba8.filter == ("linear", "linear")
-    assert int(texture_utils_mod.tex_registry) == 2
-
-
-def test_shader_library_caches_compilation_and_reports_missing_files(tmp_path, monkeypatch):
-    shader_file = tmp_path / "demo.glsl"
-    shader_file.write_text("void main() {}", encoding="utf-8")
-
-    descriptors = [SimpleNamespace(name="demo", path="demo.glsl")]
-    monkeypatch.setattr(shaders_mod.registry, "shader_files", lambda: tuple(descriptors))
-
-    compiled = []
-
-    class FakeMGLContext:
-        def compute_shader(self, code):
-            compiled.append(code)
-            return f"compiled:{code}"
-
-    library = shaders_mod.ShaderLibrary(FakeMGLContext(), base_path=tmp_path)
-
-    assert library.get("demo") == "compiled:void main() {}"
-    assert library.get("demo") == "compiled:void main() {}"
-    assert compiled == ["void main() {}"]
-
-    with pytest.raises(KeyError, match="Unknown shader 'missing'"):
-        library.get("missing")
-
-    missing_library = shaders_mod.ShaderLibrary(FakeMGLContext(), base_path=tmp_path)
-    monkeypatch.setattr(
-        shaders_mod.registry,
-        "shader_files",
-        lambda: (SimpleNamespace(name="missing_file", path="absent.glsl"),),
-    )
-    with pytest.raises(FileNotFoundError, match="no file exists there"):
-        missing_library.get("missing_file")
-
-
-def test_run_shader_binds_uniforms_and_image_inputs():
-    uniforms = []
-    bind_calls = []
-    run_calls = []
-    stats = RenderStats()
-
-    class FakeShader:
-        def __setitem__(self, key, value):
-            uniforms.append((key, value))
-
-        def run(self, *local_size):
-            run_calls.append(local_size)
-
-    class FakeTexture:
-        def __init__(self):
-            self.bindings = []
-
-        def bind_to_image(self, location, read, write):
-            bind_calls.append((location, read, write))
-
-    class FakeCtx:
-        dispatch_groups = (2, 3, 1)
-        _active_render_stats = stats
-
-        def get_shader(self, shader_name):
-            assert shader_name == "demo"
-            return FakeShader()
-
-    shader = operations_mod.run_shader(
-        FakeCtx(),
-        "demo",
-        uniforms={"alpha": 1},
-        image_bindings=[(FakeTexture(), 0, False, True), (FakeTexture(), 1, True, False)],
-    )
-
-    assert uniforms == [("alpha", 1)]
-    assert bind_calls == [(0, False, True), (1, True, False)]
-    assert run_calls == [(2, 3, 1)]
-    assert stats.shader_dispatches == 1
-    assert stats.shader_dispatches_by_name == {"demo": 1}
-    assert isinstance(shader, FakeShader)
-
-
-def test_texture_counter_and_display_helpers(monkeypatch, capsys):
-    counter = texture_utils_mod.Counter(2)
-    counter += 3
-    counter -= 1
-
-    assert int(counter) == 4
-
-    monkeypatch.setattr(texture_utils_mod, "tex_registry", counter)
-    resource = _FakeTexture(size=(2, 2), components=4)
-    texture_utils_mod.register_texture(resource)
-    texture_utils_mod.decrease_tex_registry(resource)
-    assert int(texture_utils_mod.tex_registry) == 4
-
-    calls = []
-
-    def fake_frombytes(mode, size, data, _raw):
-        calls.append((mode, size, data))
-        return _FakeTexture(size=size, components=3 if mode == "RGB" else 4, payload=data)
-
-    monkeypatch.setattr(texture_utils_mod.Image, "frombytes", fake_frombytes)
-
-    texture_utils_mod.show_texture(_FakeTexture(size=(1, 1), components=3, payload=b"\x01\x02\x03"))
-    texture_utils_mod.show_texture(_FakeTexture(size=(1, 1), components=4, payload=b"\x01\x02\x03\x04"))
-
-    assert [call[0] for call in calls] == ["RGB", "RGBA"]
-
-    with pytest.raises(NotImplementedError, match="not implemented"):
-        texture_utils_mod.show_texture(_FakeTexture(size=(1, 1), components=2, payload=b"\x00\x00"))
 
 
 def test_utilities_cover_rgb_normalization_and_collinearity():
@@ -383,7 +186,7 @@ def test_color_space_conversion_helpers_are_idempotent_when_already_in_target_mo
 
 
 def test_renderer_color_resolution_handles_hex_shorthand():
-    renderer = Renderer(_fake_context())
+    renderer = Renderer(object())
 
     assert renderer._resolve_color("#fff") == (1.0, 1.0, 1.0, 1.0)
     assert renderer._resolve_color((1, 2, 3)) == (1, 2, 3)

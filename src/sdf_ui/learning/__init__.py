@@ -8,7 +8,7 @@ from importlib import import_module
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..backends.opengl.optim import GPUSGD, GPUAdam  # noqa: F401
+    from ..gpu.optim import GPUSGD, GPUAdam  # noqa: F401
     from .autodiff import (  # noqa: F401
         Parameter,
         Tensor,
@@ -56,7 +56,7 @@ _MODULES = {
     "render": ("DifferentiableRenderer", "UnsupportedGradientError"),
     "shaders.derivatives": ("ShaderGradients",),
     "objective": ("Objective", "PixelLoss", "GeometryLoss"),
-    "..backends.opengl.optim": ("GPUAdam", "GPUSGD"),
+    "..gpu.optim": ("GPUAdam", "GPUSGD"),
 }
 __all__ = [name for names in _MODULES.values() for name in names]
 

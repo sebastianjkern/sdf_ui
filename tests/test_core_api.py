@@ -8,7 +8,6 @@ import pytest
 import sdf_ui
 from sdf_ui import Canvas, DispatchConfig, color, core, sdf
 from sdf_ui.core.api import ColorNamespace, SDFNamespace
-from sdf_ui.backends.opengl.context import Context
 from sdf_ui.core.expressions import (
     cos,
     evaluate_expr,
@@ -19,14 +18,15 @@ from sdf_ui.core.expressions import (
     percent_y,
     sin,
 )
-from sdf_ui.backends.opengl.nodes.base import Plugin, PluginFamily, TextureKind
-from sdf_ui.backends.opengl.nodes.registry import PluginRegistry, registry
 from sdf_ui.core.texture import (
     MultiOutputResult,
     PostNamespace,
     freeze,
     texture_params,
 )
+from sdf_ui.gpu.context import Context
+from sdf_ui.gpu.nodes.base import Plugin, PluginFamily, TextureKind
+from sdf_ui.gpu.nodes.registry import PluginRegistry, registry
 
 
 class FakeContext:
@@ -73,7 +73,7 @@ def test_dispatch_config_calculates_group_counts_and_validates_values():
         shader_local_size=(4, 4, 1)
     )
 
-    with pytest.raises(ValueError, match="greater than 0"):
+    with pytest.raises(ValueError, match="positive values"):
         DispatchConfig(shader_local_size=(0, 16))
     with pytest.raises(TypeError, match="DispatchConfig"):
         DispatchConfig.from_value((16, 16))
@@ -83,9 +83,16 @@ def test_namespace_dir_exposes_the_public_factories():
     sdf_names = set(dir(sdf))
     color_names = set(dir(color))
 
-    assert {"circle", "disc", "rect", "rounded_rect", "line", "bezier", "grid", "triangle"}.issubset(
-        sdf_names
-    )
+    assert {
+        "circle",
+        "disc",
+        "rect",
+        "rounded_rect",
+        "line",
+        "bezier",
+        "grid",
+        "triangle",
+    }.issubset(sdf_names)
     assert {
         "clear",
         "clear_color",
@@ -227,9 +234,15 @@ def test_registry_metadata_points_to_real_shader_files():
     package_root = Path(__file__).resolve().parents[1] / "src" / "sdf_ui"
 
     public_names = set(registry.public_names())
-    assert {"circle", "rect", "line", "bezier", "triangle", "clear", "linear_gradient"}.issubset(
-        public_names
-    )
+    assert {
+        "circle",
+        "rect",
+        "line",
+        "bezier",
+        "triangle",
+        "clear",
+        "linear_gradient",
+    }.issubset(public_names)
 
     shader_names = {descriptor.name for descriptor in registry.shader_files()}
     assert {"circle", "fill", "layer_mask", "blur_ver_9", "blur_hor_9"}.issubset(
@@ -254,9 +267,14 @@ def test_registry_method_names_match_texture_kinds():
         "outline",
         "shadow",
     }.issubset(sdf_methods)
-    assert {"alpha_overlay", "mask", "multiply", "transparency", "blur", "invert"}.issubset(
-        color_methods
-    )
+    assert {
+        "alpha_overlay",
+        "mask",
+        "multiply",
+        "transparency",
+        "blur",
+        "invert",
+    }.issubset(color_methods)
     assert "fill" not in color_methods
     assert "alpha_overlay" not in sdf_methods
 

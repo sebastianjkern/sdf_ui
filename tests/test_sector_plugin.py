@@ -1,7 +1,7 @@
 import unittest
 
 from sdf_ui import Canvas, sdf
-from sdf_ui.backends.opengl.nodes.registry import registry
+from sdf_ui.gpu.nodes.registry import registry
 from tests.helpers import rgba_array
 
 
@@ -16,10 +16,14 @@ class SectorPluginTests(unittest.TestCase):
 
     def test_sector_renders_a_visible_slice(self):
         with Canvas((96, 96)) as ctx:
-            image = sdf.sector((48, 48), 28, 0.0, 1.57079632679).fill(
-                (255, 255, 255, 255),
-                (0, 0, 0, 255),
-            ).render(ctx)
+            image = (
+                sdf.sector((48, 48), 28, 0.0, 1.57079632679)
+                .fill(
+                    (255, 255, 255, 255),
+                    (0, 0, 0, 255),
+                )
+                .render(ctx)
+            )
             pixels = rgba_array(image).copy()
 
         inside = pixels[32, 64, 0]
@@ -29,14 +33,22 @@ class SectorPluginTests(unittest.TestCase):
 
     def test_pie_matches_sector(self):
         with Canvas((96, 96)) as ctx:
-            sector = sdf.sector((48, 48), 28, 0.0, 1.57079632679).fill(
-                (255, 255, 255, 255),
-                (0, 0, 0, 255),
-            ).render(ctx)
-            pie = sdf.pie((48, 48), 28, 0.0, 1.57079632679).fill(
-                (255, 255, 255, 255),
-                (0, 0, 0, 255),
-            ).render(ctx)
+            sector = (
+                sdf.sector((48, 48), 28, 0.0, 1.57079632679)
+                .fill(
+                    (255, 255, 255, 255),
+                    (0, 0, 0, 255),
+                )
+                .render(ctx)
+            )
+            pie = (
+                sdf.pie((48, 48), 28, 0.0, 1.57079632679)
+                .fill(
+                    (255, 255, 255, 255),
+                    (0, 0, 0, 255),
+                )
+                .render(ctx)
+            )
             sector_pixels = rgba_array(sector).copy()
             pie_pixels = rgba_array(pie).copy()
 
@@ -45,4 +57,3 @@ class SectorPluginTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

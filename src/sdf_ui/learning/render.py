@@ -16,10 +16,10 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from ..backends.opengl.nodes.registry import registry
 from ..core.color import ColorSpaceMode
 from ..core.expressions import Expr, evaluate_expr
 from ..core.texture import MultiOutputResult, TextureNode
+from ..gpu.nodes.registry import registry
 from ..util import hex_col
 from .autodiff import Tensor, as_tensor, maximum, minimum, stack, where
 
@@ -180,7 +180,7 @@ class DifferentiableRenderer:
             raise ValueError("size must contain positive integer width and height")
         self.size = tuple(int(value) for value in size)
         self.params = {} if params is None else params
-        self.ctx = self  # expression context; no OpenGL Context is constructed
+        self.ctx = self  # expression context for position-dependent values
         y, x = np.indices((self.size[1], self.size[0]), dtype=float)
         self.x, self.y = as_tensor(x), as_tensor(y)
 
@@ -220,7 +220,7 @@ class DifferentiableRenderer:
 
     def render_plan(self, plan):
         """Evaluate all named outputs of a shared graph plan on the CPU."""
-        from ..backends.plan import execute_reference
+        from ..graph.execution import execute_reference
 
         return execute_reference(plan, self)
 

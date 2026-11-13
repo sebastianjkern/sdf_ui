@@ -6,19 +6,27 @@ import numpy as np
 import pytest
 
 from sdf_ui import Canvas, sdf
-from sdf_ui.backends.opengl import GPUImage
+from sdf_ui.gpu.image import GPUImage
+from sdf_ui.gpu.nodes.base import (
+    Plugin,
+    PluginFamily,
+    ShaderFile,
+    TextureKind,
+)
+from sdf_ui.gpu.nodes.differentiation import (
+    ShaderArgument,
+    ShaderDifferentiation,
+)
+from sdf_ui.gpu.nodes.registry import registry
 from sdf_ui.graph import (
     GraphPlan,
     GraphTrainer,
+    Port,
     RenderGraph,
     inspect_graph,
     lower_graph,
 )
 from sdf_ui.learning import Objective, ParameterStore
-from sdf_ui.backends.opengl.nodes.base import Plugin, PluginFamily, ShaderFile, TextureKind
-from sdf_ui.backends.opengl.nodes.differentiation import ShaderArgument, ShaderDifferentiation
-from sdf_ui.backends.opengl.nodes.registry import registry
-from sdf_ui.graph import Port
 
 
 @pytest.mark.parametrize(
@@ -50,7 +58,7 @@ def test_removed_compatibility_modules_are_not_importable(module):
 
 
 def test_graph_api_is_exposed_only_under_current_namespaces():
-    import sdf_ui.backends.opengl.context as context
+    import sdf_ui.gpu.context as context
     import sdf_ui.learning as learning
 
     assert not hasattr(learning, "GraphTrainer")
@@ -84,7 +92,7 @@ def test_parameter_bind_is_reusable_and_named():
             assert np.all(np.isfinite(execution.read("field")))
 
 
-def test_unified_render_backends_and_owned_training_images():
+def test_render_modes_and_owned_training_images():
     params = ParameterStore()
     radius = params.bind("r", 2.0)
     scene = sdf.circle((4, 3), radius)
@@ -146,10 +154,10 @@ def test_inspection_reports_missing_gpu_derivative(tmp_path, monkeypatch):
     monkeypatch.setitem(registry._plugins, name, plugin)
     report = inspect_graph({"field": registry.build(name)})
     assert not report["supported"]
-    assert "backward" in report["error"]
+    assert "incomplete" in report["error"]
 
 
-def test_backends_share_snapshots_of_materialized_sources():
+def test_render_modes_share_snapshots_of_materialized_sources():
     from sdf_ui.core.color import ColorTexture
 
     with Canvas((4, 3)) as canvas:

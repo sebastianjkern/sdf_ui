@@ -16,10 +16,10 @@ from typing import Callable, Mapping, Optional, Tuple
 
 import numpy as np
 
-from ..backends.opengl.nodes.base import ShaderFile
-from ..backends.opengl.nodes.registry import registry
 from ..core.expressions import Expr
 from ..core.texture import MultiOutputResult, TextureNode
+from ..gpu.nodes.base import ShaderFile
+from ..gpu.nodes.registry import registry
 from ..learning.autodiff import Tensor
 from ..learning.render import DifferentiableRenderer, _tensor
 

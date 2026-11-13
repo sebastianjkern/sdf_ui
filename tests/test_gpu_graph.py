@@ -6,8 +6,8 @@ import numpy as np
 import pytest
 
 from sdf_ui import Canvas, param, sdf
-from sdf_ui.backends.opengl import GPUImage
-from sdf_ui.backends.opengl.nodes.differentiation import ShaderDifferentiation
+from sdf_ui.gpu.image import GPUImage
+from sdf_ui.gpu.nodes.differentiation import ShaderDifferentiation
 from sdf_ui.graph import GraphTrainer
 from sdf_ui.learning import (
     Adam,
@@ -314,94 +314,6 @@ def test_closed_canvas_closes_registered_graph_and_default_optimizer():
         graph.run()
 
 
-@pytest.mark.parametrize("shared_program", [False, True])
-def test_explicit_custom_shader_contract_runs_through_the_full_native_stack(
-    canvas, tmp_path, monkeypatch, shared_program
-):
-    from sdf_ui.backends.opengl.nodes.differentiation import ShaderArgument, ShaderDifferentiation
-    from sdf_ui.backends.opengl.nodes.base import Plugin, PluginFamily, ShaderFile, TextureKind
-    from sdf_ui.backends.opengl.nodes.registry import registry
-    from sdf_ui.backends.opengl.nodes.shader_expression import ShaderProgram
-
-    name = "test_native_graph_gain"
-    path = tmp_path / "gain.glsl"
-    path.write_text(
-        """#version 430
-layout(local_size_x=4,local_size_y=2) in;
-layout(r32f,binding=0) writeonly uniform image2D destTex;
-layout(r32f,binding=1) readonly uniform image2D sourceField;
-uniform float gain;
-uniform int mode;
-void main(){ivec2 p=ivec2(gl_GlobalInvocationID.xy);if(any(greaterThanEqual(p,imageSize(destTex))))return;
-float value=imageLoad(sourceField,p).r;imageStore(destTex,p,vec4(mode==1?value*gain:value,0,0,0));}
-""",
-        encoding="utf-8",
-    )
-    contract = ShaderDifferentiation(
-        name,
-        str(path),
-        (ShaderArgument("sourceField", (), "r32f"),),
-        (ShaderArgument("gain", (), "float"), ShaderArgument("mode", (), "int")),
-        (ShaderArgument("destTex", (), "r32f"),),
-        zero_gradient_parameters=("mode",),
-        reference=lambda ctx, inputs, params: (
-            inputs["sourceField"] * params["gain"]
-            if params["mode"].item() == 1
-            else inputs["sourceField"]
-        ),
-    )
-    derivative = """void evaluate(ivec2 pos,out D o[8]){
-o[0]=U_mode.v==1.0?mul(ld(0,pos,0),U_gain):ld(0,pos,0);
-for(int i=1;i<8;i++)o[i]=c(0.0);}
-"""
-    descriptor = (
-        ShaderFile(name, str(path), contract, program=ShaderProgram(name, derivative))
-        if shared_program
-        else ShaderFile(name, str(path), contract, derivative)
-    )
-    plugin = Plugin(
-        name,
-        PluginFamily.PRIMITIVE,
-        TextureKind.SDF,
-        (TextureKind.SDF,),
-        params=("gain", "mode"),
-        defaults={"mode": 1},
-        shader=descriptor,
-        input_uniforms=("sourceField",),
-        make_uniforms=lambda p: p,
-    )
-    registry.ensure_loaded()
-    monkeypatch.setitem(registry._plugins, name, plugin)
-    gain = Parameter("gain", 2.0)
-    node = registry.build(name, sdf.circle((3.2, 2.3), 1.7), gain)
-    from sdf_ui.graph import lower_graph
-
-    plan = lower_graph({"field": node})
-    display = canvas.render_plan(plan)["field"]
-    np.testing.assert_allclose(
-        np.frombuffer(display.tex.read(), dtype=np.float32).reshape(6, 8),
-        target(1.7) * 2,
-        atol=2e-6,
-    )
-    objective = Objective().mse("field", target(1.7) * 3)
-    with canvas.compile({"field": node}) as graph:
-        assert graph.parameters == (gain,)
-        with graph.run(objective) as execution:
-            np.testing.assert_allclose(
-                execution.read("field"), target(1.7) * 2, atol=2e-6
-            )
-            execution.backward()
-            assert gain.grad == pytest.approx(-2 * np.mean(target(1.7) ** 2), rel=2e-5)
-        with GraphTrainer(graph, objective, lr=0.1) as trainer:
-            history = trainer.fit(30)
-            assert history[-1]["loss"] < history[0]["loss"] * 0.03
-    reference = descriptor.backward(
-        (8, 6), {"sourceField": target(1.7)}, {"gain": 2.0, "mode": 1}, np.ones((6, 8))
-    )
-    assert reference.parameters["gain"] == pytest.approx(target(1.7).sum())
-    assert reference.parameters["mode"] == 0
-
-
 def test_invalid_forward_results_are_never_reused_as_valid_cache_hits(canvas):
     p = ParameterStore([Parameter("color", [1e38, 1e38, 1e38, 1.0])])
     from sdf_ui import color
@@ -421,7 +333,8 @@ def test_existing_gpu_texture_is_a_native_input_with_pixel_adjoints_and_refresh(
 
     pixels = np.empty((6, 8, 4), dtype=np.uint8)
     pixels[:] = [51, 102, 153, 255]
-    texture = canvas._mgl_ctx.texture((8, 6), 4, pixels.tobytes())
+    texture = canvas.rgba8((8, 6))
+    texture.write(pixels)
     source = ColorTexture(tex=texture, context=canvas, mode="RGB")
     params = ParameterStore([Parameter("alpha", 0.3)])
     image = source.transparency(param("alpha"))
@@ -441,7 +354,7 @@ def test_existing_gpu_texture_is_a_native_input_with_pixel_adjoints_and_refresh(
             with pytest.raises(RuntimeError, match="active execution"):
                 graph.refresh_inputs()
         pixels[:] = [153, 102, 51, 255]
-        texture.write(pixels.tobytes())
+        texture.write(pixels)
         with graph.run() as execution:
             np.testing.assert_allclose(execution.read("source"), expected)
         graph.refresh_inputs()
@@ -451,9 +364,6 @@ def test_existing_gpu_texture_is_a_native_input_with_pixel_adjoints_and_refresh(
             )
             assert execution.stats["forward_dispatches"] == 1
         assert graph.cache_info()["input_images"] == 1
-        assert texture.glo != 0  # graph closes only its owned FP32 snapshot
-    source.tex = None
-    texture.release()
 
 
 @pytest.mark.parametrize("trainable", [False, True])
@@ -461,35 +371,30 @@ def test_fixed_pass_propagates_input_and_intermediate_adjoints(canvas, trainable
     from sdf_ui.core.color import ColorTexture
 
     pixels = np.full((6, 8, 4), 64, dtype=np.uint8)
-    texture = canvas._mgl_ctx.texture((8, 6), 4, pixels.tobytes())
+    texture = canvas.rgba8((8, 6))
+    texture.write(pixels)
     source = ColorTexture(tex=texture, context=canvas, mode="RGB")
     fixed = source.post.invert()
     params = (
         ParameterStore([Parameter("alpha", 0.5)]) if trainable else ParameterStore()
     )
     output = fixed.transparency(param("alpha")) if trainable else fixed
-    try:
-        with canvas.compile({"fixed": fixed, "image": output}, params) as graph:
-            with graph.run(Objective().mse("image", 0)) as execution:
-                execution.backward()
-                expected = np.full((6, 8, 4), -2 * (1 - 64 / 255) / (6 * 8 * 4))
-                alpha = 0.5 if trainable else 1.0
-                expected[..., 3] = 2 * (64 / 255) * alpha**2 / (6 * 8 * 4)
-                np.testing.assert_allclose(
-                    execution.input_gradient(0), expected, atol=1e-7
+    with canvas.compile({"fixed": fixed, "image": output}, params) as graph:
+        with graph.run(Objective().mse("image", 0)) as execution:
+            execution.backward()
+            expected = np.full((6, 8, 4), -2 * (1 - 64 / 255) / (6 * 8 * 4))
+            alpha = 0.5 if trainable else 1.0
+            expected[..., 3] = 2 * (64 / 255) * alpha**2 / (6 * 8 * 4)
+            np.testing.assert_allclose(execution.input_gradient(0), expected, atol=1e-7)
+            intermediate = expected.copy()
+            intermediate[..., :3] *= -1
+            np.testing.assert_allclose(
+                execution.gradient("fixed"), intermediate, atol=1e-7
+            )
+            if trainable:
+                assert params["alpha"].grad == pytest.approx(
+                    (64 / 255) ** 2 * 0.5 / 2, abs=1e-7
                 )
-                intermediate = expected.copy()
-                intermediate[..., :3] *= -1
-                np.testing.assert_allclose(
-                    execution.gradient("fixed"), intermediate, atol=1e-7
-                )
-                if trainable:
-                    assert params["alpha"].grad == pytest.approx(
-                        (64 / 255) ** 2 * 0.5 / 2, abs=1e-7
-                    )
-    finally:
-        source.tex = None
-        texture.release()
 
 
 def test_materialized_sdf_input_can_be_transformed_and_optimized(canvas):
@@ -511,9 +416,7 @@ def test_external_texture_context_and_shape_are_validated(canvas):
         source = sdf.circle((3, 2), 1).render(other)
         with pytest.raises(ValueError, match="this open Canvas"):
             canvas.compile({"field": source})
-    texture = canvas._mgl_ctx.texture((4, 3), 4)
+    texture = canvas.rgba8((4, 3))
     source = ColorTexture(tex=texture, context=canvas, mode="RGB")
     with pytest.raises(ValueError, match="canvas size"):
         canvas.compile({"image": source})
-    source.tex = None
-    texture.release()

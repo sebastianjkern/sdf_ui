@@ -8,7 +8,7 @@ The CPU reference backend provides three working training paths:
 * Fit shapes and colors through a floating-point render graph.
 
 These reference paths use NumPy on the CPU. They do not require PyTorch, Handwired, a
-network service, or an OpenGL context. Existing GPU rendering can display the
+network service, or an WebGPU context. Existing GPU rendering can display the
 same scene with the learned parameters. The differentiable backend is a
 separate execution backend, not a gradient approximation around GPU readback.
 For native GPU forward and backward execution, see :doc:`gpu_render_graph`.
@@ -145,7 +145,7 @@ Run from the repository root::
 
     uv run python -m examples.learned_dashboard --steps 80
 
-The first run compiles several GPU graphs. On a software OpenGL renderer it can
+The first run compiles several GPU graphs. On a software WebGPU renderer it can
 take several minutes; use ``--steps 5`` for a quick smoke test, though a short
 run is not expected to improve every held-out case.
 
@@ -202,7 +202,7 @@ To start a new optimizer from an existing exported policy instead, use
 ``--initial-policy out/learning/dashboard/policy.json``. This preserves the
 weights but starts optimizer moments and the step count from zero.
 
-To obtain bounds without constructing an OpenGL context or rendering images::
+To obtain bounds without constructing an WebGPU context or rendering images::
 
     uv run python -m examples.learned_dashboard \
         --policy out/learning/dashboard/policy.json --predict 150 20 15 28

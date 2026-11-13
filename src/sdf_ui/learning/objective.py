@@ -7,7 +7,7 @@ from hashlib import sha256
 
 import numpy as np
 
-from ..backends.base import Image
+from ..core.image import Image
 
 
 @dataclass(frozen=True)

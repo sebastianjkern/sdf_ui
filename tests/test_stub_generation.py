@@ -1,7 +1,7 @@
 """Generated stubs can be checked without modifying the checkout."""
 
 from build_tools import generate_api_stubs as generator
-from sdf_ui.backends.opengl.nodes import loader
+from sdf_ui.gpu.nodes import loader
 
 
 def test_stub_check_reports_stale_files_without_writing(tmp_path, monkeypatch, capsys):
@@ -21,7 +21,7 @@ def test_stub_check_reports_stale_files_without_writing(tmp_path, monkeypatch, c
 
 
 def test_plugin_loader_is_builtin_only():
-    from sdf_ui.backends.opengl.nodes.registry import PluginRegistry
+    from sdf_ui.gpu.nodes.registry import PluginRegistry
 
     registry = PluginRegistry()
     loader.load_plugins(registry, packages=())

@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from ...backends.opengl.nodes.registry import registry
+from ...gpu.nodes.registry import registry
 from ..autodiff import Tensor, stack
 from ..render import _lab_to_rgb, _rgb_to_lab, _tensor
 
@@ -31,7 +31,7 @@ def supports_plugin(plugin):
     if plugin.render_func is None:
         return plugin.shader is not None and plugin.shader.differentiation is not None
     return plugin.name in _COMPOSITES and plugin.render_func.__module__.startswith(
-        "sdf_ui.backends.opengl.nodes."
+        "sdf_ui.gpu.nodes."
     )
 
 

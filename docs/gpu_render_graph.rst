@@ -5,11 +5,10 @@ Native GPU render graphs
 existing SDF/color nodes and lowers them to a reusable graph with named outputs,
 typed shader ports, shared subexpressions, and stable parameter leaves.
 
-The full raster path executes on the GPU: generated GLSL forward shaders with
-FP32 image storage, pixel losses, analytic backward shaders, texture-gradient
-accumulation, and uniform reductions. ``GraphTrainer`` defaults to native GPU
-Adam; native GPU SGD is also available. No CPU renderer, numerical backward
-approximation, or implicit backend fallback is used.
+The full raster path executes on the GPU: WGSL forward shaders with FP32 image
+storage, pixel losses, analytic backward shaders, texture-gradient accumulation,
+and uniform reductions. ``GraphTrainer`` defaults to GPU Adam. No CPU renderer,
+numerical backward approximation, or implicit backend fallback is used.
 
 The same lowered plan can also be executed with display formats or the CPU
 reference implementation::
@@ -237,7 +236,7 @@ and makes one optimizer update. Evaluation makes no update::
 of all training cases before restoring parameters and optimizer state.
 
 Use ``canvas.compile(outputs, weights, size=(width, height))`` to give each
-graph a different viewport while sharing the same OpenGL context and parameter
+graph a different viewport while sharing the same WebGPU context and parameter
 leaves. ``canvas.capture(scene, size=(width, height))`` can create a matching
 target. Sources must match their graph's size. Alternate-size graphs support
 training and reference execution; display-plan execution uses the Canvas size.
@@ -382,13 +381,11 @@ Optimizers and checkpoints
 --------------------------
 
 ``GPUAdam(canvas, parameters, ...)`` and ``GPUSGD(canvas, parameters, ...)``
-implement the same update semantics as the reference optimizers, including
-momentum, decay, and disconnected parameters. Candidate values and moments are
-computed on GPU and committed only after finite-value validation. Small leaf
-values are synced back to Parameters so the next scalar/geometry execution sees
-the update. Existing CPU optimizers can also be supplied explicitly.
-Import these optimizers from ``sdf_ui.learning`` or ``sdf_ui.backends.opengl``;
-their implementation lives in the OpenGL backend.
+compute their updates on the WebGPU device. Candidate values and optimizer
+state are committed only after finite-value validation. Small leaf values are
+synced back to Parameters so the next scalar/geometry execution sees the
+update. Existing CPU optimizers can also be supplied explicitly. Import both
+GPU optimizers from ``sdf_ui.learning``.
 
 Trainer checkpoints contain weights, optimizer moments/counters, step count,
 graph schema/source fingerprint, and objective signature. Recreate the graph,
@@ -419,15 +416,15 @@ compiler removes tangent calculations. Circle, ring, and the pointwise Boolean a
 interpolation expressions also emit direct reverse-mode VJPs; other operations use local directional derivatives
 contracted with upstream seeds. Inactive pixels and known zero-gradient uniforms
 are skipped. Input gradients accumulate with float CAS atomics. Uniform contributions
-reduce within workgroups, then globally. Explicit GL memory barriers separate
-all dependent passes and reductions.
+reduce within workgroups, then globally. Explicit queue submissions separate
+dependent compute passes and reductions.
 
 This prototype favors complete operation coverage and verifiable math over
 maximum backward throughput: its local derivative work scales with sampled
 inputs and uniform components. Compiler-generated reverse kernels or fused
 specialized adjoints can optimize that later. Large buffers and accumulated
 values use float32; shared scatter sums may vary slightly by execution order.
-FP32 image storage and OpenGL 4.3 compute/SSBO support are required. Reduced-
+FP32 image storage and WebGPU 4.3 compute/SSBO support are required. Reduced-
 precision or CPU fallback is intentionally absent from this execution path.
 
 Tests cover all builtin GPU VJPs against the CPU oracle, original FP32 forward
@@ -467,26 +464,26 @@ is performed.
 zero-gradient uniforms, sampling behavior, and topology controls. Dependencies
 are conservative: branch choices, zero loss weights, or cancellation can still
 produce zero numerical gradients. ``sdf_ui.graph.inspect_graph(outputs)`` reports
-lowering failures and topology without creating an OpenGL context. Integer
+lowering failures and topology without creating an WebGPU context. Integer
 selectors and fixed topology need recompilation to change. Inspection checks
 shader sources and derivative availability, but GPU driver compilation and
 runtime numerical behavior are verified only when the graph is compiled or run.
 
 Built-in shader operations and their registry are internal implementation
-details under ``sdf_ui.backends.opengl.nodes``. Graph execution types are available
-under ``sdf_ui.graph``; OpenGL device types are under
-``sdf_ui.backends.opengl``. Defining or registering custom shader plugins is
+details under ``sdf_ui.gpu.nodes``. Graph execution types are available
+under ``sdf_ui.graph``; WebGPU device types are under
+``sdf_ui.gpu``. Defining or registering custom shader plugins is
 not part of the public API.
 
 Benchmarking
 ------------
 
-Run a synchronized wall-clock benchmark on the active OpenGL device::
+Run a synchronized wall-clock benchmark on the active WebGPU device::
 
     uv run python -m examples.benchmark_graph --size 64 --steps 20 --output out/learning/benchmark.json
 
 The report includes the GL vendor, renderer, version, image size, warmup count,
 and mean/minimum/median/maximum times. It measures full uncached forward and
 loss seeding, backward including small gradient transfers, and complete training
-steps. OpenGL software renderers are identified in the output and must not be
+steps. WebGPU software renderers are identified in the output and must not be
 mistaken for hardware GPU measurements.

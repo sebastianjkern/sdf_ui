@@ -7,12 +7,17 @@ import numpy as np
 import pytest
 
 from sdf_ui import color, param, sdf
-from sdf_ui.backends.opengl.nodes.differentiation import ShaderDifferentiation
 from sdf_ui.core.expressions import evaluate_expr
-from sdf_ui.backends.opengl.nodes.base import Plugin, PluginFamily, ShaderFile, TextureKind
-from sdf_ui.backends.opengl.nodes.registry import registry
 from sdf_ui.core.sdf import SDFTexture
 from sdf_ui.core.texture import MultiOutputResult
+from sdf_ui.gpu.nodes.base import (
+    Plugin,
+    PluginFamily,
+    ShaderFile,
+    TextureKind,
+)
+from sdf_ui.gpu.nodes.differentiation import ShaderDifferentiation
+from sdf_ui.gpu.nodes.registry import registry
 from sdf_ui.graph.lowering import GraphPlan, Pass, Port, lower_graph
 from sdf_ui.learning import Parameter
 from sdf_ui.learning.autodiff import Tensor
@@ -370,9 +375,7 @@ def test_cycle_and_materialized_texture_fail_with_actionable_errors():
             pass
 
     materialized = SDFTexture(tex=FakeTexture(), context=object())
-    with pytest.raises(
-        ValueError, match="Materialized.*Canvas"
-    ):
+    with pytest.raises(ValueError, match="Materialized.*Canvas"):
         lower_graph({"field": materialized})
     materialized.tex = None
 
@@ -405,7 +408,9 @@ def test_custom_shader_plugins_are_allowed_but_opaque_callbacks_are_rejected(
             lower_graph({"field": registry.build(custom.name, (3, 4), 2)})
     builtin = registry.get("translate")
     monkeypatch.setitem(
-        registry._plugins, "translate", replace(builtin, render_func=lambda *args: None, lowering_func=None)
+        registry._plugins,
+        "translate",
+        replace(builtin, render_func=lambda *args: None, lowering_func=None),
     )
     with pytest.raises(ValueError, match="custom render function"):
         lower_graph({"field": sdf.circle((3, 4), 2).translate((1, 2))})
@@ -480,9 +485,9 @@ def test_every_raw_shader_and_alias_lowers_through_public_plugins():
     distance, mask = field.masked_union(field)
     nodes.update(distance=distance, mask=mask)
     plan = lower_graph(nodes)
-    descriptors = set(registry.shader_files())
+    descriptors = {descriptor.name for descriptor in registry.shader_files()}
     assert len(descriptors) == 43
-    assert {p.shader for p in plan.passes} == descriptors
+    assert {p.shader.name for p in plan.passes} == descriptors
     for p in plan.passes:
         u = p.uniforms(resolver())
         assert set(u) <= {a.name for a in p.contract.parameters}

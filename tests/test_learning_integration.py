@@ -33,7 +33,13 @@ def test_reusable_expression_rebuilds_tape_after_parameter_update():
 
 def test_expression_gradients_and_gpu_uniform_resolution():
     value = Parameter("angle", 0.4)
-    context = SimpleNamespace(size=(20, 10), percent_x=lambda x: x * 0.2)
+    context = SimpleNamespace(
+        size=(20, 10),
+        percent=lambda x: x * 0.2,
+        percent_x=lambda x: x * 0.2,
+        percent_y=lambda x: x * 0.1,
+        percent_of_min=lambda x: x * 0.1,
+    )
     expression = sin(param("angle")) + cos(param("angle")) + percent_x(50)
     output = evaluate_expr(expression, context, {"angle": value}, track_grad=True)
     output.backward()

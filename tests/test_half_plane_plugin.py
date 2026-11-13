@@ -1,7 +1,7 @@
 import unittest
 
 from sdf_ui import Canvas, sdf
-from sdf_ui.backends.opengl.nodes.registry import registry
+from sdf_ui.gpu.nodes.registry import registry
 from tests.helpers import rgba_array
 
 
@@ -15,10 +15,14 @@ class HalfPlanePluginTests(unittest.TestCase):
 
     def test_half_plane_renders_two_distinct_halves(self):
         with Canvas((64, 64)) as ctx:
-            image = sdf.half_plane((32, 32), (1, 0)).fill(
-                (255, 255, 255, 255),
-                (0, 0, 0, 255),
-            ).render(ctx)
+            image = (
+                sdf.half_plane((32, 32), (1, 0))
+                .fill(
+                    (255, 255, 255, 255),
+                    (0, 0, 0, 255),
+                )
+                .render(ctx)
+            )
             pixels = rgba_array(image).copy()
 
         left_mean = pixels[:, :24, 0].mean()
@@ -28,10 +32,14 @@ class HalfPlanePluginTests(unittest.TestCase):
 
     def test_half_plane_accepts_arbitrary_normal_direction(self):
         with Canvas((32, 32)) as ctx:
-            image = sdf.half_plane((16, 16), (0, -1)).fill(
-                (255, 255, 255, 255),
-                (0, 0, 0, 255),
-            ).render(ctx)
+            image = (
+                sdf.half_plane((16, 16), (0, -1))
+                .fill(
+                    (255, 255, 255, 255),
+                    (0, 0, 0, 255),
+                )
+                .render(ctx)
+            )
             pixels = rgba_array(image).copy()
 
         top_mean = pixels[:12, :, 0].mean()

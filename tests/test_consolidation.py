@@ -4,9 +4,7 @@ import numpy as np
 import pytest
 
 from sdf_ui import Canvas, input_value, sdf
-from sdf_ui.backends import RenderBackend
-from sdf_ui.backends.opengl import texture_utils
-from sdf_ui.backends.opengl.nodes.shader_expression import _primal_only
+from sdf_ui.gpu.nodes.shader_expression import _primal_only
 from sdf_ui.graph import GraphCase, GraphDatasetTrainer
 from sdf_ui.learning import (
     Bounds,
@@ -97,14 +95,14 @@ def test_graphs_share_shader_programs_but_own_scratch_buffers():
             canvas.compile({"field": field}, p) as first,
             canvas.compile({"field": field}, p) as second,
         ):
-            assert isinstance(first.backend, RenderBackend)
             with first.run(objective) as execution:
                 execution.backward()
-            assert first.backend.stats["program_compilations"] > 0
+            assert canvas._pipelines
+            pipeline_count = len(canvas._pipelines)
             p["radius"].zero_grad()
             with second.run(objective) as execution:
                 execution.backward()
-            assert second.backend.stats["program_compilations"] == 0
+            assert len(canvas._pipelines) == pipeline_count
             buffer = second.backend.scratch_buffer("backward_partials", 4)
             p["radius"].zero_grad()
             with second.run(objective) as execution:
@@ -173,22 +171,6 @@ def test_dataset_rejects_conflicting_inputs_for_shared_graph():
                 with pytest.raises(ValueError, match="conflicting inputs"):
                     trainer.load_state_dict(state)
                 assert graph.inputs["x"] == 2
-
-
-def test_texture_registry_only_releases_tracked_allocations(monkeypatch):
-    class Texture:
-        pass
-
-    monkeypatch.setattr(texture_utils, "tex_registry", texture_utils.Counter(0))
-    owned, external = Texture(), Texture()
-    texture_utils.register_texture(owned)
-    texture_utils.decrease_tex_registry(external)
-    assert int(texture_utils.tex_registry) == 1
-    texture_utils.decrease_tex_registry(owned)
-    texture_utils.decrease_tex_registry(owned)
-    assert int(texture_utils.tex_registry) == 0
-    with pytest.raises(TypeError):
-        texture_utils.tex_registry + "invalid"
 
 
 def test_primal_rewrite_respects_comments_and_nested_field_access():

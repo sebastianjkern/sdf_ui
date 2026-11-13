@@ -3,8 +3,8 @@ import unittest
 import numpy as np
 
 from sdf_ui import Canvas, sdf
-from sdf_ui.backends.opengl.nodes.loader import PLUGIN_PACKAGES
-from sdf_ui.backends.opengl.nodes.registry import registry
+from sdf_ui.gpu.nodes.loader import PLUGIN_PACKAGES
+from sdf_ui.gpu.nodes.registry import registry
 from tests.helpers import rgba_array
 
 
@@ -12,10 +12,10 @@ class PluginLoaderTests(unittest.TestCase):
     def test_builtin_plugins_are_loaded_from_family_packages(self):
         registry.ensure_loaded()
 
-        self.assertIn("sdf_ui.backends.opengl.nodes.primitives", PLUGIN_PACKAGES)
-        self.assertIn("sdf_ui.backends.opengl.nodes.shading", PLUGIN_PACKAGES)
-        self.assertIn("sdf_ui.backends.opengl.nodes.layer", PLUGIN_PACKAGES)
-        self.assertIn("sdf_ui.backends.opengl.nodes.postprocessing", PLUGIN_PACKAGES)
+        self.assertIn("sdf_ui.gpu.nodes.primitives", PLUGIN_PACKAGES)
+        self.assertIn("sdf_ui.gpu.nodes.shading", PLUGIN_PACKAGES)
+        self.assertIn("sdf_ui.gpu.nodes.layer", PLUGIN_PACKAGES)
+        self.assertIn("sdf_ui.gpu.nodes.postprocessing", PLUGIN_PACKAGES)
         self.assertEqual(registry.get("circle").family, "primitive")
         self.assertEqual(registry.get("fill").family, "shading")
         self.assertEqual(registry.get("isolines").family, "shading")
@@ -28,14 +28,18 @@ class PluginLoaderTests(unittest.TestCase):
 
         self.assertIn("isolines", registry.method_names_for("sdf"))
         with Canvas((48, 48)) as ctx:
-            image = sdf.grid((8, 8), (12, 12)).isolines(
-                (255, 255, 255, 255),
-                (0, 0, 0, 255),
-                spacing=2.0,
-                line_width=0.5,
-            ).render(ctx)
+            image = (
+                sdf.grid((8, 8), (12, 12))
+                .isolines(
+                    (255, 255, 255, 255),
+                    (0, 0, 0, 255),
+                    spacing=2.0,
+                    line_width=0.5,
+                )
+                .render(ctx)
+            )
 
-        pixels = rgba_array(image)
+            pixels = rgba_array(image)
         unique_colors = np.unique(pixels[..., :3].reshape(-1, 3), axis=0)
         self.assertGreater(len(unique_colors), 1)
         self.assertGreater(
@@ -48,11 +52,15 @@ class PluginLoaderTests(unittest.TestCase):
 
         self.assertIn("light", registry.method_names_for("sdf"))
         with Canvas((32, 32)) as ctx:
-            image = sdf.circle((16, 16), 10).light(
-                (80, 180, 255, 255),
-                (0, 0, 0, 255),
-                light_dir=(-0.6, -0.6, 0.8),
-            ).render(ctx)
+            image = (
+                sdf.circle((16, 16), 10)
+                .light(
+                    (80, 180, 255, 255),
+                    (0, 0, 0, 255),
+                    light_dir=(-0.6, -0.6, 0.8),
+                )
+                .render(ctx)
+            )
             pixels = rgba_array(image)
             unique_colors = np.unique(pixels[..., :3].reshape(-1, 3), axis=0)
             self.assertGreater(len(unique_colors), 2)

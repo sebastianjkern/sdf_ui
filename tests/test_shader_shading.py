@@ -1,13 +1,11 @@
-"""Shader-name contracts, analytic gradients, and real GLSL compute parity."""
+"""Shader-name contracts and analytic shading gradients."""
 
-import re
-from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
-from sdf_ui.backends.opengl.nodes.registry import registry
+from sdf_ui.gpu.nodes.registry import registry
 from sdf_ui.learning.autodiff import Parameter, Tensor
 from sdf_ui.learning.shaders.shading import RULES
 
@@ -124,7 +122,7 @@ def test_rules_cover_exact_standalone_shader_descriptors():
     descriptors = {
         descriptor.name
         for descriptor in registry.shader_files()
-        if descriptor.path.startswith("backends/opengl/nodes/shading/")
+        if descriptor.path.startswith("gpu/nodes/shading/")
     }
     assert set(RULES) == descriptors
     for name, rule in RULES.items():
@@ -253,105 +251,3 @@ def test_noise_is_fixed_deterministic_unclipped_and_composable(name):
     gain = Parameter("gain", 0.7)
     (first * gain).mean().backward()
     assert gain.grad == pytest.approx(first.numpy().mean())
-
-
-@pytest.fixture(scope="module")
-def gl_context():
-    import moderngl
-
-    try:
-        context = moderngl.create_standalone_context(require=430, backend="egl")
-    except Exception as exc:
-        pytest.skip(f"OpenGL 4.3 EGL context unavailable: {exc}")
-    yield context
-    context.release()
-
-
-def _gl_run(context, name, inputs, params, *, size, floating):
-    root = Path(__file__).resolve().parents[1] / "src/sdf_ui/backends/opengl/nodes/shading"
-    source = (root / name / "shader.glsl").read_text()
-    if floating:
-        source = source.replace("layout (rgba8,", "layout (rgba32f,")
-    shader = context.compute_shader(source)
-    textures = []
-    try:
-        output = context.texture(size, 4, dtype="f4" if floating else "f1")
-        textures.append(output)
-        output.bind_to_image(0, read=False, write=True)
-        for key, value in inputs.items():
-            binding = int(
-                re.search(
-                    r"binding = (\d+)\) readonly uniform image2D " + key + r";", source
-                )[1]
-            )
-            scalar = value.ndim == 2
-            dtype = "f4" if scalar or floating else "f1"
-            data = (
-                value.astype(np.float32)
-                if dtype == "f4"
-                else np.rint(np.clip(value, 0, 1) * 255).astype(np.uint8)
-            )
-            texture = context.texture(
-                size, 1 if scalar else 4, data.tobytes(), dtype=dtype
-            )
-            textures.append(texture)
-            texture.bind_to_image(binding, read=True, write=False)
-        for key, value in params.items():
-            if key in shader:  # GLSL may optimize unused uniforms out.
-                data = np.asarray(value)
-                shader[key].value = float(data) if data.ndim == 0 else tuple(data)
-        shader.run(group_x=(size[0] + 15) // 16, group_y=(size[1] + 15) // 16)
-        context.memory_barrier()
-        dtype = np.float32 if floating else np.uint8
-        result = np.frombuffer(output.read(), dtype=dtype).reshape(size[1], size[0], 4)
-        return result.copy() if floating else result / 255.0
-    finally:
-        for texture in textures:
-            texture.release()
-        shader.release()
-
-
-@pytest.mark.parametrize("floating", [True, False], ids=["float32", "rgba8"])
-@pytest.mark.parametrize("name", sorted(RULES))
-def test_glsl_pixel_parity(gl_context, name, floating):
-    size = (19, 13)  # Non-workgroup dimensions exercise the GLSL bounds guards.
-    inputs, params = _case(name, size)
-    for key, value in inputs.items():
-        inputs[key] = (
-            np.rint(value * 255) / 255
-            if value.ndim == 3 and not floating
-            else value.astype(np.float32).astype(float)
-        )
-    actual = RULES[name](
-        _context(size), {k: Tensor(v) for k, v in inputs.items()}, params
-    ).numpy()
-    gpu = _gl_run(gl_context, name, inputs, params, size=size, floating=floating)
-    if not floating:
-        actual = np.clip(actual, 0.0, 1.0)
-    tolerance = 3e-5 if floating else 0.5 / 255 + 3e-5
-    # Trigonometric hash noise amplifies platform cos/dot rounding by 12345.
-    if name == "film_grain":
-        tolerance += 2.0 / 1024
-    np.testing.assert_allclose(actual, gpu, atol=tolerance, rtol=0)
-
-
-@pytest.mark.parametrize("profile", range(6))
-@pytest.mark.parametrize("shade_background", [0.0, 0.73])
-def test_light_glsl_profiles_and_background(gl_context, profile, shade_background):
-    size = (9, 7)
-    inputs, params = _case("light", size)
-    params.update(
-        heightProfile=float(profile),
-        shadeBackground=shade_background,
-        backgroundBevel=-0.3,
-    )
-    actual = RULES["light"](_context(size), {"sdf": Tensor(inputs["sdf"])}, params)
-    gpu = _gl_run(gl_context, "light", inputs, params, size=size, floating=True)
-    np.testing.assert_allclose(actual.numpy(), gpu, atol=3e-5, rtol=0)
-
-
-def test_perlin_glsl_across_lattice_cells(gl_context):
-    size = (401, 233)
-    actual = RULES["perlin_noise"](_context(size), {}, {}).numpy()
-    gpu = _gl_run(gl_context, "perlin_noise", {}, {}, size=size, floating=True)
-    np.testing.assert_allclose(actual, gpu, atol=3e-5, rtol=0)

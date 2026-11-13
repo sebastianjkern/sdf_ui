@@ -1,7 +1,7 @@
 import unittest
 
 from sdf_ui import Canvas, sdf
-from sdf_ui.backends.opengl.nodes.registry import registry
+from sdf_ui.gpu.nodes.registry import registry
 from tests.helpers import rgba_array
 
 
@@ -15,10 +15,14 @@ class EllipsePluginTests(unittest.TestCase):
 
     def test_ellipse_renders_a_visible_shape(self):
         with Canvas((96, 96)) as ctx:
-            image = sdf.ellipse((48, 48), (28, 16)).fill(
-                (255, 255, 255, 255),
-                (0, 0, 0, 255),
-            ).render(ctx)
+            image = (
+                sdf.ellipse((48, 48), (28, 16))
+                .fill(
+                    (255, 255, 255, 255),
+                    (0, 0, 0, 255),
+                )
+                .render(ctx)
+            )
             pixels = rgba_array(image).copy()
 
         center = pixels[48, 48, 0]
@@ -30,10 +34,14 @@ class EllipsePluginTests(unittest.TestCase):
 
     def test_ellipse_is_wider_than_it_is_tall(self):
         with Canvas((96, 96)) as ctx:
-            image = sdf.ellipse((48, 48), (32, 12)).fill(
-                (255, 255, 255, 255),
-                (0, 0, 0, 255),
-            ).render(ctx)
+            image = (
+                sdf.ellipse((48, 48), (32, 12))
+                .fill(
+                    (255, 255, 255, 255),
+                    (0, 0, 0, 255),
+                )
+                .render(ctx)
+            )
             pixels = rgba_array(image).copy()
 
         horizontal_span = pixels[48, :, 0] > 100

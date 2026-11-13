@@ -1,5 +1,4 @@
 from . import core, learning
-from .backends.opengl.context import Context, DispatchConfig
 from .core import ColorTexture, SDFTexture
 from .core.api import ColorNamespace, SDFNamespace
 from .core.expressions import (
@@ -13,6 +12,7 @@ from .core.expressions import (
     percent_y,
     sin,
 )
+from .gpu.context import Context, DispatchConfig
 from .log import logger
 
 Canvas = Context
