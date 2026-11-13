@@ -83,12 +83,13 @@ class RenderCacheInfo:
 
 
 class Renderer:
-    def __init__(self, ctx, params=None, cache=None):
+    def __init__(self, ctx, params=None, cache=None, evaluation_rect=None):
         if ctx is None:
             raise ValueError("A Context is required to render a texture")
         self.ctx = ctx
         self.params = params or {}
         self.cache = {} if cache is None else cache
+        self.evaluation_rect = evaluation_rect
         self.stats = RenderStats()
         self._render_depth = 0
 
@@ -103,6 +104,19 @@ class Renderer:
         if is_root_render:
             start = perf_counter()
             previous_stats = getattr(self.ctx, "_active_render_stats", None)
+            previous_rect = self.ctx._active_evaluation_rect
+            if (
+                self.evaluation_rect is not None
+                and isinstance(value, TextureNode)
+                and value.tex is not None
+            ):
+                raise ValueError(
+                    "A materialized image cannot be re-rendered into a crop"
+                )
+            rect = self._resolve_evaluation_rect(value)
+            if rect is not None:
+                self._validate_region_graph(value)
+            self.ctx._active_evaluation_rect = rect
             self.ctx._active_render_stats = self.stats
             self.stats.render_calls += 1
 
@@ -116,7 +130,75 @@ class Renderer:
             if is_root_render:
                 self.stats.elapsed_seconds += perf_counter() - start
                 self.ctx._active_render_stats = previous_stats
+                self.ctx._active_evaluation_rect = previous_rect
                 self.ctx.last_render_stats = self.stats
+
+    def _resolve_evaluation_rect(self, value):
+        from ..gpu.regions import normalize_rect
+
+        if self.evaluation_rect is not None:
+            return normalize_rect(self.evaluation_rect, self.ctx.size)
+        regions = self._materialized_regions(value)
+        if len(regions) > 1:
+            raise ValueError("Cropped input images must have the same canvas region")
+        return normalize_rect(next(iter(regions), None), self.ctx.size)
+
+    def _materialized_regions(self, value, visited=None):
+        visited = set() if visited is None else visited
+        if id(value) in visited:
+            return set()
+        visited.add(id(value))
+        if isinstance(value, MultiOutputResult):
+            children = value.inputs
+        elif isinstance(value, TextureNode):
+            if value.tex is not None:
+                origin = getattr(value.tex, "origin", (0, 0))
+                canvas_size = getattr(value.tex, "canvas_size", value.tex.size)
+                if origin != (0, 0) or value.tex.size != canvas_size:
+                    return {
+                        (*origin, *value.tex.size),
+                    }
+            children = value.inputs
+        else:
+            return set()
+        regions = set()
+        for child in children:
+            regions.update(self._materialized_regions(child, visited))
+        return regions
+
+    def _validate_region_graph(self, value, visited=None):
+        from sdf_ui.gpu.nodes.registry import registry
+
+        visited = set() if visited is None else visited
+        if id(value) in visited:
+            return
+        visited.add(id(value))
+        children = self._region_children(value, registry)
+        for child in children:
+            self._validate_region_graph(child, visited)
+
+    @staticmethod
+    def _region_children(value, registry):
+        if isinstance(value, MultiOutputResult):
+            return value.inputs
+        if not isinstance(value, TextureNode) or value.tex is not None:
+            return ()
+        plugin = registry.get(value.op)
+        shader = plugin.shader
+        if shader is None or shader.differentiation is None:
+            if plugin.render_func is not None:
+                reason = "host-rendered node"
+            else:
+                reason = "pointwise shader"
+            raise NotImplementedError(
+                f"Evaluation rectangles require a {reason} for '{plugin.name}'"
+            )
+        sampling = shader.differentiation.sampling
+        if sampling != "pointwise":
+            raise NotImplementedError(
+                f"Evaluation rectangles do not yet support '{plugin.name}' sampling: {sampling}"
+            )
+        return value.inputs
 
     def close(self):
         self.cache.clear()
@@ -189,7 +271,11 @@ class Renderer:
                 getattr(node, "mode", None),
             )
 
-        context_key = (id(self.ctx), self.ctx.size)
+        context_key = (
+            id(self.ctx),
+            self.ctx.size,
+            self.ctx._active_evaluation_rect,
+        )
         input_keys = tuple(
             self._node_key(input_)
             if isinstance(input_, TextureNode) or isinstance(input_, MultiOutputResult)
@@ -272,12 +358,35 @@ class TextureNode(ABC):
         names.update(registry.method_names_for(self.kind))
         return sorted(names)
 
-    def render(self, ctx=None, params=None, cache=None):
-        if self.tex is not None and ctx is None:
-            return self
-        return Renderer(ctx or self.context, params=params, cache=cache).render(self)
+    def render(self, ctx=None, params=None, cache=None, evaluation_rect=None):
+        """Materialize this node, optionally cropping to a canvas pixel rect.
 
-    def show(self, ctx=None, params=None, cache=None, conversion=True, size=None):
+        The rectangle is ``(x, y, width, height)``. All shaders in the render
+        tree use the same region, so this currently supports pointwise
+        operations and rejects filters that need neighboring pixels.
+        """
+        if self.tex is not None and ctx is None:
+            if evaluation_rect is not None:
+                raise ValueError(
+                    "A materialized image cannot be re-rendered into a crop"
+                )
+            return self
+        return Renderer(
+            ctx or self.context,
+            params=params,
+            cache=cache,
+            evaluation_rect=evaluation_rect,
+        ).render(self)
+
+    def show(
+        self,
+        ctx=None,
+        params=None,
+        cache=None,
+        conversion=True,
+        size=None,
+        evaluation_rect=None,
+    ):
         def _show(texture):
             if (
                 getattr(texture, "mode", None) == "LAB"
@@ -288,7 +397,12 @@ class TextureNode(ABC):
             ImageOps.flip(Image.fromarray(texture.tex.read())).show()
 
         self._with_rendered_texture(
-            _show, ctx=ctx, params=params, cache=cache, size=size
+            _show,
+            ctx=ctx,
+            params=params,
+            cache=cache,
+            size=size,
+            evaluation_rect=evaluation_rect,
         )
 
     def save(
@@ -299,6 +413,7 @@ class TextureNode(ABC):
         cache=None,
         conversion=True,
         size=None,
+        evaluation_rect=None,
     ):
         def _save(texture):
             if self.kind == "color":
@@ -321,7 +436,12 @@ class TextureNode(ABC):
             image.save(name)
 
         self._with_rendered_texture(
-            _save, ctx=ctx, params=params, cache=cache, size=size
+            _save,
+            ctx=ctx,
+            params=params,
+            cache=cache,
+            size=size,
+            evaluation_rect=evaluation_rect,
         )
 
     def named(self, label: str):
@@ -333,17 +453,31 @@ class TextureNode(ABC):
     def uncached(self):
         return self._clone(label=self.label, should_cache=False)
 
-    def _render_for_io(self, ctx, params, cache, size):
+    def _render_for_io(self, ctx, params, cache, size, evaluation_rect):
         if ctx is None and size is not None:
             ctx = Context(size)
-        return self.render(ctx, params=params, cache=cache)
+        return self.render(
+            ctx,
+            params=params,
+            cache=cache,
+            evaluation_rect=evaluation_rect,
+        )
 
-    def _with_rendered_texture(self, func, *, ctx, params, cache, size):
+    def _with_rendered_texture(
+        self, func, *, ctx, params, cache, size, evaluation_rect
+    ):
         if ctx is not None or size is None:
-            return func(self._render_for_io(ctx, params, cache, size))
+            return func(self._render_for_io(ctx, params, cache, size, evaluation_rect))
 
         with Context(size) as temp_ctx:
-            return func(self.render(temp_ctx, params=params, cache=cache))
+            return func(
+                self.render(
+                    temp_ctx,
+                    params=params,
+                    cache=cache,
+                    evaluation_rect=evaluation_rect,
+                )
+            )
 
     def _clone(self, *, label, should_cache):
         kwargs = {}
@@ -409,8 +543,13 @@ class MultiOutputResult:
     should_cache: bool = True
     kind: str = "multi_output"
 
-    def render(self, ctx, params=None, cache=None):
-        return Renderer(ctx, params=params, cache=cache).render(self)
+    def render(self, ctx, params=None, cache=None, evaluation_rect=None):
+        return Renderer(
+            ctx,
+            params=params,
+            cache=cache,
+            evaluation_rect=evaluation_rect,
+        ).render(self)
 
     def __iter__(self):
         if self.op != "masked_union":

@@ -173,6 +173,34 @@ def test_blur_preserves_a_solid_white_image():
     assert pixels.min() >= 245
 
 
+def test_evaluation_rect_returns_matching_cropped_pixels():
+    scene = (
+        sdf.circle((14, 12), 7)
+        .union(sdf.circle((20, 12), 5))
+        .fill((255, 80, 20, 255), (0, 0, 0, 0))
+        .to_rgb()
+    )
+    rect = (7, 5, 13, 11)
+    with Canvas((32, 24)) as canvas:
+        full = scene.render(canvas)
+        cropped = scene.render(canvas, evaluation_rect=rect)
+
+        assert cropped.tex.size == (rect[2], rect[3])
+        assert cropped.tex.origin == rect[:2]
+        assert cropped.tex.canvas_size == canvas.size
+        np.testing.assert_array_equal(cropped.tex.read(), full.tex.read()[5:16, 7:20])
+        roundtrip = cropped.to_lab().to_rgb().render(canvas)
+        np.testing.assert_array_equal(roundtrip.tex.read(), cropped.tex.read())
+
+
+def test_evaluation_rect_rejects_invalid_rectangles_and_nonpointwise_nodes():
+    with Canvas((16, 16)) as canvas:
+        with pytest.raises(ValueError, match="inside the canvas"):
+            sdf.circle((8, 8), 4).render(canvas, evaluation_rect=(14, 14, 4, 4))
+        with pytest.raises(NotImplementedError, match="host-rendered node"):
+            color.clear("#ffffff").blur().render(canvas, evaluation_rect=(4, 4, 8, 8))
+
+
 def test_invert_turns_white_into_black():
     pixels = rgba_array(render(color.clear("#ffffff").invert().to_rgb(), size=(8, 8)))
 

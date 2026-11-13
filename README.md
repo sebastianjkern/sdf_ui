@@ -76,6 +76,22 @@ with Canvas((640, 360)) as canvas:
     scene.save("out.png", ctx=canvas, cache=cache)
 ```
 
+For a known region of interest, `evaluation_rect` limits shader evaluation and
+returns a cropped image. Rectangles use `(x, y, width, height)` integer pixel
+coordinates from the top-left of the canvas:
+
+```python
+with Canvas((640, 360)) as canvas:
+    crop_scene = sdf.circle((300, 180), 90).fill("#62bb47").to_rgb()
+    crop = crop_scene.render(canvas, evaluation_rect=(180, 80, 240, 200))
+    print(crop.tex.size, crop.tex.origin)  # (240, 200), (180, 80)
+```
+
+The rectangle applies to every shader in that render. Pointwise operations are
+supported; filters and shaders that sample neighboring pixels need a halo and
+currently reject cropped evaluation. This explicit region is the first step
+toward automatic bounds propagation.
+
 ### Architecture Note
 
 Internally, `sdf_ui` is organized around immutable render nodes instead of immediate drawing calls.

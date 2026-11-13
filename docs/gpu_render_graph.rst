@@ -27,6 +27,10 @@ The display executor stores color passes in RGBA8, while the training and CPU
 reference paths use floating-point values. ``Canvas.render`` and CPU rendering
 remain available for ordinary rendering of supported built-in operations.
 CPU plan execution requires symbolic inputs rather than materialized GPU textures.
+For pointwise display rendering, ``Canvas.render`` and ``Canvas.render_plan``
+also accept ``evaluation_rect=(x, y, width, height)`` in canvas pixels and
+return cropped images. Neighborhood-sampling passes and compiled training do
+not yet use evaluation rectangles.
 
 Small scalar/vector parameter expressions and geometric losses use the existing
 CPU autodiff engine. Reduced uniform gradients connect the GPU graph back to

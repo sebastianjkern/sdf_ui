@@ -20,6 +20,11 @@ Modules
 Context and rendering
 ~~~~~~~~~~~~~~~~~~~~~~
 
+``Canvas.render(..., evaluation_rect=(x, y, width, height))`` evaluates a
+pointwise shader graph in the requested canvas-pixel region and returns cropped
+images. Filters and other neighborhood-sampling operations currently require a
+full-canvas render.
+
 .. automodule:: sdf_ui.gpu.context
    :members:
    :undoc-members:

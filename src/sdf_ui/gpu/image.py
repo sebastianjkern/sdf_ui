@@ -15,20 +15,40 @@ _FORMATS = {
 
 
 class GPUImage(Image):
-    """A context-owned 2D texture; CPU readback and upload are explicit."""
+    """A context-owned image with an extent and canvas-space origin.
 
-    def __init__(self, context, texture, *, size, format):
+    For cropped evaluation, ``size`` is the allocated crop size, ``origin`` is
+    its top-left position on the logical canvas, and ``canvas_size`` is the
+    full logical canvas extent.
+    """
+
+    def __init__(
+        self,
+        context,
+        texture,
+        *,
+        size,
+        format,
+        origin=(0, 0),
+        canvas_size=None,
+    ):
         if format not in _FORMATS:
             raise ValueError(f"Unsupported image format: {format}")
         self.context = context
         self.backend = context
         self.texture = texture
         self.size = tuple(map(int, size))
+        self.origin = tuple(map(int, origin))
+        self.canvas_size = tuple(
+            map(int, canvas_size or (context.size if self.origin != (0, 0) else size))
+        )
         self.format = format
         self.channels, self.numpy_dtype = _FORMATS[format]
         self.components = self.channels
         self.dtype = "f4" if self.numpy_dtype == np.dtype("float32") else "f1"
-        self.shape = (self.size[1], self.size[0]) + (() if self.channels == 1 else (self.channels,))
+        self.shape = (self.size[1], self.size[0]) + (
+            () if self.channels == 1 else (self.channels,)
+        )
         self.closed = False
         context._image_generation += 1
         self.generation = context._image_generation
@@ -56,7 +76,9 @@ class GPUImage(Image):
             array,
             {
                 "offset": 0,
-                "bytes_per_row": self.size[0] * self.channels * self.numpy_dtype.itemsize,
+                "bytes_per_row": self.size[0]
+                * self.channels
+                * self.numpy_dtype.itemsize,
                 "rows_per_image": self.size[1],
             },
             (self.size[0], self.size[1], 1),
@@ -80,7 +102,12 @@ class GPUImage(Image):
             encoder = self.context.device.create_command_encoder(label="image readback")
             encoder.copy_texture_to_buffer(
                 {"texture": self.texture, "mip_level": 0, "origin": (0, 0, 0)},
-                {"buffer": buffer, "offset": 0, "bytes_per_row": padded_row_bytes, "rows_per_image": height},
+                {
+                    "buffer": buffer,
+                    "offset": 0,
+                    "bytes_per_row": padded_row_bytes,
+                    "rows_per_image": height,
+                },
                 (width, height, 1),
             )
             self.context.queue.submit([encoder.finish()])
