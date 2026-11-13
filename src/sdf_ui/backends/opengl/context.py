@@ -273,7 +273,12 @@ class Context:
         return GPUShaderBackend(self)
 
     def training(self, outputs, params=None, *, size=None, inputs=None):
-        """Create a resource-owning high-level render-graph training session."""
+        """Create a training session for one scene or named scene outputs.
+
+        A single scene can be matched with ``session.match(target)``. For
+        multiple outputs, pass a name-to-scene mapping and select each output
+        with ``session.match(target, output=name)``.
+        """
         from ...graph.session import TrainingSession
 
         return TrainingSession(self, outputs, params, size=size, inputs=inputs)

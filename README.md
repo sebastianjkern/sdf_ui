@@ -107,24 +107,20 @@ GPU render graph also supports combined image, field, and geometry objectives,
 with GPU shader gradients and optimizer updates.
 
 ```python
-from sdf_ui import param, sdf
-from sdf_ui.learning import Adam, DifferentiableRenderer, ParameterStore
+from sdf_ui import Canvas, sdf
+from sdf_ui.learning import ParameterStore
 
 weights = ParameterStore()
-radius = weights.define("radius", 4.0)
-scene = sdf.circle((16, 16), param("radius"))
-renderer = DifferentiableRenderer((32, 32), params=weights)
-target = renderer.render(sdf.circle((16, 16), 9.0)).detach()
-optimizer = Adam(weights.parameters(), lr=0.1)
+radius = weights.scalar("radius", initial=4.0, min=0)
+scene = sdf.circle((16, 16), radius)
 
-for _ in range(150):
-    optimizer.zero_grad()
-    loss = ((renderer.render(scene) - target) ** 2).mean()
-    loss.backward()
-    optimizer.step()
+with Canvas((32, 32)) as canvas:
+    with canvas.training(scene, weights) as fit:
+        fit.match(sdf.circle((16, 16), 9.0))
+        fit.fit(150, lr=0.1)
 
 weights.save("weights.json")
-print(radius.item())  # approximately 9
+print(weights.value("radius"))  # approximately 9
 ```
 
 The CPU reference backend evaluates a documented subset of the existing render

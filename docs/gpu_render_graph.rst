@@ -67,11 +67,20 @@ and any externally supplied GPU images remain caller-owned::
 
     with Canvas((32, 32)) as canvas:
         with canvas.training({"field": field, "image": image}, weights) as session:
-            session.match("field", sdf.circle((16, 16), 9))
+            session.match(sdf.circle((16, 16), 9), output="field")
             session.fit(150, lr=0.1)
             print(session.evaluate(), session.report())
-            session.save("image", "learned.png")
+            session.save("learned.png", output="image")
             session.save_checkpoint("checkpoint.json")
+
+For a single output, pass the scene directly and omit ``output`` from ``match``::
+
+    with canvas.training(field, weights) as session:
+        session.match(sdf.circle((16, 16), 9))
+        session.fit(150, lr=0.1)
+
+Named outputs are useful when one graph shares work across several results;
+then pass ``output="field"`` (or the matching output name) to each ``match``.
 
 ``scalar`` returns a lazy expression, and ``initial`` is the actual rendered
 value. Optional bounds are strict and approached asymptotically by smooth

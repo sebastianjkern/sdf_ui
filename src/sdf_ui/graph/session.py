@@ -11,12 +11,17 @@ from .runtime import GraphTrainer
 class TrainingSession:
     """Own a compiled graph, captured targets, and a lazily created trainer."""
 
+    DEFAULT_OUTPUT = "output"
+
     def __init__(self, canvas, outputs, params=None, *, size=None, inputs=None):
         self.canvas = canvas
         self._stack = ExitStack()
+        if isinstance(outputs, (TextureNode, MultiOutputResult)):
+            outputs = {self.DEFAULT_OUTPUT: outputs}
         self.graph = self._stack.enter_context(
             canvas.compile(outputs, params, size=size, inputs=inputs)
         )
+        self.outputs = tuple(self.graph.plan.outputs)
         self.objective = Objective()
         self.trainer = None
         self._lr = None
@@ -27,11 +32,24 @@ class TrainingSession:
             raise RuntimeError("Training session is closed")
         self.graph.check()
 
+    def _select_output(self, output):
+        if output is None:
+            if len(self.outputs) != 1:
+                raise ValueError(
+                    "Specify output= when selecting from a session with multiple outputs"
+                )
+            return self.outputs[0]
+        if output not in self.outputs:
+            raise ValueError(
+                f"Unknown output '{output}'. Available outputs: {', '.join(self.outputs)}"
+            )
+        return output
+
     def match(
         self,
-        output,
         target,
         *,
+        output=None,
         kind="mse",
         weight=1.0,
         name=None,
@@ -39,8 +57,14 @@ class TrainingSession:
         normalization="all",
         delta=1.0,
     ):
-        """Add a pixel loss; scene targets are captured and owned by the session."""
+        """Match one output to a target scene or array.
+
+        A single-output session infers its output name. Multi-output sessions
+        require ``output=...`` so each target is associated explicitly.
+        Scene targets are captured and owned by the session.
+        """
         self._check()
+        output = self._select_output(output)
         with ExitStack() as pending:
             if isinstance(target, (TextureNode, MultiOutputResult)):
                 target = pending.enter_context(
@@ -135,8 +159,10 @@ class TrainingSession:
             "violations": None if layout is None else layout.violations(params),
         }
 
-    def save(self, output, path):
+    def save(self, path, *, output=None):
+        """Save a trained output, inferring its name for single-output sessions."""
         self._check()
+        output = self._select_output(output)
         return self.graph.save(output, path)
 
     def save_checkpoint(self, path):

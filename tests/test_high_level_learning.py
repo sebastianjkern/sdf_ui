@@ -57,7 +57,7 @@ def test_session_owns_targets_and_trains(tmp_path):
             {"field": field, "image": field.fill("#ffffff", "#000000").to_rgb()},
             weights,
         ) as session:
-            session.match("field", sdf.circle((4, 4), 3))
+            session.match(sdf.circle((4, 4), 3), output="field")
             initial = session.evaluate()["loss"]
             session.fit(40, lr=0.1)
             assert session.evaluate()["loss"] < initial * 0.05
@@ -66,7 +66,7 @@ def test_session_owns_targets_and_trains(tmp_path):
                 weights.value("radius")
             )
             assert report["disconnected_parameters"] == []
-            session.save("image", tmp_path / "result.png")
+            session.save(tmp_path / "result.png", output="image")
             session.save_checkpoint(tmp_path / "state.json")
             saved = weights.value("radius")
             weights.assign_value("radius", 1)
@@ -78,7 +78,7 @@ def test_session_owns_targets_and_trains(tmp_path):
             {"field": field, "image": field.fill("#ffffff", "#000000").to_rgb()},
             weights,
         ) as resumed:
-            resumed.match("field", sdf.circle((4, 4), 3))
+            resumed.match(sdf.circle((4, 4), 3), output="field")
             resumed.load_checkpoint(tmp_path / "state.json")
             assert weights.value("radius") == pytest.approx(saved)
             assert resumed.fit(1, lr=0.1)[0]["step"] == 41
