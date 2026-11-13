@@ -12,9 +12,9 @@ from sdf_ui.backends.opengl.backend import GPUShaderBackend
 from sdf_ui.backends.opengl.glsl import derivative_source
 from sdf_ui.backends.opengl.nodes.registry import registry
 from sdf_ui.backends.opengl.nodes.shader_expression import ShaderProgram
-from sdf_ui.learning.shader_derivatives import shader_vjp
-from sdf_ui.learning.shader_primitives import RULES
 from sdf_ui.backends.opengl.shader_sources.primitives import SOURCES
+from sdf_ui.learning.shaders.derivatives import shader_vjp
+from sdf_ui.learning.shaders.primitives import RULES
 
 SIZE = (7, 5)
 CASES = [

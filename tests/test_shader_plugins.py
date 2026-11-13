@@ -13,7 +13,7 @@ from sdf_ui.learning import (
     Layout,
     Parameter,
 )
-from sdf_ui.learning.shader_plugins import supports_plugin
+from sdf_ui.learning.shaders.plugins import supports_plugin
 
 
 @pytest.mark.parametrize(

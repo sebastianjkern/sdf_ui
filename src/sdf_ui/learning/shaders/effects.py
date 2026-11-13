@@ -19,16 +19,37 @@ connected zero derivatives for every input channel, including constant alpha=1.
 
 from functools import partial
 
-from ..backends.opengl.nodes.postprocessing.blur.implementation import DEFAULTS, reference as _blur
-from ..backends.opengl.nodes.layer.alpha_overlay.implementation import reference as _overlay
-from ..backends.opengl.nodes.layer.layer_mask.implementation import reference as _layer_mask
-from ..backends.opengl.nodes.layer.multiply.implementation import reference as _multiply
-from ..backends.opengl.nodes.layer.transparency.implementation import reference as _transparency
-from ..backends.opengl.nodes.postprocessing.invert.implementation import reference as _invert
-from ..backends.opengl.nodes.postprocessing.to_rgb.implementation import reference as _to_rgb
-from ..backends.opengl.nodes.postprocessing.to_lab.implementation import reference as _to_lab
-from ..backends.opengl.nodes.postprocessing.dithering.implementation import reference as _dithering
-from ..backends.opengl.nodes.postprocessing.dither_1bit.implementation import reference as _dither_1bit
+from ...backends.opengl.nodes.layer.alpha_overlay.implementation import (
+    reference as _overlay,
+)
+from ...backends.opengl.nodes.layer.layer_mask.implementation import (
+    reference as _layer_mask,
+)
+from ...backends.opengl.nodes.layer.multiply.implementation import (
+    reference as _multiply,
+)
+from ...backends.opengl.nodes.layer.transparency.implementation import (
+    reference as _transparency,
+)
+from ...backends.opengl.nodes.postprocessing.blur.implementation import DEFAULTS
+from ...backends.opengl.nodes.postprocessing.blur.implementation import (
+    reference as _blur,
+)
+from ...backends.opengl.nodes.postprocessing.dither_1bit.implementation import (
+    reference as _dither_1bit,
+)
+from ...backends.opengl.nodes.postprocessing.dithering.implementation import (
+    reference as _dithering,
+)
+from ...backends.opengl.nodes.postprocessing.invert.implementation import (
+    reference as _invert,
+)
+from ...backends.opengl.nodes.postprocessing.to_lab.implementation import (
+    reference as _to_lab,
+)
+from ...backends.opengl.nodes.postprocessing.to_rgb.implementation import (
+    reference as _to_rgb,
+)
 
 __all__ = ["RULES", "DEFAULTS"]
 

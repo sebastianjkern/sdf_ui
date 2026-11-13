@@ -39,7 +39,7 @@ class ShaderDifferentiation:
         Ports use GLSL names. Single outputs return a Tensor; multiple outputs
         return a tuple in output declaration order. Execution is CPU reference.
         """
-        from ....learning.shader_derivatives import evaluate_shader
+        from ....learning.shaders.derivatives import evaluate_shader
 
         return evaluate_shader(self, size, inputs, params)
 
@@ -49,6 +49,6 @@ class ShaderDifferentiation:
         The local CPU reference recomputes the forward expression. Upstream
         gradients are one array, or a tuple/name mapping for multiple outputs.
         """
-        from ....learning.shader_derivatives import shader_vjp
+        from ....learning.shaders.derivatives import shader_vjp
 
         return shader_vjp(self, size, inputs, params, output_gradients)

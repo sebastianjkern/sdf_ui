@@ -30,7 +30,7 @@ if TYPE_CHECKING:
         RandomSource,
     )
     from .render import DifferentiableRenderer, UnsupportedGradientError  # noqa: F401
-    from .shader_derivatives import ShaderGradients  # noqa: F401
+    from .shaders.derivatives import ShaderGradients  # noqa: F401
 
 
 _MODULES = {
@@ -54,7 +54,7 @@ _MODULES = {
         "Episode",
     ),
     "render": ("DifferentiableRenderer", "UnsupportedGradientError"),
-    "shader_derivatives": ("ShaderGradients",),
+    "shaders.derivatives": ("ShaderGradients",),
     "objective": ("Objective", "PixelLoss", "GeometryLoss"),
     "..backends.opengl.optim": ("GPUAdam", "GPUSGD"),
 }

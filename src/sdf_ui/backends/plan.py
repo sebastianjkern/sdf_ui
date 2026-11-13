@@ -7,7 +7,7 @@ from ..core.expressions import Expr, evaluate_expr
 from ..core.sdf import SDFTexture
 from ..graph.lowering import GraphPlan
 from ..learning.autodiff import Tensor, as_tensor
-from ..learning.shader_derivatives import _implementation
+from ..learning.shaders.derivatives import _implementation
 from ..util import hex_col
 
 

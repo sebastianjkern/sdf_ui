@@ -2,9 +2,9 @@
 
 import numpy as np
 
-from ..backends.opengl.nodes.registry import registry
-from .autodiff import Tensor, stack
-from .render import _lab_to_rgb, _rgb_to_lab, _tensor
+from ...backends.opengl.nodes.registry import registry
+from ..autodiff import Tensor, stack
+from ..render import _lab_to_rgb, _rgb_to_lab, _tensor
 
 _COMPOSITES = {
     "alpha_overlay",

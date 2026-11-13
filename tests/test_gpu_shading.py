@@ -8,10 +8,10 @@ import numpy as np
 import pytest
 
 from sdf_ui.backends.opengl.nodes.registry import registry
-from sdf_ui.learning.autodiff import Tensor
-from sdf_ui.learning.shader_derivatives import shader_vjp
-from sdf_ui.learning.shader_shading import RULES
 from sdf_ui.backends.opengl.shader_sources.shading import SOURCES
+from sdf_ui.learning.autodiff import Tensor
+from sdf_ui.learning.shaders.derivatives import shader_vjp
+from sdf_ui.learning.shaders.shading import RULES
 
 
 def _contract(name):

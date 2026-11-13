@@ -9,7 +9,7 @@ import pytest
 
 from sdf_ui.backends.opengl.nodes.registry import registry
 from sdf_ui.learning.autodiff import Parameter, Tensor
-from sdf_ui.learning.shader_shading import RULES
+from sdf_ui.learning.shaders.shading import RULES
 
 
 def _context(size=(4, 3)):

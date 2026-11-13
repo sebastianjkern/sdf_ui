@@ -9,7 +9,7 @@ import pytest
 
 from sdf_ui.backends.opengl.nodes.registry import registry
 from sdf_ui.learning.autodiff import Parameter, Tensor
-from sdf_ui.learning.shader_primitives import RULES
+from sdf_ui.learning.shaders.primitives import RULES
 
 SIZE = (7, 5)
 PRIMITIVES = Path(__file__).resolve().parents[1] / "src/sdf_ui/backends/opengl/nodes/primitives"

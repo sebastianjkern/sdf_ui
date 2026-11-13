@@ -203,7 +203,7 @@ class DifferentiableRenderer:
         The tuple reflects the current plugin registry, including private
         plugins with a differentiable hook. Discovery does not execute hooks.
         """
-        from .shader_plugins import supports_plugin
+        from .shaders.plugins import supports_plugin
 
         registry.ensure_loaded()
         custom = {
@@ -261,7 +261,7 @@ class DifferentiableRenderer:
         plugins[key] = plugin
 
     def _node_plugin(self, value):
-        from .shader_plugins import supports_plugin
+        from .shaders.plugins import supports_plugin
 
         op = value.op
         if getattr(value, "tex", None) is not None:
@@ -371,7 +371,7 @@ class DifferentiableRenderer:
             if not isinstance(result, Tensor):
                 raise TypeError(f"Differentiable hook '{node.op}' must return a Tensor")
         elif node.op not in self._operations:
-            from .shader_plugins import evaluate_plugin
+            from .shaders.plugins import evaluate_plugin
 
             result, mode = evaluate_plugin(self, plugin, inputs, params, input_modes)
         else:

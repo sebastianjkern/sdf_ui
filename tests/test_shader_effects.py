@@ -9,7 +9,7 @@ import pytest
 from sdf_ui.backends.opengl.nodes.base import PluginFamily
 from sdf_ui.backends.opengl.nodes.registry import registry
 from sdf_ui.learning.autodiff import Parameter, Tensor
-from sdf_ui.learning.shader_effects import DEFAULTS, RULES
+from sdf_ui.learning.shaders.effects import DEFAULTS, RULES
 
 NAMES = (
     "overlay",

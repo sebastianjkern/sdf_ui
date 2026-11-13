@@ -6,8 +6,8 @@ from types import MappingProxyType
 
 import numpy as np
 
-from ..backends.opengl.shader_operation import ShaderOperation
-from .autodiff import Tensor
+from ...backends.opengl.shader_operation import ShaderOperation
+from ..autodiff import Tensor
 
 
 @dataclass(frozen=True)
@@ -32,7 +32,7 @@ def _implementation(contract):
 
 
 def _prepare(contract, size, inputs, params, independent):
-    from .render import DifferentiableRenderer, _tensor
+    from ..render import DifferentiableRenderer, _tensor
 
     context = DifferentiableRenderer(size)
     rule, defaults = _implementation(contract)
