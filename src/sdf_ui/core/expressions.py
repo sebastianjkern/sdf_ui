@@ -1,103 +1,113 @@
 """Expression tree utilities for resolving render-time parameters."""
 
+from __future__ import annotations
+
 __docformat__ = "google"
 
 import math
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass(frozen=True)
 class Expr:
     op: str
-    args: tuple
+    args: tuple[Any, ...]
 
-    def __add__(self, other):
+    def __add__(self, other: Any) -> Expr:
         return Expr("add", (self, other))
 
-    def __radd__(self, other):
+    def __radd__(self, other: Any) -> Expr:
         return Expr("add", (other, self))
 
-    def __sub__(self, other):
+    def __sub__(self, other: Any) -> Expr:
         return Expr("sub", (self, other))
 
-    def __rsub__(self, other):
+    def __rsub__(self, other: Any) -> Expr:
         return Expr("sub", (other, self))
 
-    def __mul__(self, other):
+    def __mul__(self, other: Any) -> Expr:
         return Expr("mul", (self, other))
 
-    def __rmul__(self, other):
+    def __rmul__(self, other: Any) -> Expr:
         return Expr("mul", (other, self))
 
-    def __truediv__(self, other):
+    def __truediv__(self, other: Any) -> Expr:
         return Expr("div", (self, other))
 
-    def __rtruediv__(self, other):
+    def __rtruediv__(self, other: Any) -> Expr:
         return Expr("div", (other, self))
 
-    def __neg__(self):
+    def __neg__(self) -> Expr:
         return Expr("neg", (self,))
 
-    def __pow__(self, exponent):
+    def __pow__(self, exponent: Any) -> Expr:
         return Expr("pow", (self, exponent))
 
-    def __abs__(self):
+    def __abs__(self) -> Expr:
         return Expr("abs", (self,))
 
-    def relu(self):
+    def relu(self) -> Expr:
         return Expr("relu", (self,))
 
-    def softplus(self):
+    def softplus(self) -> Expr:
         return Expr("softplus", (self,))
 
-    def sigmoid(self):
+    def sigmoid(self) -> Expr:
         return Expr("sigmoid", (self,))
 
-    def tanh(self):
+    def tanh(self) -> Expr:
         return Expr("tanh", (self,))
 
-    def sqrt(self):
+    def sqrt(self) -> Expr:
         return Expr("sqrt", (self,))
 
-    def maximum(self, other):
+    def maximum(self, other: Any) -> Expr:
         return Expr("maximum", (self, other))
 
-    def minimum(self, other):
+    def minimum(self, other: Any) -> Expr:
         return Expr("minimum", (self, other))
 
 
-def param(name: str, default=None):
+def param(name: str, default: Any = None) -> Expr:
+    """Reference a named render parameter, with an optional fallback."""
+    if not isinstance(name, str) or not name:
+        raise ValueError("Parameter name must be a nonempty string")
     return Expr("param", (name, default))
 
 
-def input_value(name: str):
+def input_value(name: str) -> Expr:
     """A non-trainable scalar input supplied to a compiled graph."""
     if not isinstance(name, str) or not name:
         raise ValueError("Input name must be a nonempty string")
     return Expr("input", (name,))
 
 
-def percent(value):
+def percent(value: Any) -> Expr:
+    """Scale ``value`` by the canvas width divided by 100."""
     return Expr("percent", (value,))
 
 
-def percent_x(value):
+def percent_x(value: Any) -> Expr:
+    """Scale ``value`` by the canvas width divided by 100."""
     return Expr("percent_x", (value,))
 
 
-def percent_y(value):
+def percent_y(value: Any) -> Expr:
+    """Scale ``value`` by the canvas height divided by 100."""
     return Expr("percent_y", (value,))
 
 
-def percent_of_min(value):
+def percent_of_min(value: Any) -> Expr:
+    """Scale ``value`` by the smaller canvas dimension divided by 100."""
     return Expr("percent_of_min", (value,))
 
 
-def sin(value):
+def sin(value: Any) -> Expr:
     return Expr("sin", (value,))
 
 
-def cos(value):
+def cos(value: Any) -> Expr:
     return Expr("cos", (value,))
 
 

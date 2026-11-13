@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, overload
 
 from .texture import PostNamespace, TextureNode
 
@@ -11,6 +11,10 @@ class ColorSpaceMode:
 class ColorTexture(TextureNode):
     kind: str
     mode: str
+    @overload
+    def __init__(self, tex: Any, context: Any, *, mode: str = ..., op: str | None = ..., inputs: Any = ..., params: Any = ..., label: str | None = ..., should_cache: bool = ...) -> None: ...
+    @overload
+    def __init__(self, *, op: str, mode: str = ..., inputs: Any = ..., params: Any = ..., label: str | None = ..., should_cache: bool = ...) -> None: ...
     @property
     def post(self) -> PostNamespace: ...
     def over(self, other: Any) -> ColorTexture: ...

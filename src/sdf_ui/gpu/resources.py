@@ -1,5 +1,13 @@
 """Owned WebGPU buffers used by graph training and reductions."""
 
+from numbers import Integral
+
+
+def _integer(value, name):
+    if isinstance(value, bool) or not isinstance(value, Integral):
+        raise ValueError(f"{name} must be an integer")
+    return int(value)
+
 
 class GPUBuffer:
     """Storage buffer with explicit host transfers and lifecycle."""
@@ -17,8 +25,13 @@ class GPUBuffer:
 
     def write(self, data, offset=0):
         self._check_open()
+        offset = _integer(offset, "offset")
+        if offset < 0:
+            raise ValueError("offset must be nonnegative")
+        if not isinstance(data, (bytes, bytearray, memoryview)):
+            raise TypeError("buffer data must be bytes-like")
         payload = bytes(data)
-        if offset < 0 or offset % 4 or len(payload) % 4:
+        if offset % 4 or len(payload) % 4:
             raise ValueError("WebGPU buffer writes require four-byte alignment")
         if offset + len(payload) > self.size:
             raise ValueError("WebGPU buffer write exceeds its allocation")
@@ -27,8 +40,13 @@ class GPUBuffer:
 
     def read(self, size=None, offset=0):
         self._check_open()
+        offset = _integer(offset, "offset")
+        if offset < 0:
+            raise ValueError("offset must be nonnegative")
+        if size is not None:
+            size = _integer(size, "size")
         size = self.size - offset if size is None else size
-        if offset < 0 or size < 0 or offset % 4 or size % 4 or offset + size > self.size:
+        if size < 0 or offset % 4 or size % 4 or offset + size > self.size:
             raise ValueError("WebGPU buffer read has invalid bounds or alignment")
         return bytes(self.context.queue.read_buffer(self.buffer, offset, size))
 
@@ -44,3 +62,10 @@ class GPUBuffer:
             self.closed = True
 
     release = close
+
+    def __enter__(self):
+        self._check_open()
+        return self
+
+    def __exit__(self, *_):
+        self.close()

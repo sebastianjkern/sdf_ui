@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import math
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from sdf_ui.core.api import ColorNamespace, SDFNamespace
 from sdf_ui.core.expressions import (
     cos,
     evaluate_expr,
+    input_value,
     param,
     percent,
     percent_of_min,
@@ -49,6 +51,7 @@ class FakeContext:
 def test_root_exports_the_new_public_api():
     assert Canvas is Context
     assert not hasattr(core, "DispatchConfig")
+    assert core.input_value is input_value
     assert isinstance(sdf, SDFNamespace)
     assert isinstance(color, ColorNamespace)
     assert hasattr(sdf_ui, "core")
@@ -75,8 +78,22 @@ def test_dispatch_config_calculates_group_counts_and_validates_values():
 
     with pytest.raises(ValueError, match="positive values"):
         DispatchConfig(shader_local_size=(0, 16))
+    with pytest.raises(ValueError, match="positive values"):
+        DispatchConfig(shader_local_size=None)
+    with pytest.raises(ValueError, match="positive integer values"):
+        DispatchConfig(group_count=(8, "many"))
+    with pytest.raises(ValueError, match="positive integer values"):
+        DispatchConfig(shader_local_size=(8.5, 8))
     with pytest.raises(TypeError, match="DispatchConfig"):
         DispatchConfig.from_value((16, 16))
+
+
+@pytest.mark.parametrize(
+    "size", [None, 16, (16,), (16, 0), ("16", 16), (16.5, 16), (True, 16)]
+)
+def test_canvas_size_validation_has_a_consistent_error(size):
+    with pytest.raises(ValueError, match="pair of positive integer width and height"):
+        Canvas(size)
 
 
 def test_namespace_dir_exposes_the_public_factories():
@@ -102,6 +119,62 @@ def test_namespace_dir_exposes_the_public_factories():
         "perlin_noise",
         "film_grain",
     }.issubset(color_names)
+    assert "union" not in sdf_names
+    assert "fill" not in sdf_names
+    assert "over" not in color_names
+    assert callable(sdf.circle((0, 0), 1).union)
+    assert callable(color.clear("#ffffff").over)
+    assert all(
+        callable(getattr(sdf, name))
+        for name in sdf_names
+        if name in registry.public_names()
+    )
+    assert all(
+        callable(getattr(color, name))
+        for name in color_names
+        if name in registry.public_names()
+    )
+
+
+def test_unknown_namespace_factory_suggests_close_names():
+    with pytest.raises(AttributeError, match="Did you mean 'circle'"):
+        sdf.circel
+
+    with pytest.raises(AttributeError, match="Did you mean 'clear'"):
+        getattr(color, "cleer")
+
+    with pytest.raises(AttributeError, match="No sdf factory named 'not_a_factory'"):
+        sdf.not_a_factory
+
+
+def test_dynamic_factory_exposes_its_runtime_signature():
+    signature = inspect.signature(sdf.circle)
+
+    assert tuple(signature.parameters) == ("center", "radius")
+    assert sdf.circle.__name__ == "circle"
+    assert "circle" in sdf.circle.__doc__
+
+
+def test_unknown_texture_method_suggests_close_names():
+    circle = sdf.circle((0, 0), 1)
+
+    with pytest.raises(AttributeError, match="Did you mean 'union'"):
+        circle.unoin
+
+    with pytest.raises(AttributeError, match="has no method 'not_a_method'"):
+        circle.not_a_method
+
+    with pytest.raises(RuntimeError, match="must be rendered before"):
+        circle.read()
+    with pytest.raises(RuntimeError, match="must be rendered before 'size'"):
+        _ = circle.size
+
+
+def test_dynamic_texture_method_exposes_its_runtime_signature():
+    signature = inspect.signature(sdf.circle((0, 0), 1).smooth_union)
+
+    assert tuple(signature.parameters) == ("other", "k")
+    assert signature.parameters["k"].default == 0.025
 
 
 @pytest.mark.parametrize(
@@ -156,11 +229,18 @@ def test_expression_constructors_and_evaluation_cover_percent_syntax():
     ctx = FakeContext()
 
     assert percent(25).op == "percent"
+    assert param("radius", default=2).args == ("radius", 2)
     assert percent_x(25).op == "percent_x"
     assert percent_y(25).op == "percent_y"
     assert percent_of_min(25).op == "percent_of_min"
     assert sin(1).op == "sin"
     assert cos(1).op == "cos"
+    with pytest.raises(ValueError, match="Parameter name must be a nonempty string"):
+        param("")
+    with pytest.raises(ValueError, match="Parameter name must be a nonempty string"):
+        param(None)
+    with pytest.raises(ValueError, match="Input name must be a nonempty string"):
+        input_value("")
 
     assert evaluate_expr("25%", ctx, {}) == 50
     assert evaluate_expr("25%x", ctx, {}) == 50
@@ -211,6 +291,8 @@ def test_plugin_bind_and_registry_validation_cover_common_failure_modes():
         plugin.bind((shape, 7, 8, 9), {})
     with pytest.raises(TypeError, match="unexpected parameter 'unknown'"):
         plugin.bind((shape,), {"unknown": 1})
+    with pytest.raises(TypeError, match="Did you mean 'radius'"):
+        plugin.bind((shape,), {"radiu": 1})
     with pytest.raises(TypeError, match="missing required parameter"):
         Plugin(
             "missing",

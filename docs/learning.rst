@@ -8,7 +8,7 @@ The CPU reference backend provides three working training paths:
 * Fit shapes and colors through a floating-point render graph.
 
 These reference paths use NumPy on the CPU. They do not require PyTorch, Handwired, a
-network service, or an WebGPU context. Existing GPU rendering can display the
+network service, or a WebGPU context. Existing GPU rendering can display the
 same scene with the learned parameters. The differentiable backend is a
 separate execution backend, not a gradient approximation around GPU readback.
 For native GPU forward and backward execution, see :doc:`gpu_render_graph`.
@@ -63,6 +63,10 @@ accepted as checkpoints.
 Arithmetic, powers, sine/cosine, percentages, ReLU, softplus, sigmoid, tanh,
 square root, minimum, and maximum preserve gradients when evaluated in learning
 mode. Ordinary GPU rendering snapshots the same expressions into uniform values.
+The ``sdf_ui.learning`` namespace also exports functional Tensor operations such
+as ``relu(value)``, ``stack(values)``, ``matmul(left, right)``, ``reshape(value,
+shape)``, and ``where(condition, when_true, when_false)`` for composing these
+calculations without method chaining.
 
 Tensor arithmetic is eager. Rebuild derived tensor computations inside the
 loss callback on every step. Use ``param(...)`` expressions for derived values
@@ -261,9 +265,12 @@ For delayed rewards, use the episodic interface::
 
 The rollout calls ``act(observation)`` once per transition and returns exactly
 one reward per action. The trainer calculates discounted reward-to-go using
-``gamma``. Recreate/reset environment state inside every rollout. This prototype
-uses an on-policy REINFORCE trainer; collected episodes become stale when the
-policy changes and cannot be reused for another update.
+``gamma``; ``discounted_returns(rewards, gamma)`` exposes the same calculation
+for inspection or custom rollout processing. Each recorded action, observation,
+log probability, and reward is available as an immutable ``Transition`` in its
+``Episode``. Recreate/reset environment state inside every rollout. This
+prototype uses an on-policy REINFORCE trainer; collected episodes become stale
+when the policy changes and cannot be reused for another update.
 
 Differentiable images
 ---------------------

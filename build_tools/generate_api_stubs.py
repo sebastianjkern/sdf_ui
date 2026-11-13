@@ -4,7 +4,8 @@ import argparse
 import inspect
 import sys
 from pathlib import Path
-from typing import Any
+from types import UnionType
+from typing import Any, Union, get_args, get_origin
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "src"
@@ -30,7 +31,13 @@ def _load_runtime_objects():
     from sdf_ui.core.api import ColorNamespace, SDFNamespace
     from sdf_ui.core.color import ColorTexture
     from sdf_ui.core.sdf import SDFTexture
-    from sdf_ui.core.texture import PostNamespace, TextureNode
+    from sdf_ui.core.texture import (
+        PostNamespace,
+        RenderCacheInfo,
+        Renderer,
+        RenderStats,
+        TextureNode,
+    )
     from sdf_ui.gpu.nodes.base import TextureKind
     from sdf_ui.gpu.nodes.loader import load_plugins
     from sdf_ui.gpu.nodes.registry import PluginRegistry
@@ -39,6 +46,7 @@ def _load_runtime_objects():
     # Distributed stubs describe builtins, independent of third-party packages
     # installed in the developer's environment.
     load_plugins(registry)
+    registry._loaded = True
 
     return {
         "ColorNamespace": ColorNamespace,
@@ -46,6 +54,9 @@ def _load_runtime_objects():
         "ColorTexture": ColorTexture,
         "SDFTexture": SDFTexture,
         "PostNamespace": PostNamespace,
+        "Renderer": Renderer,
+        "RenderStats": RenderStats,
+        "RenderCacheInfo": RenderCacheInfo,
         "TextureNode": TextureNode,
         "TextureKind": TextureKind,
         "registry": registry,
@@ -63,19 +74,38 @@ def _format_default(value: Any) -> str:
     return repr(value)
 
 
+def _format_annotation(annotation: Any) -> str:
+    if annotation is inspect._empty:
+        return "Any"
+    if annotation is None:
+        return "None"
+    if annotation is type(None):
+        return "None"
+    if isinstance(annotation, str):
+        return annotation
+    origin = get_origin(annotation)
+    if origin in {Union, UnionType}:
+        return " | ".join(_format_annotation(arg) for arg in get_args(annotation))
+    if origin is not None:
+        origin_name = getattr(origin, "__name__", str(origin))
+        args = ", ".join(_format_annotation(arg) for arg in get_args(annotation))
+        return f"{origin_name}[{args}]"
+    return getattr(annotation, "__name__", str(annotation))
+
+
 def _format_manual_method(name: str, func: Any, return_type: str) -> str:
     signature = inspect.signature(func)
     rendered = []
     for parameter in signature.parameters.values():
         chunk = parameter.name
         if parameter.kind == inspect.Parameter.VAR_POSITIONAL:
-            chunk = f"*{parameter.name}: Any"
+            chunk = f"*{parameter.name}: {_format_annotation(parameter.annotation)}"
         elif parameter.kind == inspect.Parameter.VAR_KEYWORD:
-            chunk = f"**{parameter.name}: Any"
+            chunk = f"**{parameter.name}: {_format_annotation(parameter.annotation)}"
         elif parameter.kind == inspect.Parameter.KEYWORD_ONLY:
-            chunk = f"{parameter.name}: Any"
+            chunk = f"{parameter.name}: {_format_annotation(parameter.annotation)}"
         elif parameter.name != "self":
-            chunk = f"{parameter.name}: Any"
+            chunk = f"{parameter.name}: {_format_annotation(parameter.annotation)}"
 
         if parameter.default is not inspect._empty and parameter.kind not in (
             inspect.Parameter.VAR_POSITIONAL,
@@ -100,22 +130,14 @@ def _format_plugin_method(plugin: Any, return_type: str) -> str:
 
 
 def _plugin_input_arg_names(plugin: Any) -> tuple[str, ...]:
-    extra_inputs = max(0, len(plugin.input_kinds) - 1)
-    if extra_inputs == 0:
-        return ()
-
-    if plugin.name == "fill_from_texture":
-        return ("layer",)[:extra_inputs]
-    if plugin.name in {"mask", "layer_mask"}:
-        return ("top", "mask")[:extra_inputs]
-    if extra_inputs == 1:
-        return ("other",)
-
-    return tuple(f"input_{index + 1}" for index in range(extra_inputs))
+    return plugin.method_input_names()
 
 
-def _render_class(name: str, body_lines: list[str]) -> str:
-    body = "\n".join(body_lines) if body_lines else "    pass"
+def _render_class(
+    name: str, body_lines: list[str], *, properties: list[str] | None = None
+) -> str:
+    members = [*(properties or []), *body_lines]
+    body = "\n".join(members) if members else "    pass"
     return f"class {name}:\n{body}\n"
 
 
@@ -130,12 +152,24 @@ def _plugin_return_type(texture_kind: Any, plugin: Any) -> str:
 def _method_return_overrides() -> dict[str, dict[str, str]]:
     return {
         "TextureNode": {
-            "render": "Any",
+            "close": "None",
+            "__enter__": "Self",
+            "__exit__": "None",
+            "render": "Self",
+            "read": "NDArray[Any]",
             "show": "None",
             "save": "None",
             "named": "Any",
             "cache": "Any",
             "uncached": "Any",
+        },
+        "Renderer": {
+            "__init__": "None",
+            "render": "Any",
+            "close": "None",
+            "cache_info": "RenderCacheInfo",
+            "__enter__": "Renderer",
+            "__exit__": "None",
         },
         "SDFTexture": {
             "__or__": "SDFTexture",
@@ -160,7 +194,18 @@ def _collect_manual_methods(class_name: str, cls: Any) -> list[str]:
     overrides = _method_return_overrides().get(class_name, {})
     methods = []
     for name, value in cls.__dict__.items():
-        if name.startswith("_") and name not in {"__or__", "__and__", "__sub__"}:
+        if (
+            name.startswith("_")
+            and name
+            not in {
+                "__enter__",
+                "__exit__",
+                "__or__",
+                "__and__",
+                "__sub__",
+            }
+            and not (class_name == "Renderer" and name == "__init__")
+        ):
             continue
         if isinstance(value, property) or not callable(value):
             continue
@@ -172,11 +217,21 @@ def _collect_manual_methods(class_name: str, cls: Any) -> list[str]:
 def _collect_plugin_methods(class_name: str, runtime: dict[str, Any]) -> list[str]:
     registry = runtime["registry"]
     texture_kind = runtime["TextureKind"]
-    plugins = [
-        plugin
-        for plugin in registry._plugins.values()
-        if _plugin_matches_class(class_name, plugin, texture_kind)
-    ]
+    namespace_kinds = {
+        "SDFNamespace": texture_kind.SDF,
+        "ColorNamespace": texture_kind.COLOR,
+    }
+    if class_name in namespace_kinds:
+        plugins = [
+            registry.get(name)
+            for name in registry.factory_names_for(namespace_kinds[class_name])
+        ]
+    else:
+        plugins = [
+            plugin
+            for plugin in registry._plugins.values()
+            if _plugin_matches_class(class_name, plugin, texture_kind)
+        ]
     plugins.sort(key=lambda plugin: plugin.name)
     return [
         _format_plugin_method(plugin, _plugin_return_type(texture_kind, plugin))
@@ -186,18 +241,6 @@ def _collect_plugin_methods(class_name: str, runtime: dict[str, Any]) -> list[st
 
 def _plugin_matches_class(class_name, plugin, texture_kind):
     match class_name:
-        case "SDFNamespace":
-            return (
-                plugin.public
-                and not plugin.input_kinds
-                and plugin.result == texture_kind.SDF
-            )
-        case "ColorNamespace":
-            return (
-                plugin.public
-                and not plugin.input_kinds
-                and plugin.result == texture_kind.COLOR
-            )
         case "SDFTexture":
             return texture_kind.SDF in plugin.method_of
         case "ColorTexture":
@@ -232,7 +275,11 @@ def _render_texture_stub(runtime: dict[str, Any]) -> str:
     lines = [
         "from __future__ import annotations",
         "",
-        "from typing import Any, Iterator, Optional, TYPE_CHECKING",
+        "from collections.abc import Iterable, Mapping",
+        "from pathlib import Path",
+        "from typing import TYPE_CHECKING, Any, Iterator, Optional, Self, overload",
+        "",
+        "from numpy.typing import NDArray",
         "",
         "if TYPE_CHECKING:",
         "    from .color import ColorTexture",
@@ -240,11 +287,61 @@ def _render_texture_stub(runtime: dict[str, Any]) -> str:
         _render_class(
             "TextureNode",
             _collect_manual_methods("TextureNode", runtime["TextureNode"]),
+            properties=[
+                "    tex: Any",
+                "    context: Any",
+                "    op: str | None",
+                "    inputs: tuple[Any, ...]",
+                "    params: Any",
+                "    label: str | None",
+                "    should_cache: bool",
+                "    size: tuple[int, int]",
+                "    origin: tuple[int, int]",
+                "    canvas_size: tuple[int, int]",
+                "    @overload",
+                "    def __init__(self, tex: Any, context: Any, *, op: str | None = ..., inputs: Iterable[Any] = ..., params: Mapping[str, Any] | Iterable[Any] | None = ..., label: str | None = ..., should_cache: bool = ...) -> None: ...",
+                "    @overload",
+                "    def __init__(self, *, op: str, inputs: Iterable[Any] = ..., params: Mapping[str, Any] | Iterable[Any] | None = ..., label: str | None = ..., should_cache: bool = ...) -> None: ...",
+            ],
         ).rstrip(),
         "",
         _render_class(
             "PostNamespace",
             _merge_methods("PostNamespace", runtime["PostNamespace"], runtime),
+        ).rstrip(),
+        "",
+        _render_class(
+            "RenderStats",
+            [
+                "    shader_dispatches: int",
+                "    shader_dispatches_by_name: dict[str, int]",
+                "    cache_hits: int",
+                "    cache_misses: int",
+                "    cache_writes: int",
+                "    cache_skips: int",
+                "    texture_allocations: int",
+                "    texture_allocations_by_kind: dict[str, int]",
+                "    render_calls: int",
+                "    elapsed_seconds: float",
+                "    def as_dict(self) -> dict[str, Any]: ...",
+            ],
+        ).rstrip(),
+        "",
+        _render_class(
+            "RenderCacheInfo",
+            [
+                "    entries: int",
+                "    hits: int",
+                "    misses: int",
+                "    writes: int",
+                "    skips: int",
+            ],
+        ).rstrip(),
+        "",
+        _render_class(
+            "Renderer",
+            _collect_manual_methods("Renderer", runtime["Renderer"]),
+            properties=["    stats: RenderStats"],
         ).rstrip(),
         "",
         _render_class(
@@ -269,6 +366,10 @@ def _render_color_stub(runtime: dict[str, Any]) -> str:
     methods = [
         "    kind: str",
         "    mode: str",
+        "    @overload",
+        "    def __init__(self, tex: Any, context: Any, *, mode: str = ..., op: str | None = ..., inputs: Any = ..., params: Any = ..., label: str | None = ..., should_cache: bool = ...) -> None: ...",
+        "    @overload",
+        "    def __init__(self, *, op: str, mode: str = ..., inputs: Any = ..., params: Any = ..., label: str | None = ..., should_cache: bool = ...) -> None: ...",
         "    @property",
         "    def post(self) -> PostNamespace: ...",
     ]
@@ -276,7 +377,7 @@ def _render_color_stub(runtime: dict[str, Any]) -> str:
     lines = [
         "from __future__ import annotations",
         "",
-        "from typing import Any",
+        "from typing import Any, overload",
         "",
         "from .texture import PostNamespace, TextureNode",
         "",
@@ -331,7 +432,7 @@ def _render_core_init_stub() -> str:
     return "\n".join(
         [
             "from .color import ColorSpaceMode as ColorSpaceMode, ColorTexture as ColorTexture",
-            "from .expressions import Expr as Expr, cos as cos, param as param, percent as percent, percent_of_min as percent_of_min, percent_x as percent_x, percent_y as percent_y, sin as sin",
+            "from .expressions import Expr as Expr, cos as cos, input_value as input_value, param as param, percent as percent, percent_of_min as percent_of_min, percent_x as percent_x, percent_y as percent_y, sin as sin",
             "from .sdf import SDFTexture as SDFTexture",
             "",
         ]

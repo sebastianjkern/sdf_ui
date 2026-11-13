@@ -76,6 +76,35 @@ with Canvas((640, 360)) as canvas:
     scene.save("out.png", ctx=canvas, cache=cache)
 ```
 
+`render()` returns a materialized texture that owns a GPU image. Close it when
+you are done, or use it as a context manager. Call `.read()` for a NumPy copy of
+the rendered pixels:
+
+```python
+with Canvas((640, 360)) as canvas:
+    with scene.render(canvas, cache=cache) as image:
+        pixels = image.read()
+        image.save("out.png")
+```
+
+Calling `scene.save(..., size=(640, 360))` creates and closes a temporary canvas
+for one-off output. Pass `ctx=canvas` when you want to reuse a canvas across
+multiple renders.
+
+For repeated evaluations, `Canvas.session()` reuses one renderer and cache and
+exposes render counters:
+
+```python
+with Canvas((640, 360)) as canvas:
+    with canvas.session(cache={}) as renderer:
+        image = renderer.render(scene)
+        assert renderer.render(scene) is image
+        with image:
+            image.save("out.png")
+        print(renderer.cache_info().hits)
+        print(renderer.stats.shader_dispatches)
+```
+
 For a known region of interest, `evaluation_rect` limits shader evaluation and
 returns a cropped image. Rectangles use `(x, y, width, height)` integer pixel
 coordinates from the top-left of the canvas:
@@ -84,7 +113,7 @@ coordinates from the top-left of the canvas:
 with Canvas((640, 360)) as canvas:
     crop_scene = sdf.circle((300, 180), 90).fill("#62bb47").to_rgb()
     crop = crop_scene.render(canvas, evaluation_rect=(180, 80, 240, 200))
-    print(crop.tex.size, crop.tex.origin)  # (240, 200), (180, 80)
+    print(crop.size, crop.origin)  # (240, 200), (180, 80)
 ```
 
 The rectangle applies to every shader in that render. Pointwise operations are
@@ -102,13 +131,14 @@ against a `Canvas`.
 At render time, the node graph is resolved by the renderer and dispatched through an internal
 registry of built-in shader operations. Those operations are not a user extension API.
 
-To keep editor support and static analysis usable for library users, the public typed API is
-generated from built-in operation metadata and the resulting stubs are tracked in the repository.
-Shipped `.pyi` stubs provide autocomplete and type checking for supported entry points.
+Tracked `.pyi` stubs provide editor completion and type checking. Dynamic core factory and
+texture-operation signatures are generated from built-in operation metadata; GPU, graph, and
+learning module stubs are maintained alongside their runtime APIs.
 
-After changing built-in operation metadata, run `uv run python build_tools/generate_api_stubs.py` and
-commit the resulting stubs. Run `uv run python build_tools/generate_api_stubs.py --check`
-to check for stale stubs without modifying files. For development, install
+After changing built-in operation metadata, run `uv run python build_tools/generate_api_stubs.py`
+and commit the generated core stubs. Run
+`uv run python build_tools/generate_api_stubs.py --check` to check those stubs for drift
+without modifying files. For development, install
 [uv](https://docs.astral.sh/uv/getting-started/installation/), run `uv sync`,
 then `uv run pre-commit install`; `uv run pre-commit run --all-files` checks tracked
 files. If an older checkout configured `core.hooksPath` to `.githooks`, remove

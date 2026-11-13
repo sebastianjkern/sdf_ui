@@ -188,6 +188,9 @@ def test_evaluation_rect_returns_matching_cropped_pixels():
         assert cropped.tex.size == (rect[2], rect[3])
         assert cropped.tex.origin == rect[:2]
         assert cropped.tex.canvas_size == canvas.size
+        assert cropped.size == (rect[2], rect[3])
+        assert cropped.origin == rect[:2]
+        assert cropped.canvas_size == canvas.size
         np.testing.assert_array_equal(cropped.tex.read(), full.tex.read()[5:16, 7:20])
         roundtrip = cropped.to_lab().to_rgb().render(canvas)
         np.testing.assert_array_equal(roundtrip.tex.read(), cropped.tex.read())
@@ -195,10 +198,157 @@ def test_evaluation_rect_returns_matching_cropped_pixels():
 
 def test_evaluation_rect_rejects_invalid_rectangles_and_nonpointwise_nodes():
     with Canvas((16, 16)) as canvas:
+        with pytest.raises(TypeError, match="four integers"):
+            sdf.circle((8, 8), 4).render(canvas, evaluation_rect=(0, 0, 4.0, 4))
+        with pytest.raises(TypeError, match="four integers"):
+            sdf.circle((8, 8), 4).render(canvas, evaluation_rect=(0, 0, True, 4))
         with pytest.raises(ValueError, match="inside the canvas"):
             sdf.circle((8, 8), 4).render(canvas, evaluation_rect=(14, 14, 4, 4))
         with pytest.raises(NotImplementedError, match="host-rendered node"):
             color.clear("#ffffff").blur().render(canvas, evaluation_rect=(4, 4, 8, 8))
+
+
+def test_create_image_validates_size_and_canvas_coordinates():
+    with Canvas((16, 16)) as canvas:
+        with pytest.raises(ValueError, match="size must contain two integer"):
+            canvas.create_image((8.5, 8))
+        with pytest.raises(ValueError, match="origin must contain two nonnegative"):
+            canvas.create_image((8, 8), origin=(-1, 0))
+        with pytest.raises(ValueError, match="fit inside canvas_size"):
+            canvas.create_image((8, 8), origin=(4, 4), canvas_size=(8, 8))
+
+
+def test_buffer_api_validates_sizes_offsets_and_data_types():
+    with Canvas((4, 4)) as canvas:
+        for invalid_size in (-1, 1.5, True):
+            with pytest.raises(ValueError, match="buffer size"):
+                canvas.create_buffer(invalid_size, usage=1)
+            with pytest.raises(ValueError, match="buffer size"):
+                canvas.allocate_buffer(invalid_size)
+        with pytest.raises(TypeError, match="bytes-like"):
+            canvas.create_buffer("four", usage=1)
+
+        with canvas.allocate_buffer(8) as buffer:
+            buffer.write(b"abcd")
+            assert buffer.read(4) == b"abcd"
+            with pytest.raises(ValueError, match="offset"):
+                buffer.write(b"abcd", offset=1.5)
+            with pytest.raises(TypeError, match="bytes-like"):
+                buffer.write([1, 2, 3, 4])
+            with pytest.raises(ValueError, match="size"):
+                buffer.read(1.5)
+
+
+def test_save_with_size_uses_and_closes_a_temporary_context(tmp_path, monkeypatch):
+    from sdf_ui.core import texture as texture_module
+
+    contexts = []
+    original_context = texture_module.Context
+
+    class TrackingContext(original_context):
+        def __init__(self, size):
+            super().__init__(size)
+            contexts.append(self)
+
+    monkeypatch.setattr(texture_module, "Context", TrackingContext)
+    output = tmp_path / "saved.png"
+
+    sdf.circle((8, 8), 5).fill("#ffffff").save(output, size=(16, 16))
+
+    assert output.exists()
+    assert len(contexts) == 1
+    assert contexts[0]._closed
+
+
+def test_save_closes_only_textures_it_materializes(tmp_path, monkeypatch):
+    from sdf_ui.core.texture import TextureNode
+
+    closed = []
+    original_close = TextureNode.close
+
+    def tracking_close(self):
+        if self.tex is not None:
+            closed.append(self)
+        original_close(self)
+
+    monkeypatch.setattr(TextureNode, "close", tracking_close)
+    output = tmp_path / "saved.png"
+
+    with Canvas((8, 8)) as canvas:
+        color.clear("#ffffff").save(output, ctx=canvas)
+        assert len(closed) == 2  # rendered input and temporary RGB conversion
+
+        materialized = color.clear("#000000").render(canvas)
+        materialized.save(output, ctx=canvas)
+        assert not materialized.tex.closed
+
+    assert output.exists()
+
+
+def test_show_closes_textures_it_materializes(monkeypatch):
+    from PIL import Image
+
+    from sdf_ui.core.texture import TextureNode
+
+    closed = []
+    original_close = TextureNode.close
+    monkeypatch.setattr(Image.Image, "show", lambda self, *args, **kwargs: None)
+
+    def tracking_close(self):
+        if self.tex is not None:
+            closed.append(self)
+        original_close(self)
+
+    monkeypatch.setattr(TextureNode, "close", tracking_close)
+
+    with Canvas((8, 8)) as canvas:
+        color.clear("#ffffff").show(ctx=canvas)
+
+    assert len(closed) == 2  # rendered input and temporary RGB conversion
+
+
+def test_materialized_texture_can_be_closed_explicitly():
+    with Canvas((8, 8)) as canvas:
+        cache = {}
+        scene = sdf.circle((4, 4), 3)
+        texture = scene.render(canvas, cache=cache)
+        image = texture.tex
+        np.testing.assert_array_equal(texture.read(), image.read())
+
+        texture.close()
+        texture.close()
+
+        assert image.closed
+        with pytest.raises(RuntimeError, match="GPU image is closed"):
+            image.read()
+        with pytest.raises(RuntimeError, match="closed texture node"):
+            texture.render()
+        with pytest.raises(RuntimeError, match="closed texture node"):
+            _ = texture.size
+
+        rerendered = scene.render(canvas, cache=cache)
+        assert rerendered is not texture
+        assert not rerendered.tex.closed
+
+
+def test_materialized_texture_context_manager_closes_image():
+    with Canvas((8, 8)) as canvas:
+        with sdf.circle((4, 4), 3).render(canvas) as texture:
+            image = texture.tex
+            assert not image.closed
+
+        assert image.closed
+
+
+def test_read_returns_image_shaped_arrays_for_sdf_and_color():
+    with Canvas((8, 6)) as canvas:
+        sdf_pixels = sdf.circle((4, 3), 2).render(canvas).read()
+        color_pixels = color.clear("#ffffff").to_rgb().render(canvas).read()
+
+    assert sdf_pixels.shape == (6, 8)
+    assert sdf_pixels.dtype == np.float32
+    assert color_pixels.shape == (6, 8, 4)
+    assert color_pixels.dtype == np.uint8
 
 
 def test_invert_turns_white_into_black():

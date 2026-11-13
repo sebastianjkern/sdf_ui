@@ -4,14 +4,17 @@ __docformat__ = "google"
 
 from abc import ABC
 from dataclasses import dataclass, field
+from pathlib import Path
 from time import perf_counter
-from typing import Dict, Optional
+from typing import Any, Dict, Optional, Self
 
+from numpy.typing import NDArray
 from PIL import Image, ImageOps
 
 from ..gpu.context import Context
 from ..gpu.nodes.common import build
 from ..util import hex_col
+from ._suggestions import unknown_name_message
 
 
 def _texture_bytes(texture):
@@ -35,6 +38,8 @@ def texture_params(**kwargs):
 
 @dataclass
 class RenderStats:
+    """Counters accumulated across calls made through one renderer."""
+
     shader_dispatches: int = 0
     shader_dispatches_by_name: Dict[str, int] = field(default_factory=dict)
     cache_hits: int = 0
@@ -75,6 +80,8 @@ class RenderStats:
 
 @dataclass(frozen=True)
 class RenderCacheInfo:
+    """Immutable snapshot of cache size and activity counters."""
+
     entries: int
     hits: int
     misses: int
@@ -83,6 +90,13 @@ class RenderCacheInfo:
 
 
 class Renderer:
+    """Render nodes on one context while reusing a caller-provided cache.
+
+    Use ``Context.session`` to create a renderer tied to a canvas. The
+    ``evaluation_rect`` option limits compatible pointwise graphs to a canvas
+    region, and ``stats`` and ``cache_info()`` expose work performed.
+    """
+
     def __init__(self, ctx, params=None, cache=None, evaluation_rect=None):
         if ctx is None:
             raise ValueError("A Context is required to render a texture")
@@ -93,7 +107,7 @@ class Renderer:
         self.stats = RenderStats()
         self._render_depth = 0
 
-    def __enter__(self):
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -200,7 +214,7 @@ class Renderer:
             )
         return value.inputs
 
-    def close(self):
+    def close(self) -> None:
         self.cache.clear()
 
     def clear_cache(self):
@@ -217,12 +231,17 @@ class Renderer:
 
     def _eval(self, node):
         if getattr(node, "tex", None) is not None:
+            if getattr(node.tex, "closed", False):
+                raise RuntimeError("Cannot use a closed texture node as an input")
             return node
 
         cache_key = self._node_key(node)
         if node.should_cache and cache_key in self.cache:
-            self.stats.cache_hits += 1
-            return self.cache[cache_key]
+            cached = self.cache[cache_key]
+            if not getattr(getattr(cached, "tex", None), "closed", False):
+                self.stats.cache_hits += 1
+                return cached
+            del self.cache[cache_key]
         if node.should_cache:
             self.stats.cache_misses += 1
         else:
@@ -332,24 +351,49 @@ class TextureNode(ABC):
             raise ValueError("either tex or op is required")
 
     def __del__(self):
-        if getattr(self, "tex", None) is not None:
-            try:
-                close = getattr(self.tex, "close", None)
-                if callable(close):
-                    close()
-            except Exception:
-                pass
+        try:
+            self.close()
+        except Exception:
+            pass
+
+    def close(self) -> None:
+        """Release the GPU image owned by this materialized texture node.
+
+        Calling ``close`` on an unevaluated render node has no effect. A closed
+        materialized node cannot be rendered or read again.
+        """
+        texture = getattr(self, "tex", None)
+        close = getattr(texture, "close", None)
+        if callable(close):
+            close()
+
+    def __enter__(self) -> Self:
+        if self.tex is not None and getattr(self.tex, "closed", False):
+            raise RuntimeError("Texture node is closed")
+        return self
+
+    def __exit__(self, *_: Any) -> None:
+        self.close()
 
     def __getattr__(self, name):
         from sdf_ui.gpu.nodes.registry import registry
 
-        if name in registry.method_names_for(self.kind):
+        method_names = registry.method_names_for(self.kind)
+        if name in method_names:
+            plugin = registry.get(name)
 
             def method(*args, **kwargs):
                 return build(name, self, *args, **kwargs)
 
+            method.__name__ = name
+            method.__qualname__ = f"{type(self).__name__}.{name}"
+            method.__doc__ = plugin.docstring(bound=True)
+            method.__signature__ = plugin.signature(bound=True)
             return method
-        raise AttributeError(f"{type(self).__name__!s} has no attribute '{name}'")
+        message = unknown_name_message(
+            f"{type(self).__name__!s} has no method", name, method_names
+        )
+        raise AttributeError(message)
 
     def __dir__(self):
         from sdf_ui.gpu.nodes.registry import registry
@@ -358,13 +402,15 @@ class TextureNode(ABC):
         names.update(registry.method_names_for(self.kind))
         return sorted(names)
 
-    def render(self, ctx=None, params=None, cache=None, evaluation_rect=None):
+    def render(self, ctx=None, params=None, cache=None, evaluation_rect=None) -> Self:
         """Materialize this node, optionally cropping to a canvas pixel rect.
 
         The rectangle is ``(x, y, width, height)``. All shaders in the render
         tree use the same region, so this currently supports pointwise
         operations and rejects filters that need neighboring pixels.
         """
+        if self.tex is not None and getattr(self.tex, "closed", False):
+            raise RuntimeError("Cannot render a closed texture node")
         if self.tex is not None and ctx is None:
             if evaluation_rect is not None:
                 raise ValueError(
@@ -378,23 +424,67 @@ class TextureNode(ABC):
             evaluation_rect=evaluation_rect,
         ).render(self)
 
+    def read(self) -> NDArray[Any]:
+        """Copy this materialized texture's pixels into a NumPy array.
+
+        SDF textures return a two-dimensional float array. Color textures
+        return an ``(height, width, 4)`` array in the image's native dtype.
+        """
+        if self.tex is None:
+            raise RuntimeError(
+                "Texture node must be rendered before its pixels can be read"
+            )
+        if getattr(self.tex, "closed", False):
+            raise RuntimeError("Cannot read a closed texture node")
+        return self.tex.read()
+
+    @property
+    def size(self) -> tuple[int, int]:
+        """Return the materialized image's ``(width, height)`` in pixels."""
+        return self._image_metadata("size")
+
+    @property
+    def origin(self) -> tuple[int, int]:
+        """Return the materialized image's top-left canvas-space pixel."""
+        return self._image_metadata("origin", (0, 0))
+
+    @property
+    def canvas_size(self) -> tuple[int, int]:
+        """Return the full canvas size associated with this image."""
+        return self._image_metadata("canvas_size", None) or self.size
+
+    def _image_metadata(self, name: str, default: Any = None) -> Any:
+        if self.tex is None:
+            raise RuntimeError(
+                f"Texture node must be rendered before '{name}' is available"
+            )
+        if getattr(self.tex, "closed", False):
+            raise RuntimeError(f"Cannot access '{name}' on a closed texture node")
+        return getattr(self.tex, name, default)
+
     def show(
         self,
-        ctx=None,
-        params=None,
-        cache=None,
-        conversion=True,
-        size=None,
-        evaluation_rect=None,
-    ):
+        ctx: Any = None,
+        params: dict[str, Any] | None = None,
+        cache: dict[Any, Any] | None = None,
+        conversion: bool = True,
+        size: tuple[int, int] | None = None,
+        evaluation_rect: tuple[int, int, int, int] | None = None,
+    ) -> None:
         def _show(texture):
+            converted = None
             if (
                 getattr(texture, "mode", None) == "LAB"
                 and conversion
                 and hasattr(texture, "to_rgb")
             ):
-                texture = texture.to_rgb().render(texture.context)
-            ImageOps.flip(Image.fromarray(texture.tex.read())).show()
+                converted = texture.to_rgb().render(texture.context)
+                texture = converted
+            try:
+                ImageOps.flip(Image.fromarray(texture.read())).show()
+            finally:
+                if converted is not None:
+                    converted.close()
 
         self._with_rendered_texture(
             _show,
@@ -407,33 +497,40 @@ class TextureNode(ABC):
 
     def save(
         self,
-        name="./image.png",
-        ctx=None,
-        params=None,
-        cache=None,
-        conversion=True,
-        size=None,
-        evaluation_rect=None,
-    ):
+        name: str | Path = "./image.png",
+        ctx: Any = None,
+        params: dict[str, Any] | None = None,
+        cache: dict[Any, Any] | None = None,
+        conversion: bool = True,
+        size: tuple[int, int] | None = None,
+        evaluation_rect: tuple[int, int, int, int] | None = None,
+    ) -> None:
         def _save(texture):
+            converted = None
             if self.kind == "color":
                 if (
                     getattr(texture, "mode", None) == "LAB"
                     and conversion
                     and hasattr(texture, "to_rgb")
                 ):
-                    texture = texture.to_rgb().render(texture.context)
-                image = Image.frombytes(
-                    "RGBA", texture.tex.size, _texture_bytes(texture.tex), "raw"
-                )
-            else:
-                image = Image.frombytes(
-                    "F", texture.tex.size, _texture_bytes(texture.tex), "raw"
-                )
-                image = image.convert("L")
+                    converted = texture.to_rgb().render(texture.context)
+                    texture = converted
+            try:
+                if self.kind == "color":
+                    image = Image.frombytes(
+                        "RGBA", texture.size, _texture_bytes(texture.tex), "raw"
+                    )
+                else:
+                    image = Image.frombytes(
+                        "F", texture.size, _texture_bytes(texture.tex), "raw"
+                    )
+                    image = image.convert("L")
 
-            image = image.transpose(Image.FLIP_TOP_BOTTOM)
-            image.save(name)
+                image = image.transpose(Image.FLIP_TOP_BOTTOM)
+                image.save(name)
+            finally:
+                if converted is not None:
+                    converted.close()
 
         self._with_rendered_texture(
             _save,
@@ -454,8 +551,6 @@ class TextureNode(ABC):
         return self._clone(label=self.label, should_cache=False)
 
     def _render_for_io(self, ctx, params, cache, size, evaluation_rect):
-        if ctx is None and size is not None:
-            ctx = Context(size)
         return self.render(
             ctx,
             params=params,
@@ -466,18 +561,28 @@ class TextureNode(ABC):
     def _with_rendered_texture(
         self, func, *, ctx, params, cache, size, evaluation_rect
     ):
-        if ctx is not None or size is None:
-            return func(self._render_for_io(ctx, params, cache, size, evaluation_rect))
+        if ctx is not None:
+            texture = self._render_for_io(ctx, params, cache, size, evaluation_rect)
+            try:
+                return func(texture)
+            finally:
+                if texture is not self and self.tex is None:
+                    texture.close()
 
-        with Context(size) as temp_ctx:
-            return func(
-                self.render(
-                    temp_ctx,
-                    params=params,
-                    cache=cache,
-                    evaluation_rect=evaluation_rect,
+        if size is not None:
+            with Context(size) as temp_ctx:
+                return func(
+                    self._render_for_io(temp_ctx, params, cache, size, evaluation_rect)
                 )
+
+        if self.context is None:
+            raise ValueError(
+                "A Context is required to save or show an unmaterialized texture; "
+                "pass ctx= or size= to create a temporary context"
             )
+        return func(
+            self._render_for_io(self.context, params, cache, size, evaluation_rect)
+        )
 
     def _clone(self, *, label, should_cache):
         kwargs = {}

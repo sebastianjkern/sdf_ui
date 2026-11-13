@@ -40,6 +40,17 @@ class PluginRegistry:
         self.ensure_loaded()
         return tuple(name for name, plugin in self._plugins.items() if plugin.public)
 
+    def factory_names_for(self, kind: str):
+        """Return public zero-input factories that create ``kind`` textures."""
+        self.ensure_loaded()
+        return tuple(
+            name
+            for name, plugin in self._plugins.items()
+            if plugin.public
+            and plugin.result == kind
+            and not plugin.input_kinds
+        )
+
     def shader_files(self):
         self.ensure_loaded()
         descriptors = []

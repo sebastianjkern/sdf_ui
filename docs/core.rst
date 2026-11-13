@@ -67,6 +67,24 @@ Expression system
    :show-inheritance:
    :no-index:
 
+Canvas-relative values
+~~~~~~~~~~~~~~~~~~~~~~
+
+Percentage expressions resolve against the canvas when a render executes.
+``percent`` and ``percent_x`` use the canvas width, ``percent_y`` uses its
+height, and ``percent_of_min`` uses the smaller dimension. Numeric strings
+offer the same forms in texture parameters: ``"40%"`` or ``"40%x"`` for width,
+``"40%y"`` for height, and ``"40%min"`` for the smaller dimension. For
+example, ``sdf.circle(("50%x", "50%y"), "12%min")`` remains centered and
+proportional when rendered at different canvas sizes.
+
+The function forms return lazy expressions and can be composed with other
+expressions or trainable parameters::
+
+    from sdf_ui import percent_x, percent_y, sdf
+
+    scene = sdf.circle((percent_x(50), percent_y(50)), percent_x(12))
+
 Dynamic API namespaces
 ~~~~~~~~~~~~~~~~~~~~~~
 

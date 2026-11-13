@@ -14,10 +14,14 @@ import weakref
 from collections.abc import Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
+from numbers import Integral, Number
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import TYPE_CHECKING, Any
 
 import wgpu
+
+if TYPE_CHECKING:
+    from ..core.texture import Renderer
 
 
 def _wgsl_functions(code):
@@ -80,12 +84,35 @@ def _active_bindings(code, entry_point):
 
 
 def _triple(value, name):
-    items = tuple(value)
+    try:
+        items = tuple(value)
+    except TypeError as exc:
+        raise ValueError(f"{name} must contain two or three positive values") from exc
+    if any(isinstance(item, bool) or not isinstance(item, Integral) for item in items):
+        raise ValueError(f"{name} must contain two or three positive integer values")
+    items = tuple(int(item) for item in items)
     if len(items) == 2:
         items = (*items, 1)
-    if len(items) != 3 or any(int(item) <= 0 for item in items):
+    if len(items) != 3 or any(item <= 0 for item in items):
         raise ValueError(f"{name} must contain two or three positive values")
-    return tuple(int(item) for item in items)
+    return items
+
+
+def _integer_pair(value, name, *, positive) -> tuple[int, int]:
+    try:
+        items = tuple(value)
+    except TypeError as exc:
+        raise ValueError(f"{name} must contain two integer values") from exc
+    if len(items) != 2 or any(
+        isinstance(item, bool) or not isinstance(item, Integral) for item in items
+    ):
+        raise ValueError(f"{name} must contain two integer values")
+    items = (int(items[0]), int(items[1]))
+    if positive and min(items) <= 0:
+        raise ValueError(f"{name} must contain two positive integer values")
+    if not positive and min(items) < 0:
+        raise ValueError(f"{name} must contain two nonnegative integer values")
+    return items
 
 
 def _node_shader_images(descriptor, interface, output, inputs, extra_outputs):
@@ -132,10 +159,10 @@ def _bind_node_uniforms(context, descriptor, resources, uniforms, values):
 class DispatchConfig:
     """Compute workgroup size and optional explicit dispatch count."""
 
-    shader_local_size: Tuple[int, int, int] = (16, 16, 1)
-    group_count: Optional[Tuple[int, int, int]] = None
+    shader_local_size: tuple[int, int, int] = (16, 16, 1)
+    group_count: tuple[int, int, int] | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         object.__setattr__(
             self,
             "shader_local_size",
@@ -147,7 +174,9 @@ class DispatchConfig:
             )
 
     @classmethod
-    def from_value(cls, value):
+    def from_value(
+        cls, value: DispatchConfig | dict[str, Any] | None
+    ) -> DispatchConfig:
         if value is None:
             return cls()
         if isinstance(value, cls):
@@ -156,7 +185,7 @@ class DispatchConfig:
             return cls(**value)
         raise TypeError("dispatch_config must be a DispatchConfig, dict, or None")
 
-    def groups_for_size(self, size):
+    def groups_for_size(self, size: tuple[int, int]) -> tuple[int, int, int]:
         if self.group_count is not None:
             return self.group_count
         width, height = size
@@ -168,14 +197,33 @@ class Context:
     """Own a WebGPU adapter, device, queue, and context-sized dispatch policy."""
 
     def __init__(
-        self, size, dispatch_config=None, *, power_preference="high-performance"
-    ):
-        self.size = tuple(int(value) for value in size)
-        if len(self.size) != 2 or min(self.size) <= 0:
-            raise ValueError("size must contain positive width and height")
+        self,
+        size: tuple[int, int],
+        dispatch_config: DispatchConfig | dict[str, Any] | None = None,
+        *,
+        power_preference: str = "high-performance",
+    ) -> None:
+        try:
+            values = tuple(size)
+        except TypeError as exc:
+            raise ValueError(
+                "size must be a pair of positive integer width and height values"
+            ) from exc
+        if len(values) != 2 or any(
+            isinstance(value, bool) or not isinstance(value, Integral)
+            for value in values
+        ):
+            raise ValueError(
+                "size must be a pair of positive integer width and height values"
+            )
+        self.size = (int(values[0]), int(values[1]))
+        if min(self.size) <= 0:
+            raise ValueError(
+                "size must be a pair of positive integer width and height values"
+            )
         self._closed = False
         self.ctx = self
-        self._training_graphs = weakref.WeakSet()
+        self._training_graphs: weakref.WeakSet[Any] = weakref.WeakSet()
         self._image_generation = 0
         self.dispatch_config = DispatchConfig.from_value(dispatch_config)
         self.dispatch_groups = self.dispatch_config.groups_for_size(self.size)
@@ -184,15 +232,15 @@ class Context:
             raise RuntimeError("No WebGPU adapter is available")
         self.device = self.adapter.request_device_sync(label="sdf-ui device")
         self.queue = self.device.queue
-        self._pipelines = {}
-        self._pipeline_bindings = {}
-        self._uniform_buffers = {}
+        self._pipelines: dict[Any, Any] = {}
+        self._pipeline_bindings: dict[int, Any] = {}
+        self._uniform_buffers: dict[Any, Any] = {}
         self._active_evaluation_rect = None
         self._active_render_stats = None
         self.last_render_stats = None
 
     @property
-    def device_info(self):
+    def device_info(self) -> dict[str, Any]:
         return dict(self.adapter.info)
 
     def _check_open(self):
@@ -220,14 +268,23 @@ class Context:
         return pipeline
 
     def create_buffer(self, data_or_size, *, usage, label=""):
-        """Allocate a buffer, initializing it when bytes-like data is supplied."""
+        """Allocate a buffer, zero-padding bytes-like initial data to four bytes."""
         self._check_open()
-        if isinstance(data_or_size, int):
-            size = max(4, data_or_size)
+        if isinstance(data_or_size, Integral) and not isinstance(data_or_size, bool):
+            if data_or_size < 0:
+                raise ValueError("buffer size must be a nonnegative integer")
+            size = max(4, int(data_or_size))
             initial_data = None
         else:
+            if isinstance(data_or_size, Number):
+                raise ValueError("buffer size must be a nonnegative integer")
+            if not isinstance(data_or_size, (bytes, bytearray, memoryview)):
+                raise TypeError(
+                    "buffer data must be a nonnegative integer size or bytes-like"
+                )
             initial_data = bytes(data_or_size)
             size = max(4, (len(initial_data) + 3) & ~3)
+            initial_data = initial_data.ljust(size, b"\0")
         buffer_usage = usage
         if initial_data is not None:
             buffer_usage |= wgpu.BufferUsage.COPY_DST
@@ -407,14 +464,20 @@ class Context:
         resources[region_binding] = buffer
         return source_code, rect_groups(source_code, rect)
 
-    def render(self, texture, params=None, cache=None, evaluation_rect=None):
+    def render(
+        self,
+        texture: Any,
+        params: dict[str, Any] | None = None,
+        cache: dict[Any, Any] | None = None,
+        evaluation_rect: tuple[int, int, int, int] | None = None,
+    ) -> Any:
         """Render a node, optionally returning a cropped pixel rectangle.
 
         ``evaluation_rect`` is ``(x, y, width, height)`` in canvas pixels. It
         applies to every shader in the render tree and supports pointwise
         shaders; neighborhood-sampling and host-rendered operations reject it.
         """
-        from ..core.texture import Renderer
+        from ..core.texture import Renderer  # type: ignore[attr-defined]
 
         return Renderer(
             self,
@@ -423,7 +486,12 @@ class Context:
             evaluation_rect=evaluation_rect,
         ).render(texture)
 
-    def session(self, params=None, cache=None, evaluation_rect=None):
+    def session(
+        self,
+        params: dict[str, Any] | None = None,
+        cache: dict[Any, Any] | None = None,
+        evaluation_rect: tuple[int, int, int, int] | None = None,
+    ) -> Renderer:
         from ..core.texture import Renderer
 
         return Renderer(
@@ -433,13 +501,25 @@ class Context:
             evaluation_rect=evaluation_rect,
         )
 
-    def compile(self, outputs, params=None, *, size=None, inputs=None):
+    def compile(
+        self,
+        outputs: Any,
+        params: dict[str, Any] | None = None,
+        *,
+        size: tuple[int, int] | None = None,
+        inputs: dict[str, Any] | None = None,
+    ) -> Any:
         """Compile named scene outputs for display or differentiable training."""
         from ..graph.runtime import RenderGraph
 
         return RenderGraph(self, outputs, params=params, size=size, inputs=inputs)
 
-    def render_plan(self, plan, params=None, evaluation_rect=None):
+    def render_plan(
+        self,
+        plan: Any,
+        params: dict[str, Any] | None = None,
+        evaluation_rect: tuple[int, int, int, int] | None = None,
+    ) -> Any:
         from .plan import execute_display
 
         with self._evaluation_scope(evaluation_rect):
@@ -462,30 +542,47 @@ class Context:
 
         return GPUShaderBackend(self)
 
-    def training(self, outputs, params=None, *, size=None, inputs=None):
+    def training(
+        self,
+        outputs: Any,
+        params: Any = None,
+        *,
+        size: tuple[int, int] | None = None,
+        inputs: Any = None,
+    ) -> Any:
         from ..graph.session import TrainingSession
 
         return TrainingSession(self, outputs, params, size=size, inputs=inputs)
 
-    def differentiate(self, texture, params=None):
+    def differentiate(self, texture: Any, params: dict[str, Any] | None = None) -> Any:
         from ..learning.render import DifferentiableRenderer
 
         return DifferentiableRenderer(self.size, params=params).render(texture)
 
-    def inspect_graph(self, outputs, params=None):
+    def inspect_graph(self, outputs: Any, params: dict[str, Any] | None = None) -> Any:
         from ..graph.inspection import inspect_graph
 
         return inspect_graph(outputs, params=params)
 
     @contextmanager
-    def capture(self, scene, params=None, *, size=None, inputs=None):
+    def capture(
+        self,
+        scene: Any,
+        params: dict[str, Any] | None = None,
+        *,
+        size: tuple[int, int] | None = None,
+        inputs: dict[str, Any] | None = None,
+    ) -> Any:
         with self.compile(
             {"target": scene}, params=params, size=size, inputs=inputs
         ) as graph:
             with graph.snapshot("target") as image:
                 yield image
 
-    def allocate_buffer(self, size, *, label="graph buffer"):
+    def allocate_buffer(self, size: int, *, label: str = "graph buffer") -> Any:
+        self._check_open()
+        if isinstance(size, bool) or not isinstance(size, Integral) or size < 0:
+            raise ValueError("buffer size must be a nonnegative integer")
         from .resources import GPUBuffer
 
         buffer = self.device.create_buffer(
@@ -501,24 +598,39 @@ class Context:
 
     def create_image(
         self,
-        size=None,
+        size: tuple[int, int] | None = None,
         *,
-        format="r32float",
-        label="",
-        origin=(0, 0),
-        canvas_size=None,
-    ):
+        format: str = "r32float",
+        label: str = "",
+        origin: tuple[int, int] = (0, 0),
+        canvas_size: tuple[int, int] | None = None,
+    ) -> Any:
         """Allocate an owned image usable for storage, sampling, and copies."""
         self._check_open()
-        origin = tuple(origin)
-        canvas_size = tuple(canvas_size or (self.size if size is None else size))
+        size_value = (
+            None if size is None else _integer_pair(size, "size", positive=True)
+        )
+        origin_value = _integer_pair(origin, "origin", positive=False)
+        canvas_size_value = _integer_pair(
+            canvas_size
+            if canvas_size is not None
+            else (self.size if size_value is None else size_value),
+            "canvas_size",
+            positive=True,
+        )
         if self._active_evaluation_rect is not None and (
-            size is None or tuple(size) == self.size
+            size_value is None or size_value == self.size
         ):
             x, y, width, height = self._active_evaluation_rect
-            origin = (x, y)
-            size = (width, height)
-        width, height = self.size if size is None else size
+            origin_value = (x, y)
+            size_value = (width, height)
+            canvas_size_value = self.size
+        width, height = self.size if size_value is None else size_value
+        if (
+            origin_value[0] + width > canvas_size_value[0]
+            or origin_value[1] + height > canvas_size_value[1]
+        ):
+            raise ValueError("image extent and origin must fit inside canvas_size")
         texture = self.device.create_texture(
             label=label,
             size=(int(width), int(height), 1),
@@ -541,23 +653,23 @@ class Context:
             texture,
             size=(width, height),
             format=format,
-            origin=origin,
-            canvas_size=canvas_size,
+            origin=origin_value,
+            canvas_size=canvas_size_value,
         )
 
-    def r32f(self, size=None):
+    def r32f(self, size: tuple[int, int] | None = None) -> Any:
         """Allocate a single-channel FP32 signed-distance image."""
         return self.create_image(size, format="r32float", label="sdf image")
 
-    def rgba32f(self, size=None):
+    def rgba32f(self, size: tuple[int, int] | None = None) -> Any:
         """Allocate a four-channel FP32 working image for graph execution."""
         return self.create_image(size, format="rgba32float", label="rgba32f image")
 
-    def rgba8(self, size=None):
+    def rgba8(self, size: tuple[int, int] | None = None) -> Any:
         """Allocate a four-channel normalized image for display output."""
         return self.create_image(size, format="rgba8unorm", label="rgba8 image")
 
-    def texture_from_image(self, path):
+    def texture_from_image(self, path: str | Path) -> Any:
         """Load an image file as a vertically flipped RGBA8 GPU image."""
         import cv2
         import numpy as np
@@ -572,19 +684,23 @@ class Context:
         image.write(pixels)
         return image
 
-    def percent(self, alpha):
+    def percent(self, alpha: Any) -> Any:
+        """Return ``alpha`` percent of the canvas width."""
         return alpha / 100 * self.size[0]
 
-    def percent_of_min(self, alpha):
+    def percent_of_min(self, alpha: Any) -> Any:
+        """Return ``alpha`` percent of the smaller canvas dimension."""
         return alpha / 100 * min(self.size)
 
-    def percent_x(self, alpha):
+    def percent_x(self, alpha: Any) -> Any:
+        """Return ``alpha`` percent of the canvas width."""
         return alpha / 100 * self.size[0]
 
-    def percent_y(self, alpha):
+    def percent_y(self, alpha: Any) -> Any:
+        """Return ``alpha`` percent of the canvas height."""
         return alpha / 100 * self.size[1]
 
-    def copy_image(self, image, *, label="image copy"):
+    def copy_image(self, image: Any, *, label: str = "image copy") -> Any:
         """Copy a GPU image without mapping or reading pixels on the CPU."""
         self._check_open()
         from .image import GPUImage
@@ -608,7 +724,7 @@ class Context:
         self.queue.submit([encoder.finish()])
         return result
 
-    def close(self):
+    def close(self) -> None:
         if self._closed:
             return
         for graph in tuple(self._training_graphs):
@@ -620,11 +736,11 @@ class Context:
         self._closed = True
         self.device.destroy()
 
-    def __enter__(self):
+    def __enter__(self) -> Context:
         self._check_open()
         return self
 
-    def __exit__(self, *_):
+    def __exit__(self, *_: Any) -> None:
         self.close()
 
 

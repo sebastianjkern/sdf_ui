@@ -1,7 +1,10 @@
 __docformat__ = "google"
 
+import inspect
 from dataclasses import dataclass
 from typing import Callable, Optional
+
+from ...core._suggestions import unknown_name_message
 
 
 class TextureKind:
@@ -29,7 +32,11 @@ class ImageBinding:
     def __post_init__(self):
         if not isinstance(self.name, str) or not self.name:
             raise ValueError("Image binding needs a uniform name")
-        if isinstance(self.unit, bool) or not isinstance(self.unit, int) or self.unit < 0:
+        if (
+            isinstance(self.unit, bool)
+            or not isinstance(self.unit, int)
+            or self.unit < 0
+        ):
             raise ValueError("Image binding unit must be a nonnegative integer")
         if not self.read and not self.write:
             raise ValueError("Image binding must be readable or writable")
@@ -62,8 +69,9 @@ class ShaderInterface:
         names = [item.name for item in (*images, *self.uniforms)]
         if len(set(names)) != len(names):
             raise ValueError("Shader uniform names must be unique")
-        if (any(not item.write for item in (self.output, *self.extra_outputs))
-                or any(not item.read for item in self.inputs)):
+        if any(not item.write for item in (self.output, *self.extra_outputs)) or any(
+            not item.read for item in self.inputs
+        ):
             raise ValueError("Shader output must be writable and inputs readable")
 
 
@@ -123,13 +131,86 @@ class Plugin:
     # Return one Port or a tuple of Ports using the shared graph builder.
     lowering_func: Optional[Callable] = None
 
-    def bind(self, args, kwargs):
-        if len(args) < len(self.input_kinds):
-            raise TypeError(
-                f"{self.name} expects at least {len(self.input_kinds)} input argument(s)"
-            )
+    def method_input_names(self) -> tuple[str, ...]:
+        """Return names for texture inputs after a method's bound receiver."""
+        extra_inputs = max(0, len(self.input_kinds) - 1)
+        if extra_inputs == 0:
+            return ()
+        if self.name == "fill_from_texture":
+            return ("layer",)[:extra_inputs]
+        if self.name in {"mask", "layer_mask"}:
+            return ("top", "mask")[:extra_inputs]
+        if extra_inputs == 1:
+            return ("other",)
+        return tuple(f"input_{index + 1}" for index in range(extra_inputs))
 
-        inputs = args[: len(self.input_kinds)]
+    def signature(self, *, bound: bool = False) -> inspect.Signature:
+        """Return the public callable signature represented by this plugin."""
+        parameters = [
+            inspect.Parameter(name, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+            for name in (self.method_input_names() if bound else ())
+        ]
+        defaults = self.defaults or {}
+        parameters.extend(
+            inspect.Parameter(
+                name,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                default=defaults.get(name, inspect.Parameter.empty),
+            )
+            for name in self.params
+        )
+        return inspect.Signature(parameters)
+
+    def docstring(self, *, bound: bool = False) -> str:
+        """Describe the callable signature for factories and bound methods."""
+        signature = f"{self.name}{self.signature(bound=bound)}"
+        kind_labels = {
+            TextureKind.SDF: "SDF",
+            TextureKind.COLOR: "color",
+            TextureKind.MULTI_OUTPUT: "multi-output",
+        }
+        if bound:
+            kind = kind_labels.get(self.input_kinds[0], self.input_kinds[0])
+            action = f"Apply '{self.name}' to this {kind} texture."
+        else:
+            kind = kind_labels.get(self.result, self.result)
+            action = f"Create a {kind} texture with '{self.name}'."
+        return f"{action}\n\nCall signature: {signature}."
+
+    def bind(self, args, kwargs):
+        kwargs = dict(kwargs)
+        input_names = self.method_input_names()
+        inputs = []
+        for index in range(len(self.input_kinds)):
+            name = input_names[index - 1] if index > 0 and input_names else None
+            if index < len(args):
+                if name is not None and name in kwargs:
+                    raise TypeError(f"{self.name} got multiple values for '{name}'")
+                inputs.append(args[index])
+            elif name is not None and name in kwargs:
+                inputs.append(kwargs.pop(name))
+            elif index == 0 or name is None:
+                raise TypeError(
+                    f"{self.name} expects at least {len(self.input_kinds)} input argument(s)"
+                )
+            else:
+                unknown = next(
+                    (
+                        key
+                        for key in kwargs
+                        if key not in self.params and key not in input_names
+                    ),
+                    None,
+                )
+                if unknown is not None:
+                    message = unknown_name_message(
+                        f"{self.name} got an unexpected argument",
+                        unknown,
+                        (*input_names, *self.params),
+                    )
+                    raise TypeError(message)
+                raise TypeError(f"{self.name} missing required input argument '{name}'")
+
         param_args = args[len(self.input_kinds) :]
         if len(param_args) > len(self.params):
             raise TypeError(f"{self.name} got too many positional arguments")
@@ -137,7 +218,10 @@ class Plugin:
         params = dict(zip(self.params, param_args))
         for key, value in kwargs.items():
             if key not in self.params:
-                raise TypeError(f"{self.name} got an unexpected parameter '{key}'")
+                message = unknown_name_message(
+                    f"{self.name} got an unexpected parameter", key, self.params
+                )
+                raise TypeError(message)
             if key in params:
                 raise TypeError(f"{self.name} got multiple values for '{key}'")
             params[key] = value
@@ -148,7 +232,7 @@ class Plugin:
             names = ", ".join(missing)
             raise TypeError(f"{self.name} missing required parameter(s): {names}")
 
-        return inputs, params
+        return tuple(inputs), params
 
     def render(self, renderer, inputs, params):
         if self.render_func is not None:

@@ -6,6 +6,7 @@ from .color import ColorSpaceMode, ColorTexture
 from .expressions import (
     Expr,
     cos,
+    input_value,
     param,
     percent,
     percent_of_min,
@@ -21,6 +22,7 @@ __all__ = [
     "Expr",
     "SDFTexture",
     "cos",
+    "input_value",
     "param",
     "percent",
     "percent_of_min",
