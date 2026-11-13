@@ -10,8 +10,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..backends.opengl.optim import GPUSGD, GPUAdam  # noqa: F401
     from .autodiff import (  # noqa: F401
-        SGD,
-        Adam,
         Parameter,
         Tensor,
         as_tensor,
@@ -22,6 +20,7 @@ if TYPE_CHECKING:
     )
     from .layout import Bounds, Element, Layout, LayoutSnapshot, LayoutTrainer  # noqa: F401
     from .objective import GeometryLoss, Objective, PixelLoss  # noqa: F401
+    from .optimizers import SGD, Adam  # noqa: F401
     from .parameters import ParameterStore  # noqa: F401
     from .policy import (  # noqa: F401
         CategoricalPolicy,
@@ -38,14 +37,13 @@ _MODULES = {
     "autodiff": (
         "Tensor",
         "Parameter",
-        "Adam",
-        "SGD",
         "as_tensor",
         "stack",
         "maximum",
         "minimum",
         "where",
     ),
+    "optimizers": ("Adam", "SGD"),
     "parameters": ("ParameterStore",),
     "layout": ("Bounds", "Element", "Layout", "LayoutSnapshot", "LayoutTrainer"),
     "policy": (

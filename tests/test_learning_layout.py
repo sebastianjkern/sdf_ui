@@ -11,8 +11,9 @@ import pytest
 
 from sdf_ui import param, percent_x, percent_y
 from sdf_ui.core.expressions import Expr, evaluate_expr
-from sdf_ui.learning.autodiff import SGD, Adam, Parameter, Tensor
+from sdf_ui.learning.autodiff import Parameter, Tensor
 from sdf_ui.learning.layout import Bounds, Element, Layout, LayoutTrainer
+from sdf_ui.learning.optimizers import SGD, Adam
 
 
 def test_bounds_use_full_extents_and_snapshot_reports_exact_geometry():

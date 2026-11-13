@@ -11,7 +11,8 @@ from collections.abc import Mapping
 
 import numpy as np
 
-from ...learning.autodiff import SGD, Adam, _array, _hyper, _Optimizer
+from ...learning.autodiff import _array
+from ...learning.optimizers import SGD, Adam, _hyper, _Optimizer
 
 __all__ = ["GPUSGD", "GPUAdam"]
 

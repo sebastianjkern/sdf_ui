@@ -8,8 +8,9 @@ import pytest
 from sdf_ui import Canvas, cos, param, percent_x, sdf, sin
 from sdf_ui.core.expressions import evaluate_expr
 from sdf_ui.core.texture import Renderer
-from sdf_ui.learning.autodiff import Adam, Parameter
+from sdf_ui.learning.autodiff import Parameter
 from sdf_ui.learning.layout import Bounds, Element
+from sdf_ui.learning.optimizers import Adam
 from sdf_ui.learning.parameters import ParameterStore
 
 

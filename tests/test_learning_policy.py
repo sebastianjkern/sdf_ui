@@ -6,7 +6,8 @@ from copy import deepcopy
 import numpy as np
 import pytest
 
-from sdf_ui.learning.autodiff import SGD, Adam, Tensor
+from sdf_ui.learning.autodiff import Tensor
+from sdf_ui.learning.optimizers import SGD, Adam
 from sdf_ui.learning.policy import (
     CategoricalPolicy,
     GaussianPolicy,

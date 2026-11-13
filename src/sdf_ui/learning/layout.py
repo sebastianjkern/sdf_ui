@@ -26,7 +26,8 @@ from types import MappingProxyType
 import numpy as np
 
 from ..core.expressions import Expr, evaluate_expr
-from .autodiff import Adam, Parameter, Tensor, as_tensor, maximum, minimum
+from .autodiff import Parameter, Tensor, as_tensor, maximum, minimum
+from .optimizers import Adam
 
 __all__ = ["Bounds", "Element", "Layout", "LayoutSnapshot", "LayoutTrainer"]
 

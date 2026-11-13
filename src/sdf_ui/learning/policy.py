@@ -18,7 +18,8 @@ from typing import Any, Tuple, Union
 
 import numpy as np
 
-from .autodiff import SGD, Adam, Parameter, Tensor, as_tensor, stack
+from .autodiff import Parameter, Tensor, as_tensor, stack
+from .optimizers import SGD, Adam
 
 __all__ = [
     "CategoricalPolicy",
