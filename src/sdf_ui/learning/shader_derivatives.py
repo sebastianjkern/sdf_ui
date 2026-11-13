@@ -106,6 +106,12 @@ def evaluate_shader(contract, size, inputs=None, params=None):
 def shader_vjp(contract, size, inputs, params, output_gradients):
     context, rule, textures, uniforms = _prepare(contract, size, inputs, params, True)
     values = _outputs(contract, context, rule(context, textures, uniforms))
+    seeds = _output_seeds(contract, values, output_gradients)
+    _backward_from_seeds(values, seeds)
+    return ShaderGradients(_gradient_arrays(textures), _gradient_arrays(uniforms))
+
+
+def _output_seeds(contract, values, output_gradients):
     if isinstance(output_gradients, Mapping):
         expected_names = {argument.name for argument in contract.outputs}
         if set(output_gradients) != expected_names:
@@ -119,6 +125,10 @@ def shader_vjp(contract, size, inputs, params, output_gradients):
         seeds = tuple(output_gradients)
     if len(seeds) != len(values):
         raise ValueError("One upstream gradient is required per shader output")
+    return seeds
+
+
+def _backward_from_seeds(values, seeds):
     terms = []
     for value, seed in zip(values, seeds):
         seed = Tensor(seed.numpy() if isinstance(seed, Tensor) else seed)
@@ -132,10 +142,9 @@ def shader_vjp(contract, size, inputs, params, output_gradients):
         if loss.requires_grad:
             loss.backward()
 
-    def gradients(values):
-        return {
-            name: (np.zeros(value.shape) if value.grad is None else value.grad)
-            for name, value in values.items()
-        }
 
-    return ShaderGradients(gradients(textures), gradients(uniforms))
+def _gradient_arrays(values):
+    return {
+        name: np.zeros(value.shape) if value.grad is None else value.grad
+        for name, value in values.items()
+    }

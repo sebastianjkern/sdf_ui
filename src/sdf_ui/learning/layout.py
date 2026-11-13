@@ -242,6 +242,76 @@ def _outside_length(start, length, limit):
     )
 
 
+def _validated_parameters(parameters):
+    source = parameters.values() if isinstance(parameters, Mapping) else parameters
+    values = tuple(source)
+    if not values or not all(isinstance(value, Parameter) for value in values):
+        raise TypeError("parameters must be a nonempty collection of Parameters")
+    if len({id(value) for value in values}) != len(values):
+        raise ValueError("parameters must not contain duplicates")
+    return values
+
+
+def _serialize_layout_identity(identity):
+    if identity is None:
+        return None
+    try:
+        return json.dumps(
+            identity, sort_keys=True, allow_nan=False, separators=(",", ":")
+        )
+    except (TypeError, ValueError) as error:
+        raise ValueError(
+            "Layout identity must be finite JSON-serializable data"
+        ) from error
+
+
+def _validate_layout_checkpoint(trainer, state):
+    if (
+        not isinstance(state, Mapping)
+        or state.get("format_version") != 2
+        or "parameter_schema" not in state
+    ):
+        raise ValueError("Invalid layout trainer checkpoint")
+    if trainer.identity is None or state.get("identity") != trainer.identity:
+        raise ValueError("Checkpoint layout loss identity differs")
+    schema = (
+        None if trainer._parameter_store is None else trainer._parameter_store.schema()
+    )
+    if state.get("parameter_schema") != schema:
+        raise ValueError("Checkpoint parameter schema differs")
+
+
+def _validated_checkpoint_parameters(parameters, values, steps):
+    if (
+        not isinstance(values, Mapping)
+        or set(values) != {parameter.name for parameter in parameters}
+        or len(values) != len(parameters)
+    ):
+        raise ValueError("Checkpoint parameter names differ")
+    if isinstance(steps, bool) or not isinstance(steps, int) or steps < 0:
+        raise ValueError("Invalid checkpoint step count")
+    checked = {}
+    for parameter in parameters:
+        value = np.asarray(values[parameter.name], dtype=float)
+        if value.shape != parameter.shape or not np.isfinite(value).all():
+            raise ValueError(f"Invalid checkpoint parameter '{parameter.name}'")
+        checked[parameter.name] = value
+    return checked
+
+
+def _validate_parent_forest(elements):
+    for element in elements.values():
+        seen = {element.name}
+        parent = element.parent
+        while parent is not None:
+            if parent not in elements:
+                raise ValueError(f"Unknown parent: {parent}")
+            if parent in seen:
+                raise ValueError("Element parents must not form a cycle")
+            seen.add(parent)
+            parent = elements[parent].parent
+
+
 @dataclass(frozen=True)
 class LayoutSnapshot:
     """Detached reward input with read-only mappings and frozen numeric bounds.
@@ -311,11 +381,16 @@ class Layout:
     def __post_init__(self):
         if not isinstance(self.inputs, Mapping):
             raise TypeError("Layout inputs must be a mapping")
-        source = (
-            self.elements.values()
-            if isinstance(self.elements, Mapping)
-            else self.elements
-        )
+        elements = self._validate_layout_elements(self.elements)
+        size = tuple(_number(v, "viewport size") for v in _pair(self.size, "size"))
+        if any(v <= 0 for v in size):
+            raise ValueError("Viewport size must be positive")
+        object.__setattr__(self, "size", size)
+        object.__setattr__(self, "elements", MappingProxyType(elements))
+
+    @staticmethod
+    def _validate_layout_elements(source):
+        source = source.values() if isinstance(source, Mapping) else source
         elements = {}
         for element in source:
             if not isinstance(element, Element):
@@ -323,21 +398,8 @@ class Layout:
             if element.name in elements:
                 raise ValueError(f"Duplicate element name: {element.name}")
             elements[element.name] = element
-        for element in elements.values():
-            seen = {element.name}
-            parent = element.parent
-            while parent is not None:
-                if parent not in elements:
-                    raise ValueError(f"Unknown parent: {parent}")
-                if parent in seen:
-                    raise ValueError("Element parents must not form a cycle")
-                seen.add(parent)
-                parent = elements[parent].parent
-        size = tuple(_number(v, "viewport size") for v in _pair(self.size, "size"))
-        if any(v <= 0 for v in size):
-            raise ValueError("Viewport size must be positive")
-        object.__setattr__(self, "size", size)
-        object.__setattr__(self, "elements", MappingProxyType(elements))
+        _validate_parent_forest(elements)
+        return elements
 
     def _pairs(self):
         ancestors = {}
@@ -630,27 +692,10 @@ class LayoutTrainer:
         self._parameter_store = (
             parameters if isinstance(parameters, ParameterStore) else None
         )
-        source = parameters.values() if isinstance(parameters, Mapping) else parameters
-        self.parameters = tuple(source)
-        if not self.parameters or not all(
-            isinstance(parameter, Parameter) for parameter in self.parameters
-        ):
-            raise TypeError("parameters must be a nonempty collection of Parameters")
-        if len({id(parameter) for parameter in self.parameters}) != len(
-            self.parameters
-        ):
-            raise ValueError("parameters must not contain duplicates")
+        self.parameters = _validated_parameters(parameters)
         if not callable(loss_fn):
             raise TypeError("loss_fn must be callable")
-        if identity is not None:
-            try:
-                identity = json.dumps(
-                    identity, sort_keys=True, allow_nan=False, separators=(",", ":")
-                )
-            except (TypeError, ValueError) as error:
-                raise ValueError(
-                    "Layout identity must be finite JSON-serializable data"
-                ) from error
+        identity = _serialize_layout_identity(identity)
         self.identity = identity
         self.loss_fn = loss_fn
         self.steps = 0
@@ -714,33 +759,9 @@ class LayoutTrainer:
         }
 
     def load_state_dict(self, state):
-        if (
-            not isinstance(state, Mapping)
-            or state.get("format_version") != 2
-            or "parameter_schema" not in state
-        ):
-            raise ValueError("Invalid layout trainer checkpoint")
-        if self.identity is None or state.get("identity") != self.identity:
-            raise ValueError("Checkpoint layout loss identity differs")
-        if state.get("parameter_schema") != (
-            None if self._parameter_store is None else self._parameter_store.schema()
-        ):
-            raise ValueError("Checkpoint parameter schema differs")
+        _validate_layout_checkpoint(self, state)
         values, steps = state.get("parameters"), state.get("steps")
-        if (
-            not isinstance(values, Mapping)
-            or set(values) != {p.name for p in self.parameters}
-            or len(values) != len(self.parameters)
-        ):
-            raise ValueError("Checkpoint parameter names differ")
-        if isinstance(steps, bool) or not isinstance(steps, int) or steps < 0:
-            raise ValueError("Invalid checkpoint step count")
-        checked = {}
-        for p in self.parameters:
-            value = np.asarray(values[p.name], dtype=float)
-            if value.shape != p.shape or not np.isfinite(value).all():
-                raise ValueError(f"Invalid checkpoint parameter '{p.name}'")
-            checked[p.name] = value
+        checked = _validated_checkpoint_parameters(self.parameters, values, steps)
         if not callable(getattr(self.optimizer, "load_state_dict", None)):
             raise TypeError("Optimizer does not support checkpoints")
         self.optimizer.load_state_dict(state.get("optimizer"))

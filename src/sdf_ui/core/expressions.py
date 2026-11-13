@@ -127,7 +127,24 @@ def evaluate_expr(expr, ctx, params, *, track_grad=False):
 
     op = expr.op
     args = expr.args
+    if op in {"param", "input"}:
+        return _resolve_binding(op, args, ctx, params, track_grad)
 
+    values = tuple(
+        evaluate_expr(arg, ctx, params, track_grad=track_grad) for arg in args
+    )
+    return _apply_expression_op(op, values, ctx)
+
+
+def _apply_expression_op(op, values, ctx):
+    from ..learning.autodiff import Tensor
+
+    if op in {"percent", "percent_x", "percent_y", "percent_of_min"}:
+        return _evaluate_percent(op, values[0], ctx)
+    return _apply_math_op(op, values, Tensor)
+
+
+def _resolve_binding(op, args, ctx, params, track_grad):
     if op == "param":
         name, default = args
         if name in params:
@@ -135,76 +152,92 @@ def evaluate_expr(expr, ctx, params, *, track_grad=False):
         if default is not None:
             return evaluate_expr(default, ctx, params, track_grad=track_grad)
         raise KeyError(f"Missing render parameter '{name}'")
+    name = args[0]
+    inputs = getattr(ctx, "inputs", {})
+    if name not in inputs:
+        raise KeyError(f"Missing render input '{name}'")
+    return inputs[name]
 
-    if op == "input":
-        name = args[0]
-        inputs = getattr(ctx, "inputs", {})
-        if name not in inputs:
-            raise KeyError(f"Missing render input '{name}'")
-        return inputs[name]
 
-    values = tuple(
-        evaluate_expr(arg, ctx, params, track_grad=track_grad) for arg in args
-    )
+def _evaluate_percent(op, value, ctx):
+    return {
+        "percent": ctx.percent,
+        "percent_x": ctx.percent_x,
+        "percent_y": ctx.percent_y,
+        "percent_of_min": ctx.percent_of_min,
+    }[op](value)
 
+
+def _apply_math_op(op, values, tensor_type):
     if op == "index":
         value, index = values
-        if isinstance(value, Tensor):
+        if isinstance(value, tensor_type):
             return value[index]
         for part in index if isinstance(index, tuple) else (index,):
             value = value[part]
         return value
 
-    if op == "percent":
-        return ctx.percent(values[0])
-    if op == "percent_x":
-        return ctx.percent_x(values[0])
-    if op == "percent_y":
-        return ctx.percent_y(values[0])
-    if op == "percent_of_min":
-        return ctx.percent_of_min(values[0])
-    if op == "sin":
-        return values[0].sin() if isinstance(values[0], Tensor) else math.sin(values[0])
-    if op == "cos":
-        return values[0].cos() if isinstance(values[0], Tensor) else math.cos(values[0])
+    if op in {"sin", "cos"}:
+        return _evaluate_trig(op, values[0], tensor_type)
+    if op in {"neg", "pow", "abs"}:
+        return _evaluate_simple_math(op, values)
+    if op in {"relu", "softplus", "sigmoid", "tanh", "sqrt"}:
+        return _evaluate_activation(op, values[0], tensor_type)
+    if op in {"maximum", "minimum"}:
+        return _evaluate_minmax(op, values, tensor_type)
+    binary = {
+        "add": lambda left, right: left + right,
+        "sub": lambda left, right: left - right,
+        "mul": lambda left, right: left * right,
+        "div": lambda left, right: left / right,
+    }
+    if op in binary:
+        return binary[op](*values)
+
+    raise ValueError(f"Unknown expression op '{op}'")
+
+
+def _evaluate_trig(op, value, tensor_type):
+    if isinstance(value, tensor_type):
+        return getattr(value, op)()
+    return getattr(math, op)(value)
+
+
+def _evaluate_simple_math(op, values):
     if op == "neg":
         return -values[0]
     if op == "pow":
         return values[0] ** values[1]
-    if op == "abs":
-        return abs(values[0])
-    if op in {"relu", "softplus", "sigmoid", "tanh", "sqrt"}:
-        value = values[0]
-        if isinstance(value, Tensor):
-            return getattr(value, op)()
-        if op == "relu":
-            return max(value, 0.0)
-        if op == "softplus":
-            return max(value, 0.0) + math.log1p(math.exp(-abs(value)))
-        if op == "sigmoid":
-            if value >= 0:
-                return 1.0 / (1.0 + math.exp(-value))
-            exponential = math.exp(value)
-            return exponential / (1.0 + exponential)
-        if op == "tanh":
-            return math.tanh(value)
-        return math.sqrt(value)
-    if op in {"maximum", "minimum"}:
-        if any(isinstance(value, Tensor) for value in values):
-            from ..learning.autodiff import maximum, minimum
+    return abs(values[0])
 
-            return (maximum if op == "maximum" else minimum)(*values)
-        return (max if op == "maximum" else min)(values)
-    if op == "add":
-        return values[0] + values[1]
-    if op == "sub":
-        return values[0] - values[1]
-    if op == "mul":
-        return values[0] * values[1]
-    if op == "div":
-        return values[0] / values[1]
 
-    raise ValueError(f"Unknown expression op '{op}'")
+def _evaluate_activation(op, value, tensor_type):
+    if isinstance(value, tensor_type):
+        return getattr(value, op)()
+    if op == "relu":
+        return max(value, 0.0)
+    if op == "softplus":
+        return max(value, 0.0) + math.log1p(math.exp(-abs(value)))
+    if op == "sigmoid":
+        return _scalar_sigmoid(value)
+    if op == "tanh":
+        return math.tanh(value)
+    return math.sqrt(value)
+
+
+def _scalar_sigmoid(value):
+    if value >= 0:
+        return 1.0 / (1.0 + math.exp(-value))
+    exponential = math.exp(value)
+    return exponential / (1.0 + exponential)
+
+
+def _evaluate_minmax(op, values, tensor_type):
+    if any(isinstance(value, tensor_type) for value in values):
+        from ..learning.autodiff import maximum, minimum
+
+        return (maximum if op == "maximum" else minimum)(*values)
+    return (max if op == "maximum" else min)(values)
 
 
 def _parse_context_percent(value):

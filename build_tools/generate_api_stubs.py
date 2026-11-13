@@ -27,11 +27,11 @@ def _ensure_root_on_path() -> None:
 def _load_runtime_objects():
     _ensure_src_on_path()
 
-    from sdf_ui.core.api import ColorNamespace, SDFNamespace
-    from sdf_ui.core.color import ColorTexture
     from sdf_ui.backends.opengl.nodes.base import TextureKind
     from sdf_ui.backends.opengl.nodes.loader import load_plugins
     from sdf_ui.backends.opengl.nodes.registry import PluginRegistry
+    from sdf_ui.core.api import ColorNamespace, SDFNamespace
+    from sdf_ui.core.color import ColorTexture
     from sdf_ui.core.sdf import SDFTexture
     from sdf_ui.core.texture import PostNamespace, TextureNode
 
@@ -172,50 +172,43 @@ def _collect_manual_methods(class_name: str, cls: Any) -> list[str]:
 def _collect_plugin_methods(class_name: str, runtime: dict[str, Any]) -> list[str]:
     registry = runtime["registry"]
     texture_kind = runtime["TextureKind"]
-
-    if class_name == "SDFNamespace":
-        plugins = [
-            plugin
-            for plugin in registry._plugins.values()
-            if plugin.public
-            and not plugin.input_kinds
-            and plugin.result == texture_kind.SDF
-        ]
-    elif class_name == "ColorNamespace":
-        plugins = [
-            plugin
-            for plugin in registry._plugins.values()
-            if plugin.public
-            and not plugin.input_kinds
-            and plugin.result == texture_kind.COLOR
-        ]
-    elif class_name == "SDFTexture":
-        plugins = [
-            plugin
-            for plugin in registry._plugins.values()
-            if texture_kind.SDF in plugin.method_of
-        ]
-    elif class_name == "ColorTexture":
-        plugins = [
-            plugin
-            for plugin in registry._plugins.values()
-            if texture_kind.COLOR in plugin.method_of
-        ]
-    elif class_name == "PostNamespace":
-        plugins = [
-            plugin
-            for plugin in registry._plugins.values()
-            if plugin.family == "postprocessing"
-            and texture_kind.COLOR in plugin.method_of
-        ]
-    else:
-        plugins = []
-
+    plugins = [
+        plugin
+        for plugin in registry._plugins.values()
+        if _plugin_matches_class(class_name, plugin, texture_kind)
+    ]
     plugins.sort(key=lambda plugin: plugin.name)
     return [
         _format_plugin_method(plugin, _plugin_return_type(texture_kind, plugin))
         for plugin in plugins
     ]
+
+
+def _plugin_matches_class(class_name, plugin, texture_kind):
+    match class_name:
+        case "SDFNamespace":
+            return (
+                plugin.public
+                and not plugin.input_kinds
+                and plugin.result == texture_kind.SDF
+            )
+        case "ColorNamespace":
+            return (
+                plugin.public
+                and not plugin.input_kinds
+                and plugin.result == texture_kind.COLOR
+            )
+        case "SDFTexture":
+            return texture_kind.SDF in plugin.method_of
+        case "ColorTexture":
+            return texture_kind.COLOR in plugin.method_of
+        case "PostNamespace":
+            return (
+                plugin.family == "postprocessing"
+                and texture_kind.COLOR in plugin.method_of
+            )
+        case _:
+            return False
 
 
 def _merge_methods(class_name: str, cls: Any, runtime: dict[str, Any]) -> list[str]:

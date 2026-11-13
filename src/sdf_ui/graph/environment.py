@@ -13,6 +13,81 @@ from ..learning.parameters import ParameterStore
 from .runtime import RenderGraph
 
 
+def _check_graph(graph):
+    if not isinstance(graph, RenderGraph):
+        raise TypeError("graph must be a RenderGraph")
+    graph.check()
+
+
+def _validate_action_observation_names(actions, observations):
+    names = actions + observations
+    if not actions or len(set(names)) != len(names):
+        raise ValueError("Action and observation bindings must be nonempty and unique")
+
+
+def _validate_named_bindings(actions, observations):
+    if not isinstance(actions, Mapping) or not actions:
+        raise ValueError("actions must be a nonempty name-to-binding mapping")
+    if observations is not None and not isinstance(observations, Mapping):
+        raise TypeError("observations must be a name-to-binding mapping")
+
+
+def _validate_binding_names(actions, observations):
+    if set(actions) & set(observations):
+        raise ValueError("Observation and action names must be distinct")
+    for name in (*actions, *observations):
+        if not isinstance(name, str) or not name:
+            raise ValueError("Binding names must be nonempty strings")
+
+
+def _validate_callbacks(objective, reward, action_transform):
+    if objective is not None and not isinstance(objective, Objective):
+        raise TypeError("objective must be an Objective")
+    if reward is not None and not callable(reward):
+        raise TypeError("reward must be callable")
+    if action_transform is not None and not callable(action_transform):
+        raise TypeError("action_transform must be callable")
+    if objective is None and reward is None:
+        raise ValueError("Provide an objective or a reward callback")
+
+
+def _serialize_identity(identity):
+    if identity is None:
+        return None
+    try:
+        return json.dumps(
+            identity, sort_keys=True, allow_nan=False, separators=(",", ":")
+        )
+    except (TypeError, ValueError) as error:
+        raise ValueError(
+            "Environment identity must be finite JSON-serializable data"
+        ) from error
+
+
+def _input_binding(value, graph):
+    if not isinstance(value, Expr) or value.op != "input":
+        return None
+    if value.args[0] not in graph.inputs:
+        raise ValueError(f"Unknown graph input {value.args[0]!r}")
+    return "input", value.args[0]
+
+
+def _named_parameter_binding(value, params, parameters):
+    if not isinstance(value, str):
+        return None
+    parameter = next(
+        (item for item in parameters if item.name == value and item.shape == ()), None
+    )
+    if parameter is None:
+        return None
+    kind = (
+        "scalar"
+        if isinstance(params, ParameterStore) and params.is_scalar(value)
+        else "parameter"
+    )
+    return kind, value
+
+
 class RenderEnvironment:
     """A callable reward function for ``PolicyGradientTrainer.train``.
 
@@ -33,29 +108,17 @@ class RenderEnvironment:
         reward=None,
         action_transform=None,
     ):
-        if not isinstance(graph, RenderGraph):
-            raise TypeError("graph must be a RenderGraph")
-        graph.check()
+        _check_graph(graph)
         self.graph = graph
         self.actions = tuple(actions)
         self.observations = tuple(observations)
+        _validate_action_observation_names(self.actions, self.observations)
         names = self.actions + self.observations
-        if not self.actions or len(set(names)) != len(names):
-            raise ValueError(
-                "Action and observation bindings must be nonempty and unique"
-            )
         self._parameters = {p.name: p for p in graph.parameters}
         for name in names:
             if name not in self._parameters or self._parameters[name].shape != ():
                 raise ValueError(f"Binding {name!r} must name a scalar graph parameter")
-        if objective is not None and not isinstance(objective, Objective):
-            raise TypeError("objective must be an Objective")
-        if reward is not None and not callable(reward):
-            raise TypeError("reward must be callable")
-        if action_transform is not None and not callable(action_transform):
-            raise TypeError("action_transform must be callable")
-        if objective is None and reward is None:
-            raise ValueError("Provide an objective or a reward callback")
+        _validate_callbacks(objective, reward, action_transform)
         self.objective = objective
         self.reward = reward
         self.action_transform = action_transform
@@ -132,21 +195,12 @@ class NamedRenderEnvironment:
         action_transform=None,
         identity=None,
     ):
-        if not isinstance(graph, RenderGraph):
-            raise TypeError("graph must be a RenderGraph")
-        graph.check()
-        if not isinstance(actions, Mapping) or not actions:
-            raise ValueError("actions must be a nonempty name-to-binding mapping")
-        if observations is not None and not isinstance(observations, Mapping):
-            raise TypeError("observations must be a name-to-binding mapping")
+        _check_graph(graph)
+        _validate_named_bindings(actions, observations)
         self.graph = graph
         self.actions = MappingProxyType(dict(actions))
         self.observations = MappingProxyType(dict(observations or {}))
-        if set(self.actions) & set(self.observations):
-            raise ValueError("Observation and action names must be distinct")
-        for name in (*self.actions, *self.observations):
-            if not isinstance(name, str) or not name:
-                raise ValueError("Binding names must be nonempty strings")
+        _validate_binding_names(self.actions, self.observations)
         self._bindings = {
             key: self._binding(value)
             for key, value in (*self.actions.items(), *self.observations.items())
@@ -156,23 +210,8 @@ class NamedRenderEnvironment:
             raise ValueError(
                 "Each observation and action must bind a different input or parameter"
             )
-        if objective is not None and not isinstance(objective, Objective):
-            raise TypeError("objective must be an Objective")
-        if reward is not None and not callable(reward):
-            raise TypeError("reward must be callable")
-        if action_transform is not None and not callable(action_transform):
-            raise TypeError("action_transform must be callable")
-        if objective is None and reward is None:
-            raise ValueError("Provide an objective or a reward callback")
-        if identity is not None:
-            try:
-                identity = json.dumps(
-                    identity, sort_keys=True, allow_nan=False, separators=(",", ":")
-                )
-            except (TypeError, ValueError) as error:
-                raise ValueError(
-                    "Environment identity must be finite JSON-serializable data"
-                ) from error
+        _validate_callbacks(objective, reward, action_transform)
+        identity = _serialize_identity(identity)
         self.identity = identity
         self.objective, self.reward, self.action_transform = (
             objective,
@@ -199,10 +238,9 @@ class NamedRenderEnvironment:
 
     def _binding(self, value):
         params = self.graph.params
-        if isinstance(value, Expr) and value.op == "input":
-            if value.args[0] not in self.graph.inputs:
-                raise ValueError(f"Unknown graph input {value.args[0]!r}")
-            return ("input", value.args[0])
+        binding = _input_binding(value, self.graph)
+        if binding is not None:
+            return binding
         if isinstance(params, ParameterStore):
             name = params.scalar_name(value)
             if name is not None:
@@ -213,16 +251,9 @@ class NamedRenderEnvironment:
             if not any(value is p for p in self.graph.parameters):
                 raise ValueError("Parameter binding must belong to this graph")
             value = value.name
-        if isinstance(value, str):
-            for parameter in self.graph.parameters:
-                if parameter.name == value and parameter.shape == ():
-                    return (
-                        "scalar"
-                        if isinstance(params, ParameterStore)
-                        and params.is_scalar(value)
-                        else "parameter",
-                        value,
-                    )
+        binding = _named_parameter_binding(value, params, self.graph.parameters)
+        if binding is not None:
+            return binding
         raise ValueError("Bindings must identify a scalar graph parameter or input")
 
     @staticmethod

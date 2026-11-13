@@ -91,11 +91,6 @@ def convert_image_to_ascii_colored(
     >>> input_image = Image.open("example.jpg")
     >>> convert_image_to_ascii_colored(input_image, 80, 0.43, True, False, True, True)
     """
-    hr_ascii_table = (
-        "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1{}[]?-_+~<>i!lI;:,\"^`'. "
-    )
-    lr_ascii_table = "@%#*+=-:. "
-
     bw_image = image.convert("L")
 
     if enhance:
@@ -118,42 +113,66 @@ def convert_image_to_ascii_colored(
 
     _validate_ascii_dimensions(cols, scale, original_width, original_height, rows)
 
-    ascii_image = []
     for j in range(rows):
         y1 = int(j * new_height)
-        y2 = int((j + 1) * new_height)
+        y2 = original_height if j == rows - 1 else int((j + 1) * new_height)
+        print(
+            _colored_ascii_row(
+                image,
+                bw_image,
+                j,
+                y1,
+                y2,
+                cols,
+                new_width,
+                original_width,
+                more_levels,
+                as_background,
+            )
+        )
 
-        if j == rows - 1:
-            y2 = original_height
 
-        ascii_image.append("")
+def _colored_ascii_row(
+    image,
+    bw_image,
+    row,
+    y1,
+    y2,
+    cols,
+    cell_width,
+    original_width,
+    more_levels,
+    as_background,
+):
+    return "".join(
+        _colored_ascii_cell(
+            image,
+            bw_image,
+            int(column * cell_width),
+            original_width if column == cols - 1 else int((column + 1) * cell_width),
+            y1,
+            y2,
+            more_levels,
+            as_background,
+        )
+        for column in range(cols)
+    )
 
-        for i in range(cols):
-            x1 = int(i * new_width)
-            x2 = int((i + 1) * new_width)
-            if i == cols - 1:
-                x2 = original_width
 
-            img = image.crop((x1, y1, x2, y2))
-            bg_img = bw_image.crop((x1, y1, x2, y2))
-
-            avg = int(get_average_l(bg_img))
-            clr = get_average_c(img)
-
-            if more_levels:
-                symbol = hr_ascii_table[int((avg * 69) / 255)]
-            else:
-                symbol = lr_ascii_table[int((avg * 9) / 255)]
-
-            if as_background:
-                symbol = getattr(bg, "t_" + rgb_to_hex(clr)) + " " + fx.end
-            else:
-                symbol = getattr(fg, "t_" + rgb_to_hex(clr)) + symbol + fx.end
-
-            ascii_image[j] += symbol
-
-    for row in ascii_image:
-        print(row)
+def _colored_ascii_cell(image, bw_image, x1, x2, y1, y2, more_levels, as_background):
+    img = image.crop((x1, y1, x2, y2))
+    bg_img = bw_image.crop((x1, y1, x2, y2))
+    avg = int(get_average_l(bg_img))
+    color = rgb_to_hex(get_average_c(img))
+    table = (
+        "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1{}[]?-_+~<>i!lI;:,\"^`'. "
+        if more_levels
+        else "@%#*+=-:. "
+    )
+    symbol = table[int(avg * (69 if more_levels else 9) / 255)]
+    if as_background:
+        return getattr(bg, "t_" + color) + " " + fx.end
+    return getattr(fg, "t_" + color) + symbol + fx.end
 
 
 def convert_image_to_ascii(image, cols, scale, more_levels, invert, enhance):

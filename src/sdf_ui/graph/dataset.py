@@ -10,6 +10,40 @@ from ..learning.objective import Objective
 from .runtime import GraphTrainer, RenderGraph
 
 
+def _validate_dataset_checkpoint(trainer, state):
+    if not isinstance(state, dict) or state.get("format_version") != 2:
+        raise ValueError("Invalid dataset trainer checkpoint")
+    if state.get("cases") != trainer._case_signatures():
+        raise ValueError("Checkpoint training cases differ")
+
+
+def _validated_case_inputs(cases, inputs):
+    if not isinstance(inputs, dict) or set(inputs) != {case.name for case in cases}:
+        raise ValueError("Checkpoint case inputs differ")
+    for case in cases:
+        saved = inputs[case.name]
+        if not isinstance(saved, dict) or set(saved) != set(case.graph.inputs):
+            raise ValueError("Invalid checkpoint case inputs")
+        if any(
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+            for value in saved.values()
+        ):
+            raise ValueError("Invalid checkpoint case inputs")
+    return inputs
+
+
+def _validate_shared_graph_inputs(cases, inputs):
+    graph_inputs = {}
+    for case in cases:
+        saved = inputs[case.name]
+        key = id(case.graph)
+        if key in graph_inputs and graph_inputs[key] != saved:
+            raise ValueError("Checkpoint gives conflicting inputs for a shared graph")
+        graph_inputs[key] = saved
+
+
 @dataclass(frozen=True)
 class GraphCase:
     """One compiled scene and objective; cases share the same parameter leaves."""
@@ -160,37 +194,9 @@ class GraphDatasetTrainer:
         }
 
     def load_state_dict(self, state):
-        if not isinstance(state, dict) or state.get("format_version") != 2:
-            raise ValueError("Invalid dataset trainer checkpoint")
-        if state.get("cases") != self._case_signatures():
-            raise ValueError("Checkpoint training cases differ")
-        inputs = state.get("case_inputs", {})
-        if not isinstance(inputs, dict) or set(inputs) != {
-            case.name for case in self.cases
-        }:
-            raise ValueError("Checkpoint case inputs differ")
-        for case in self.cases:
-            saved = inputs[case.name]
-            if (
-                not isinstance(saved, dict)
-                or set(saved) != set(case.graph.inputs)
-                or any(
-                    isinstance(v, bool)
-                    or not isinstance(v, (int, float))
-                    or not math.isfinite(v)
-                    for v in saved.values()
-                )
-            ):
-                raise ValueError("Invalid checkpoint case inputs")
-        graph_inputs = {}
-        for case in self.cases:
-            saved = inputs[case.name]
-            key = id(case.graph)
-            if key in graph_inputs and graph_inputs[key] != saved:
-                raise ValueError(
-                    "Checkpoint gives conflicting inputs for a shared graph"
-                )
-            graph_inputs[key] = saved
+        _validate_dataset_checkpoint(self, state)
+        inputs = _validated_case_inputs(self.cases, state.get("case_inputs", {}))
+        _validate_shared_graph_inputs(self.cases, inputs)
         trainer_state = state.get("trainer")
         if (
             not isinstance(trainer_state, dict)

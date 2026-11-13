@@ -20,6 +20,84 @@ from ..util import hex_col
 from .lowering import GraphPlan, lower_graph
 
 
+def _cache_hit(cached, key):
+    return (
+        cached is not None
+        and cached[0] == key
+        and not any(image.closed for image in cached[1])
+    )
+
+
+def _close_images(images):
+    for image in images:
+        image.close()
+
+
+def _validate_graph_cases(cases, case_type):
+    if not cases or any(not isinstance(case, case_type) for case in cases):
+        raise ValueError("A batch requires GraphCase instances")
+    if len({case.name for case in cases}) != len(cases):
+        raise ValueError("Case names must be unique")
+
+
+def _validate_shared_graph_case(case, graph):
+    if case.graph.canvas is not graph.canvas or {
+        id(parameter) for parameter in case.graph.parameters
+    } != {id(parameter) for parameter in graph.parameters}:
+        raise ValueError("Cases must share a Canvas and parameter leaves")
+
+
+def _validate_trainer_checkpoint(trainer, state, parameter_store_type):
+    graph = trainer.graph
+    if (
+        not isinstance(state, Mapping)
+        or state.get("format_version") != 2
+        or "parameter_schema" not in state
+    ):
+        raise ValueError("Invalid trainer checkpoint")
+    schema = (
+        graph.params.schema()
+        if isinstance(graph.params, parameter_store_type)
+        else None
+    )
+    if (
+        state.get("graph") != graph.fingerprint
+        or state.get("objective") != trainer._objective_signature()
+        or state.get("parameter_schema") != schema
+    ):
+        raise ValueError(
+            "Checkpoint graph or objective differs from the current trainer"
+        )
+
+
+def _validate_saved_inputs(expected_names, saved_inputs):
+    if not isinstance(saved_inputs, Mapping) or set(saved_inputs) != set(
+        expected_names
+    ):
+        raise ValueError("Checkpoint graph input names differ")
+    for name, value in saved_inputs.items():
+        if isinstance(value, bool) or not np.isscalar(value) or not np.isfinite(value):
+            raise ValueError(f"Invalid checkpoint input '{name}'")
+    return saved_inputs
+
+
+def _validate_saved_parameters(parameters, values):
+    if not isinstance(values, Mapping) or set(values) != {
+        parameter.name for parameter in parameters
+    }:
+        raise ValueError("Checkpoint parameter names differ")
+    validated = {}
+    for parameter in parameters:
+        value = np.asarray(values[parameter.name], dtype=float)
+        if value.shape != parameter.shape or not np.all(np.isfinite(value)):
+            raise ValueError(f"Invalid checkpoint value for '{parameter.name}'")
+        with np.errstate(over="ignore"):
+            if not np.all(np.isfinite(value.astype(np.float32))):
+                raise ValueError("Checkpoint values exceed float32 range")
+        validated[parameter.name] = value
+    return validated
+
+
 class RenderGraph:
     """A lowered GPU graph with bounded value caches and stable parameter leaves.
 
@@ -79,51 +157,72 @@ class RenderGraph:
         self._parameters = ()
         self._binding_schema = self._schema()
         try:
-            leaves = {}
-            for value in self.params.values():
-                if isinstance(value, Parameter):
-                    leaves[id(value)] = value
-            initial = self._uniforms()
-            for values in initial:
-                for value in values.values():
-                    for parameter in value._versions:
-                        leaves[id(parameter)] = parameter
-            self._parameters = tuple(leaves.values())
-            if len({p.name for p in self._parameters}) != len(self._parameters):
-                raise ValueError(
-                    "Graph parameter names must be unique across distinct leaves"
-                )
-            offset, uniform_offset = 0, 0
-            for i, node in enumerate(self.plan.sources):
-                image = self._import_source(node)
-                self._sources.append(image)
-                self._offsets[(-i - 1, 0)] = offset
-                offset += int(np.prod(image.shape))
-            self.backend.validate_images(self._sources)
-            self.backend.check_status()
-            source_hashes = []
-            for i, operation in enumerate(self.plan.passes):
-                contract = operation.contract
-                for j, argument in enumerate(contract.outputs):
-                    self._offsets[(i, j)] = offset
-                    offset += self.size[0] * self.size[1] * shape_size(argument.shape)
-                self._uniform_offsets.append(uniform_offset)
-                uniform_offset += sum(shape_size(a.shape) for a in contract.parameters)
-                source_hashes.extend(self.backend.shader_fingerprints(contract.name))
-            self._adjoint_count = offset
-            self._uniform_count = uniform_offset
-            self._adjoints = self.backend.create_buffer(offset * 4)
-            self._uniform_gradients = self.backend.create_buffer(uniform_offset * 4)
-            schema = tuple((p.name, p.shape) for p in self._parameters)
-            self.fingerprint = sha256(
-                repr((self.plan.fingerprint, self.size, schema, source_hashes)).encode()
-            ).hexdigest()
+            self._collect_parameters()
+            self._allocate_graph_storage()
         except BaseException:
             self.close()
             raise
         if not hasattr(canvas, "_training_graphs"):
             canvas._training_graphs = weakref.WeakSet()
         canvas._training_graphs.add(self)
+
+    def _collect_parameters(self):
+        leaves = {
+            id(value): value
+            for value in self.params.values()
+            if isinstance(value, Parameter)
+        }
+        for values in self._uniforms():
+            for value in values.values():
+                leaves.update(
+                    {id(parameter): parameter for parameter in value._versions}
+                )
+        self._parameters = tuple(leaves.values())
+        names = [parameter.name for parameter in self._parameters]
+        if len(set(names)) != len(names):
+            raise ValueError(
+                "Graph parameter names must be unique across distinct leaves"
+            )
+
+    def _allocate_graph_storage(self):
+        offset = self._import_graph_sources()
+        offset, uniform_offset, source_hashes = self._allocate_pass_storage(offset)
+        self._allocate_training_buffers(offset, uniform_offset, source_hashes)
+
+    def _import_graph_sources(self):
+        offset = 0
+        for index, node in enumerate(self.plan.sources):
+            image = self._import_source(node)
+            self._sources.append(image)
+            self._offsets[(-index - 1, 0)] = offset
+            offset += int(np.prod(image.shape))
+        self.backend.validate_images(self._sources)
+        self.backend.check_status()
+        return offset
+
+    def _allocate_pass_storage(self, offset):
+        uniform_offset = 0
+        source_hashes = []
+        for index, operation in enumerate(self.plan.passes):
+            contract = operation.contract
+            for output_index, argument in enumerate(contract.outputs):
+                self._offsets[(index, output_index)] = offset
+                offset += self.size[0] * self.size[1] * shape_size(argument.shape)
+            self._uniform_offsets.append(uniform_offset)
+            uniform_offset += sum(shape_size(arg.shape) for arg in contract.parameters)
+            source_hashes.extend(self.backend.shader_fingerprints(contract.name))
+        return offset, uniform_offset, source_hashes
+
+    def _allocate_training_buffers(self, offset, uniform_offset, source_hashes):
+        self._adjoint_count = offset
+        self._uniform_count = uniform_offset
+        self._adjoints = self.backend.create_buffer(offset * 4)
+        self._uniform_gradients = self.backend.create_buffer(uniform_offset * 4)
+        schema = tuple(
+            (parameter.name, parameter.shape) for parameter in self._parameters
+        )
+        fingerprint = repr((self.plan.fingerprint, self.size, schema, source_hashes))
+        self.fingerprint = sha256(fingerprint.encode()).hexdigest()
 
     @property
     def parameters(self):
@@ -339,43 +438,52 @@ class RenderGraph:
         if self._running or (self._active is not None and not self._active.closed):
             raise RuntimeError("Close the active execution before rendering")
         if backend == "display":
-            if self.size != self._canvas_size:
-                raise ValueError(
-                    "Display rendering requires the Canvas size; use training or reference rendering for this graph"
-                )
-            from ..backends.plan import execute_display
-
-            sources = [
-                self.backend.display_image(image, getattr(node, "mode", None))
-                for image, node in zip(self._sources, self.plan.sources)
-            ]
-            return execute_display(
-                self.plan,
-                self.canvas,
-                self.params,
-                sources=sources,
-                expression_context=self,
-            )
+            return self._render_display()
         if backend == "reference":
-            from ..backends.plan import execute_reference
-            from ..learning.render import DifferentiableRenderer
-
-            sources = [image.read() for image in self._sources]
-            renderer = DifferentiableRenderer(self.size, self.params)
-            renderer.inputs = self.inputs
-            return execute_reference(self.plan, renderer, sources=sources)
+            return self._render_reference()
         if backend == "training":
-            images = {}
-            try:
-                with self.run() as execution:
-                    for name, image in execution.outputs.items():
-                        images[name] = self.backend.copy_image(image)
-                return images
-            except BaseException:
-                for image in images.values():
-                    image.close()
-                raise
+            return self._render_training()
         raise ValueError("backend must be display, reference, or training")
+
+    def _render_display(self):
+        if self.size != self._canvas_size:
+            raise ValueError(
+                "Display rendering requires the Canvas size; use training or reference rendering for this graph"
+            )
+        from ..backends.plan import execute_display
+
+        sources = [
+            self.backend.display_image(image, getattr(node, "mode", None))
+            for image, node in zip(self._sources, self.plan.sources)
+        ]
+        return execute_display(
+            self.plan,
+            self.canvas,
+            self.params,
+            sources=sources,
+            expression_context=self,
+        )
+
+    def _render_reference(self):
+        from ..backends.plan import execute_reference
+        from ..learning.render import DifferentiableRenderer
+
+        sources = [image.read() for image in self._sources]
+        renderer = DifferentiableRenderer(self.size, self.params)
+        renderer.inputs = self.inputs
+        return execute_reference(self.plan, renderer, sources=sources)
+
+    def _render_training(self):
+        images = {}
+        try:
+            with self.run() as execution:
+                for name, image in execution.outputs.items():
+                    images[name] = self.backend.copy_image(image)
+            return images
+        except BaseException:
+            for image in images.values():
+                image.close()
+            raise
 
     def explain(self):
         """Report topology, derivative conventions and parameter dependencies.
@@ -463,56 +571,7 @@ class RenderGraph:
             self._targets.clear()
             self._mask_denominators.clear()
             try:
-                for index, term in enumerate(objective.pixel_losses):
-                    if term.output not in self.plan.outputs:
-                        raise ValueError(f"Unknown objective root '{term.output}'")
-                    prediction = images[term.output]
-                    if isinstance(term.target, BackendImage):
-                        if term.target.shape != prediction.shape:
-                            raise ValueError("GPU target shape differs from prediction")
-                        target = self.backend.copy_image(term.target)
-                    else:
-                        if term.target.shape == ():
-                            pixels = np.full(
-                                prediction.shape, term.target.item(), dtype=np.float32
-                            )
-                        elif term.target.shape == prediction.shape:
-                            pixels = term.target
-                        else:
-                            raise ValueError(
-                                f"Target shape {term.target.shape} differs from root '{term.output}' {prediction.shape}"
-                            )
-                        target = self.backend.upload(pixels)
-                    self._targets[index] = target
-                    if term.mask is not None:
-                        if isinstance(term.mask, BackendImage):
-                            if term.mask.shape != prediction.shape:
-                                raise ValueError(
-                                    "GPU mask shape differs from prediction"
-                                )
-                            mask = self.backend.copy_image(term.mask)
-                        else:
-                            if term.mask.shape == ():
-                                pixels = np.full(
-                                    prediction.shape, term.mask.item(), dtype=np.float32
-                                )
-                            elif term.mask.shape == prediction.shape:
-                                pixels = term.mask
-                            elif (
-                                prediction.channels == 4
-                                and term.mask.shape == prediction.shape[:2]
-                            ):
-                                pixels = np.repeat(term.mask[..., None], 4, axis=2)
-                            else:
-                                raise ValueError(
-                                    f"Mask shape {term.mask.shape} differs from root '{term.output}' {prediction.shape}"
-                                )
-                            mask = self.backend.upload(pixels)
-                        self._targets[("mask", index)] = mask
-                        if term.normalization == "mask":
-                            self._mask_denominators[index] = (
-                                self.backend.mask_weight_sum(mask)
-                            )
+                self._capture_objective_targets(objective, images)
             except BaseException:
                 for target in self._targets.values():
                     target.close()
@@ -520,7 +579,55 @@ class RenderGraph:
                 self._target_signature = None
                 raise
             self._target_signature = signature
-        count = len(objective.pixel_losses)
+        self._ensure_loss_buffer(len(objective.pixel_losses))
+
+    def _capture_objective_targets(self, objective, images):
+        for index, term in enumerate(objective.pixel_losses):
+            if term.output not in self.plan.outputs:
+                raise ValueError(f"Unknown objective root '{term.output}'")
+            prediction = images[term.output]
+            self._targets[index] = self._copy_loss_target(term, prediction)
+            mask = self._copy_loss_mask(term, prediction)
+            if mask is not None:
+                self._targets[("mask", index)] = mask
+                if term.normalization == "mask":
+                    self._mask_denominators[index] = self.backend.mask_weight_sum(mask)
+
+    def _copy_loss_target(self, term, prediction):
+        if isinstance(term.target, BackendImage):
+            if term.target.shape != prediction.shape:
+                raise ValueError("GPU target shape differs from prediction")
+            return self.backend.copy_image(term.target)
+        if term.target.shape == ():
+            pixels = np.full(prediction.shape, term.target.item(), dtype=np.float32)
+        elif term.target.shape == prediction.shape:
+            pixels = term.target
+        else:
+            raise ValueError(
+                f"Target shape {term.target.shape} differs from root '{term.output}' {prediction.shape}"
+            )
+        return self.backend.upload(pixels)
+
+    def _copy_loss_mask(self, term, prediction):
+        if term.mask is None:
+            return None
+        if isinstance(term.mask, BackendImage):
+            if term.mask.shape != prediction.shape:
+                raise ValueError("GPU mask shape differs from prediction")
+            return self.backend.copy_image(term.mask)
+        if term.mask.shape == ():
+            pixels = np.full(prediction.shape, term.mask.item(), dtype=np.float32)
+        elif term.mask.shape == prediction.shape:
+            pixels = term.mask
+        elif prediction.channels == 4 and term.mask.shape == prediction.shape[:2]:
+            pixels = np.repeat(term.mask[..., None], 4, axis=2)
+        else:
+            raise ValueError(
+                f"Mask shape {term.mask.shape} differs from root '{term.output}' {prediction.shape}"
+            )
+        return self.backend.upload(pixels)
+
+    def _ensure_loss_buffer(self, count):
         if self._loss_count != count or self._loss_values is None:
             if self._loss_values is not None:
                 self._loss_values.release()
@@ -584,102 +691,10 @@ class GraphExecution:
         self._dependencies = []
         self._images = []
         try:
-            self.uniforms = graph._uniforms()
-            graph.backend.clear_status()
-            self.cache_hits = 0
-            for index, (operation, uniforms) in enumerate(
-                zip(graph.plan.passes, self.uniforms)
-            ):
-                values = graph.backend.uniforms(operation.shader.name, uniforms)
-                input_images = tuple(self._port_image(p) for p in operation.inputs)
-                key = (
-                    tuple((name, value.tobytes()) for name, value in values.items()),
-                    tuple(image.generation for image in input_images),
-                )
-                cached = graph._cache.get(index)
-                if (
-                    cached is not None
-                    and cached[0] == key
-                    and not any(im.closed for im in cached[1])
-                ):
-                    output_images = cached[1]
-                    self.cache_hits += 1
-                else:
-                    ports = dict(
-                        zip((a.name for a in operation.contract.inputs), input_images)
-                    )
-                    output_images = graph.backend.forward(
-                        operation.shader.name, ports, values, graph.size
-                    )
-                    graph.backend.validate_images(output_images)
-                    if cached is not None:
-                        for image in cached[1]:
-                            image.close()
-                    graph._cache[index] = (key, output_images)
-                self._images.append(output_images)
-                deps = set()
-                for value in uniforms.values():
-                    deps.update(value._versions)
-                for port in operation.inputs:
-                    if port.pass_index >= 0:
-                        deps.update(self._dependencies[port.pass_index])
-                if deps - set(graph.parameters):
-                    raise ValueError(
-                        "Trainable parameter leaves changed after graph compilation"
-                    )
-                self._dependencies.append(deps)
-            self.outputs = MappingProxyType(
-                {name: self._port_image(p) for name, p in graph.plan.outputs.items()}
-            )
-            graph.backend.check_status()
+            self._forward()
             if objective is not None:
-                if not objective.pixel_losses and not objective.geometry_losses:
-                    raise ValueError("Objective must contain at least one loss term")
-                graph._prepare_targets(objective, self.outputs)
-                graph._adjoints.clear()
-                graph._uniform_gradients.clear()
-                graph._loss_values.clear()
-                for index, term in enumerate(objective.pixel_losses):
-                    port = graph.plan.outputs[term.output]
-                    graph.backend.seed_pixel_loss(
-                        term,
-                        self.outputs[term.output],
-                        graph._targets[index],
-                        graph._targets.get(("mask", index)),
-                        graph._adjoints,
-                        graph._offsets[(port.pass_index, port.output_index)],
-                        graph._loss_values,
-                        index,
-                        graph._mask_denominators.get(index),
-                    )
-                graph.backend.check_status()
-                count = len(objective.pixel_losses)
-                values = (
-                    np.frombuffer(
-                        graph._loss_values.read(size=count * 4), dtype=np.float32
-                    )
-                    if count
-                    else ()
-                )
-                for term, value in zip(objective.pixel_losses, values):
-                    self.metrics[term.name] = float(value)
-                for term in objective.geometry_losses:
-                    value = _tensor(term.callback())
-                    if value.size != 1 or not np.isfinite(value.item()):
-                        raise ValueError(
-                            "Geometry callbacks must return finite scalar losses"
-                        )
-                    if set(value._versions) - set(graph.parameters):
-                        raise ValueError(
-                            "Geometry loss uses parameters absent from graph params"
-                        )
-                    weighted = value * term.weight
-                    self.geometry.append(weighted)
-                    self.metrics[term.name] = weighted.item()
-                self.loss = float(sum(self.metrics.values()))
-            self._check_versions()
-            if objective is not None and objective.version != self._objective_version:
-                raise RuntimeError("Objective changed during execution")
+                self._evaluate_objective()
+            self._validate_completion()
         except BaseException:
             self.close()
             # A failed forward must not leave an invalid value eligible for a
@@ -689,6 +704,121 @@ class GraphExecution:
                     image.close()
             graph._cache.clear()
             raise
+
+    def _forward(self):
+        self.uniforms = self.graph._uniforms()
+        self.graph.backend.clear_status()
+        self.cache_hits = 0
+        for index, (operation, uniforms) in enumerate(
+            zip(self.graph.plan.passes, self.uniforms)
+        ):
+            self._forward_pass(index, operation, uniforms)
+        self.outputs = MappingProxyType(
+            {
+                name: self._port_image(port)
+                for name, port in self.graph.plan.outputs.items()
+            }
+        )
+        self.graph.backend.check_status()
+
+    def _forward_pass(self, index, operation, uniforms):
+        graph = self.graph
+        values = graph.backend.uniforms(operation.shader.name, uniforms)
+        input_images = tuple(self._port_image(port) for port in operation.inputs)
+        key = (
+            tuple((name, value.tobytes()) for name, value in values.items()),
+            tuple(image.generation for image in input_images),
+        )
+        cached = graph._cache.get(index)
+        if _cache_hit(cached, key):
+            output_images = cached[1]
+            self.cache_hits += 1
+        else:
+            output_images = self._execute_forward_pass(operation, values, input_images)
+            if cached is not None:
+                _close_images(cached[1])
+            graph._cache[index] = (key, output_images)
+        self._images.append(output_images)
+        self._dependencies.append(self._pass_dependencies(operation, uniforms))
+
+    def _execute_forward_pass(self, operation, values, input_images):
+        ports = dict(zip((arg.name for arg in operation.contract.inputs), input_images))
+        outputs = self.graph.backend.forward(
+            operation.shader.name, ports, values, self.graph.size
+        )
+        self.graph.backend.validate_images(outputs)
+        return outputs
+
+    def _pass_dependencies(self, operation, uniforms):
+        dependencies = set()
+        for value in uniforms.values():
+            dependencies.update(value._versions)
+        for port in operation.inputs:
+            if port.pass_index >= 0:
+                dependencies.update(self._dependencies[port.pass_index])
+        if dependencies - set(self.graph.parameters):
+            raise ValueError(
+                "Trainable parameter leaves changed after graph compilation"
+            )
+        return dependencies
+
+    def _evaluate_objective(self):
+        if not self.objective.pixel_losses and not self.objective.geometry_losses:
+            raise ValueError("Objective must contain at least one loss term")
+        graph = self.graph
+        graph._prepare_targets(self.objective, self.outputs)
+        graph._adjoints.clear()
+        graph._uniform_gradients.clear()
+        graph._loss_values.clear()
+        self._seed_pixel_losses()
+        self._evaluate_geometry_losses()
+        self.loss = float(sum(self.metrics.values()))
+
+    def _seed_pixel_losses(self):
+        graph = self.graph
+        for index, term in enumerate(self.objective.pixel_losses):
+            port = graph.plan.outputs[term.output]
+            graph.backend.seed_pixel_loss(
+                term,
+                self.outputs[term.output],
+                graph._targets[index],
+                graph._targets.get(("mask", index)),
+                graph._adjoints,
+                graph._offsets[(port.pass_index, port.output_index)],
+                graph._loss_values,
+                index,
+                graph._mask_denominators.get(index),
+            )
+        graph.backend.check_status()
+        count = len(self.objective.pixel_losses)
+        values = (
+            np.frombuffer(graph._loss_values.read(size=count * 4), dtype=np.float32)
+            if count
+            else ()
+        )
+        for term, value in zip(self.objective.pixel_losses, values):
+            self.metrics[term.name] = float(value)
+
+    def _evaluate_geometry_losses(self):
+        for term in self.objective.geometry_losses:
+            value = _tensor(term.callback())
+            if value.size != 1 or not np.isfinite(value.item()):
+                raise ValueError("Geometry callbacks must return finite scalar losses")
+            if set(value._versions) - set(self.graph.parameters):
+                raise ValueError(
+                    "Geometry loss uses parameters absent from graph params"
+                )
+            weighted = value * term.weight
+            self.geometry.append(weighted)
+            self.metrics[term.name] = weighted.item()
+
+    def _validate_completion(self):
+        self._check_versions()
+        if (
+            self.objective is not None
+            and self.objective.version != self._objective_version
+        ):
+            raise RuntimeError("Objective changed during execution")
 
     @property
     def stats(self):
@@ -728,70 +858,14 @@ class GraphExecution:
         if self.backward_called:
             raise RuntimeError("This execution's backward pass was already consumed")
         graph = self.graph
-        needed = set()
-        pending = [
-            graph.plan.outputs[term.output].pass_index
-            for term in self.objective.pixel_losses
-        ]
-        while pending:
-            index = pending.pop()
-            if index in needed or index < 0:
-                continue
-            needed.add(index)
-            pending.extend(p.pass_index for p in graph.plan.passes[index].inputs)
-        reaches_source = []
-        for operation in graph.plan.passes:
-            reaches_source.append(
-                any(
-                    port.pass_index < 0 or reaches_source[port.pass_index]
-                    for port in operation.inputs
-                )
-            )
+        needed = self._needed_passes()
+        reaches_source = self._passes_reaching_sources()
         graph.backend.clear_status()
         for index in reversed(range(len(graph.plan.passes))):
-            # Even a pass with no trainable uniforms can carry adjoints to an
-            # input texture (or to another named intermediate output).
-            if index not in needed or not (
-                self._dependencies[index] or reaches_source[index]
-            ):
-                continue
-            operation = graph.plan.passes[index]
-            inputs = {
-                argument.name: self._port_image(port)
-                for argument, port in zip(operation.contract.inputs, operation.inputs)
-            }
-            input_offsets = [
-                graph._offsets[(p.pass_index, p.output_index)] for p in operation.inputs
-            ]
-            output_offsets = [
-                graph._offsets[(index, j)]
-                for j in range(len(operation.contract.outputs))
-            ]
-            graph.backend.backward_into(
-                operation.shader.name,
-                inputs,
-                self.uniforms[index],
-                graph._adjoints,
-                input_offsets,
-                output_offsets,
-                graph._uniform_gradients,
-                graph._uniform_offsets[index],
-                size=graph.size,
-            )
+            self._backward_pass(index, needed, reaches_source)
         graph.backend.check_status()
         raw = np.frombuffer(graph._uniform_gradients.read(), dtype=np.float32)
-        terms = list(self.geometry)
-        for index, operation in enumerate(graph.plan.passes):
-            if index not in needed:
-                continue
-            base = graph._uniform_offsets[index]
-            for argument in operation.contract.parameters:
-                count = shape_size(argument.shape)
-                value = self.uniforms[index][argument.name]
-                if value.requires_grad:
-                    seed = raw[base : base + count].reshape(argument.shape)
-                    terms.append((value * Tensor(seed)).sum())
-                base += count
+        terms = self._uniform_gradient_terms(raw, needed)
         self._check_versions()
         if terms:
             chain = sum(terms)
@@ -801,6 +875,82 @@ class GraphExecution:
         return {
             p.name: None if p.grad is None else p.grad.copy() for p in graph.parameters
         }
+
+    def _needed_passes(self):
+        graph = self.graph
+        needed = set()
+        pending = [
+            graph.plan.outputs[term.output].pass_index
+            for term in self.objective.pixel_losses
+        ]
+        while pending:
+            index = pending.pop()
+            if index < 0 or index in needed:
+                continue
+            needed.add(index)
+            pending.extend(port.pass_index for port in graph.plan.passes[index].inputs)
+        return needed
+
+    def _passes_reaching_sources(self):
+        reaches_source = []
+        for operation in self.graph.plan.passes:
+            reaches_source.append(
+                any(
+                    port.pass_index < 0 or reaches_source[port.pass_index]
+                    for port in operation.inputs
+                )
+            )
+        return reaches_source
+
+    def _backward_pass(self, index, needed, reaches_source):
+        if index not in needed or not (
+            self._dependencies[index] or reaches_source[index]
+        ):
+            return
+        graph = self.graph
+        operation = graph.plan.passes[index]
+        inputs = {
+            argument.name: self._port_image(port)
+            for argument, port in zip(operation.contract.inputs, operation.inputs)
+        }
+        input_offsets = [
+            graph._offsets[(port.pass_index, port.output_index)]
+            for port in operation.inputs
+        ]
+        output_offsets = [
+            graph._offsets[(index, output_index)]
+            for output_index in range(len(operation.contract.outputs))
+        ]
+        graph.backend.backward_into(
+            operation.shader.name,
+            inputs,
+            self.uniforms[index],
+            graph._adjoints,
+            input_offsets,
+            output_offsets,
+            graph._uniform_gradients,
+            graph._uniform_offsets[index],
+            size=graph.size,
+        )
+
+    def _uniform_gradient_terms(self, raw, needed):
+        terms = list(self.geometry)
+        for index, operation in enumerate(self.graph.plan.passes):
+            if index in needed:
+                terms.extend(self._pass_uniform_gradient_terms(index, operation, raw))
+        return terms
+
+    def _pass_uniform_gradient_terms(self, index, operation, raw):
+        terms = []
+        base = self.graph._uniform_offsets[index]
+        for argument in operation.contract.parameters:
+            count = shape_size(argument.shape)
+            value = self.uniforms[index][argument.name]
+            if value.requires_grad:
+                seed = raw[base : base + count].reshape(argument.shape)
+                terms.append((value * Tensor(seed)).sum())
+            base += count
+        return terms
 
     def read(self, name):
         self._check()
@@ -908,9 +1058,9 @@ class GraphTrainer:
             else optimizer
         )
         actual = tuple(getattr(self.optimizer, "parameters", ()))
-        if len(actual) != len(graph.trainable_parameters) or {id(p) for p in actual} != {
-            id(p) for p in graph.trainable_parameters
-        }:
+        if len(actual) != len(graph.trainable_parameters) or {
+            id(p) for p in actual
+        } != {id(p) for p in graph.trainable_parameters}:
             if self._owns_optimizer:
                 self.optimizer.close()
             raise ValueError("Optimizer must own exactly this graph's parameter leaves")
@@ -958,29 +1108,13 @@ class GraphTrainer:
 
         self._check()
         cases = tuple(cases)
-        if not cases or any(not isinstance(case, GraphCase) for case in cases):
-            raise ValueError("A batch requires GraphCase instances")
-        if len({case.name for case in cases}) != len(cases):
-            raise ValueError("Case names must be unique")
+        _validate_graph_cases(cases, GraphCase)
         weights = normalized_case_weights(cases)
         parameters = self.graph.parameters
-        expected = {id(p) for p in parameters}
         gradients, losses = {}, {}
         try:
             for case, weight in zip(cases, weights):
-                if (
-                    case.graph.canvas is not self.graph.canvas
-                    or {id(p) for p in case.graph.parameters} != expected
-                ):
-                    raise ValueError("Cases must share a Canvas and parameter leaves")
-                self.optimizer.zero_grad()
-                with case.graph.run(case.objective) as execution:
-                    execution.backward()
-                    losses[case.name] = execution.loss
-                for parameter in parameters:
-                    if parameter.grad is not None:
-                        value = parameter.grad * weight
-                        gradients[parameter] = gradients.get(parameter, 0) + value
+                self._accumulate_case(case, weight, parameters, gradients, losses)
             if not gradients:
                 raise ValueError("Batch has no gradient path to graph parameters")
             self.optimizer.zero_grad()
@@ -1000,6 +1134,18 @@ class GraphTrainer:
         }
         self.last_metrics = result
         return result
+
+    def _accumulate_case(self, case, weight, parameters, gradients, losses):
+        _validate_shared_graph_case(case, self.graph)
+        self.optimizer.zero_grad()
+        with case.graph.run(case.objective) as execution:
+            execution.backward()
+            losses[case.name] = execution.loss
+        for parameter in parameters:
+            if parameter.grad is not None:
+                gradients[parameter] = (
+                    gradients.get(parameter, 0) + parameter.grad * weight
+                )
 
     def evaluate(self):
         """Evaluate the current objective without updating parameters."""
@@ -1062,55 +1208,16 @@ class GraphTrainer:
 
         if self.graph._active is not None and not self.graph._active.closed:
             raise RuntimeError("Close the execution before restoring a checkpoint")
-        if (
-            not isinstance(state, Mapping)
-            or state.get("format_version") != 2
-            or "parameter_schema" not in state
-        ):
-            raise ValueError("Invalid trainer checkpoint")
-        if (
-            state.get("graph") != self.graph.fingerprint
-            or state.get("objective") != self._objective_signature()
-            or state.get("parameter_schema")
-            != (
-                self.graph.params.schema()
-                if isinstance(self.graph.params, ParameterStore)
-                else None
-            )
-        ):
-            raise ValueError(
-                "Checkpoint graph or objective differs from the current trainer"
-            )
+        _validate_trainer_checkpoint(self, state, ParameterStore)
         steps = state.get("steps")
         if isinstance(steps, bool) or not isinstance(steps, int) or steps < 0:
             raise ValueError("Invalid checkpoint step count")
-        values = state.get("parameters")
-        if not isinstance(values, Mapping) or set(values) != {
-            p.name for p in self.graph.parameters
-        }:
-            raise ValueError("Checkpoint parameter names differ")
-        validated = {}
-        saved_inputs = state.get("inputs", {})
-        if not isinstance(saved_inputs, Mapping) or set(saved_inputs) != set(
-            self.graph.inputs
-        ):
-            raise ValueError("Checkpoint graph input names differ")
-        for name, value in saved_inputs.items():
-            if (
-                isinstance(value, bool)
-                or not np.isscalar(value)
-                or not np.isfinite(value)
-            ):
-                raise ValueError(f"Invalid checkpoint input '{name}'")
-        for parameter in self.graph.parameters:
-            value = np.asarray(values[parameter.name], dtype=float)
-            if value.shape != parameter.shape or not np.all(np.isfinite(value)):
-                raise ValueError(f"Invalid checkpoint value for '{parameter.name}'")
-            with np.errstate(over="ignore"):
-                valid32 = np.all(np.isfinite(value.astype(np.float32)))
-            if not valid32:
-                raise ValueError("Checkpoint values exceed float32 range")
-            validated[parameter.name] = value
+        validated = _validate_saved_parameters(
+            self.graph.parameters, state.get("parameters")
+        )
+        saved_inputs = _validate_saved_inputs(
+            self.graph.inputs, state.get("inputs", {})
+        )
         self.optimizer.load_state_dict(state.get("optimizer"))
         for parameter in self.graph.parameters:
             parameter.assign(validated[parameter.name])

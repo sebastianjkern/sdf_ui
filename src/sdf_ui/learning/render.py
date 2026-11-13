@@ -16,9 +16,9 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+from ..backends.opengl.nodes.registry import registry
 from ..core.color import ColorSpaceMode
 from ..core.expressions import Expr, evaluate_expr
-from ..backends.opengl.nodes.registry import registry
 from ..core.texture import MultiOutputResult, TextureNode
 from ..util import hex_col
 from .autodiff import Tensor, as_tensor, maximum, minimum, stack, where
@@ -234,52 +234,65 @@ class DifferentiableRenderer:
         return result, modes[id(scene)]
 
     def _validate(self, value, plugins, visiting):
+        if isinstance(value, (TextureNode, MultiOutputResult)):
+            self._validate_node(value, plugins, visiting)
+            return
+        if isinstance(value, Expr):
+            self._validate_expression(value, plugins, visiting)
+            return
+        if isinstance(value, dict):
+            self._validate_values(value.values(), plugins, visiting)
+        elif isinstance(value, (tuple, list)):
+            self._validate_values(value, plugins, visiting)
+
+    def _validate_node(self, value, plugins, visiting):
+        key = id(value)
+        if key in visiting:
+            raise ValueError("Cycle in differentiable render graph")
+        if key in plugins:
+            return
+        plugin = self._node_plugin(value)
+        visiting.add(key)
+        try:
+            self._validate_values(value.inputs, plugins, visiting)
+            self._validate_values((item for _, item in value.params), plugins, visiting)
+        finally:
+            visiting.remove(key)
+        plugins[key] = plugin
+
+    def _node_plugin(self, value):
         from .shader_plugins import supports_plugin
 
-        if isinstance(value, (TextureNode, MultiOutputResult)):
-            key = id(value)
-            if key in visiting:
-                raise ValueError("Cycle in differentiable render graph")
-            if key in plugins:
-                return
-            op = value.op
-            if getattr(value, "tex", None) is not None:
-                raise UnsupportedGradientError(
-                    f"Unsupported gradient operation '{op or 'materialized texture'}'"
-                )
-            try:
-                plugin = registry.get(op)
-            except KeyError as exc:
-                raise UnsupportedGradientError(
-                    f"Unsupported gradient operation '{op}'"
-                ) from exc
-            if (
-                op not in self._operations
-                and getattr(plugin, "differentiable_func", None) is None
-                and op != "output"
-                and not supports_plugin(plugin)
-            ):
-                raise UnsupportedGradientError(f"Unsupported gradient operation '{op}'")
-            visiting.add(key)
-            for item in value.inputs:
-                self._validate(item, plugins, visiting)
-            for _, item in value.params:
-                self._validate(item, plugins, visiting)
-            visiting.remove(key)
-            plugins[key] = plugin
-        elif isinstance(value, Expr):
-            if value.op == "param":
-                name, default = value.args
-                self._validate(self.params.get(name, default), plugins, visiting)
-            else:
-                for item in value.args:
-                    self._validate(item, plugins, visiting)
-        elif isinstance(value, dict):
-            for item in value.values():
-                self._validate(item, plugins, visiting)
-        elif isinstance(value, (tuple, list)):
-            for item in value:
-                self._validate(item, plugins, visiting)
+        op = value.op
+        if getattr(value, "tex", None) is not None:
+            raise UnsupportedGradientError(
+                f"Unsupported gradient operation '{op or 'materialized texture'}'"
+            )
+        try:
+            plugin = registry.get(op)
+        except KeyError as exc:
+            raise UnsupportedGradientError(
+                f"Unsupported gradient operation '{op}'"
+            ) from exc
+        if (
+            op not in self._operations
+            and getattr(plugin, "differentiable_func", None) is None
+            and op != "output"
+            and not supports_plugin(plugin)
+        ):
+            raise UnsupportedGradientError(f"Unsupported gradient operation '{op}'")
+        return plugin
+
+    def _validate_expression(self, value, plugins, visiting):
+        if value.op == "param":
+            name, default = value.args
+            self._validate(self.params.get(name, default), plugins, visiting)
+            return
+        self._validate_values(value.args, plugins, visiting)
+
+    def _validate_values(self, values, plugins, visiting):
+        for item in values:
+            self._validate(item, plugins, visiting)
 
     def _resolve(self, value, plugins, memo, modes):
         if isinstance(value, (Expr, str)):
@@ -316,6 +329,30 @@ class DifferentiableRenderer:
         mode = plugin.mode or next((item for item in input_modes if item), None)
         if node.kind == "color":
             mode = mode or ColorSpaceMode.LAB
+        result, mode = self._evaluate_node_operation(
+            node, plugin, inputs, params, input_modes, mode
+        )
+        if node.kind == "multi_output":
+            if not isinstance(result, tuple) or not all(
+                isinstance(value, Tensor) for value in result
+            ):
+                raise TypeError(
+                    "Multi-output derivative must return a tuple of Tensors"
+                )
+            memo[key], modes[key] = result, mode
+            return result
+        expected = (self.size[1], self.size[0])
+        if node.kind == "color":
+            expected += (4,)
+        if result.shape != expected:
+            raise ValueError(
+                f"Differentiable operation '{node.op}' returned shape {result.shape}; "
+                f"expected {expected}"
+            )
+        memo[key], modes[key] = result, mode
+        return result
+
+    def _evaluate_node_operation(self, node, plugin, inputs, params, input_modes, mode):
         hook = getattr(plugin, "differentiable_func", None)
         if node.op == "output":
             index = params["index"]
@@ -339,29 +376,16 @@ class DifferentiableRenderer:
             result, mode = evaluate_plugin(self, plugin, inputs, params, input_modes)
         else:
             result = self._builtin(node.op, inputs, params, input_modes)
-            if node.op in {"fill", "clear", "clear_color", "to_lab"}:
-                mode = ColorSpaceMode.LAB
-            elif node.op in {"to_rgb", "generate_mask", "alpha_overlay", "multiply"}:
-                mode = ColorSpaceMode.RGB
-        if node.kind == "multi_output":
-            if not isinstance(result, tuple) or not all(
-                isinstance(v, Tensor) for v in result
-            ):
-                raise TypeError(
-                    "Multi-output derivative must return a tuple of Tensors"
-                )
-            memo[key], modes[key] = result, mode
-            return result
-        expected = (self.size[1], self.size[0])
-        if node.kind == "color":
-            expected += (4,)
-        if result.shape != expected:
-            raise ValueError(
-                f"Differentiable operation '{node.op}' returned shape {result.shape}; "
-                f"expected {expected}"
-            )
-        memo[key], modes[key] = result, mode
-        return result
+            mode = self._builtin_mode(node.op, mode)
+        return result, mode
+
+    @staticmethod
+    def _builtin_mode(op, mode):
+        if op in {"fill", "clear", "clear_color", "to_lab"}:
+            return ColorSpaceMode.LAB
+        if op in {"to_rgb", "generate_mask", "alpha_overlay", "multiply"}:
+            return ColorSpaceMode.RGB
+        return mode
 
     @staticmethod
     def _color(value):
@@ -389,95 +413,121 @@ class DifferentiableRenderer:
         )
 
     def _builtin(self, op, inputs, params, modes):
-        if op in {"circle", "disc"}:
-            center = _tensor(params["center"])
-            return _length(self.x - center[0], self.y - center[1]) - _tensor(
-                params["radius"]
-            )
-        if op in {"rect", "rounded_rect"}:
-            center, size = _tensor(params["center"]), _tensor(params["size"])
-            angle = _tensor(params.get("angle", 0.0))
-            x, y = self.x - center[0], self.y - center[1]
-            # GLSL row-vector multiplication by its column-major mat2.
-            u = x * angle.cos() - y * angle.sin()
-            v = x * angle.sin() + y * angle.cos()
-            radius = _tensor(params.get("corner_radius", 0.0))
-            if radius.shape == (4,):
-                hx = _smoothstep(0.0, 0.0001, u)
-                hy = _smoothstep(0.0, 0.0001, v)
-                radius = _mix(
-                    _mix(radius[0], radius[2], hx), _mix(radius[1], radius[3], hx), hy
+        match op:
+            case "circle" | "disc":
+                return self._circle(params)
+            case "rect" | "rounded_rect":
+                return self._rectangle(params)
+            case "union":
+                return minimum(*inputs)
+            case "intersection":
+                return maximum(*inputs)
+            case "subtract":
+                return maximum(inputs[0], -inputs[1])
+            case "smooth_union":
+                return self._smooth_union(inputs, params)
+            case "interpolate":
+                return _mix(inputs[0], inputs[1], _tensor(params["t"]))
+            case "abs":
+                return inputs[0].abs()
+            case "translate" | "scale" | "rotate":
+                return self._transform(op, inputs[0], params)
+            case "clear" | "clear_color":
+                return self._clear(params)
+            case "fill":
+                return self._fill(inputs[0], params)
+            case "generate_mask":
+                return self._generate_mask(inputs, params)
+            case "to_rgb":
+                return _lab_to_rgb(inputs[0])
+            case "to_lab":
+                return _rgb_to_lab(inputs[0])
+            case "transparency":
+                return _rgba(
+                    inputs[0][..., :3], inputs[0][..., 3] * _tensor(params["alpha"])
                 )
-            elif radius.shape != ():
-                raise ValueError("corner_radius must be a scalar or four radii")
-            qx, qy = u.abs() - size[0] + radius, v.abs() - size[1] + radius
-            return (
-                minimum(maximum(qx, qy), 0.0)
-                + _length(maximum(qx, 0.0), maximum(qy, 0.0))
-                - radius
+            case "multiply" | "alpha_overlay":
+                return self._layer_operation(op, inputs, modes)
+            case _:
+                raise UnsupportedGradientError(f"Unsupported gradient operation '{op}'")
+
+    def _circle(self, params):
+        center = _tensor(params["center"])
+        return _length(self.x - center[0], self.y - center[1]) - _tensor(
+            params["radius"]
+        )
+
+    def _rectangle(self, params):
+        center, size = _tensor(params["center"]), _tensor(params["size"])
+        angle = _tensor(params.get("angle", 0.0))
+        x, y = self.x - center[0], self.y - center[1]
+        u = x * angle.cos() - y * angle.sin()
+        v = x * angle.sin() + y * angle.cos()
+        radius = self._corner_radius(params, u, v)
+        qx, qy = u.abs() - size[0] + radius, v.abs() - size[1] + radius
+        return (
+            minimum(maximum(qx, qy), 0.0)
+            + _length(maximum(qx, 0.0), maximum(qy, 0.0))
+            - radius
+        )
+
+    @staticmethod
+    def _corner_radius(params, u, v):
+        radius = _tensor(params.get("corner_radius", 0.0))
+        if radius.shape == (4,):
+            hx = _smoothstep(0.0, 0.0001, u)
+            hy = _smoothstep(0.0, 0.0001, v)
+            return _mix(
+                _mix(radius[0], radius[2], hx), _mix(radius[1], radius[3], hx), hy
             )
-        if op == "union":
-            return minimum(*inputs)
-        if op == "intersection":
-            return maximum(*inputs)
-        if op == "subtract":
-            return maximum(inputs[0], -inputs[1])
-        if op == "smooth_union":
-            k = maximum(_tensor(params["k"]), 1e-6)
-            weight = _clip(0.5 + 0.5 * (inputs[1] - inputs[0]) / k, 0.0, 1.0)
-            return _mix(inputs[1], inputs[0], weight) - k * weight * (1.0 - weight)
-        if op == "interpolate":
-            return _mix(inputs[0], inputs[1], _tensor(params["t"]))
-        if op == "abs":
-            return inputs[0].abs()
-        if op in {"translate", "scale", "rotate"}:
-            return self._transform(op, inputs[0], params)
-        if op in {"clear", "clear_color"}:
-            return _rgb_to_lab(self._color(params["color"])) + np.zeros(
-                (self.size[1], self.size[0], 4)
+        if radius.shape != ():
+            raise ValueError("corner_radius must be a scalar or four radii")
+        return radius
+
+    @staticmethod
+    def _smooth_union(inputs, params):
+        k = maximum(_tensor(params["k"]), 1e-6)
+        weight = _clip(0.5 + 0.5 * (inputs[1] - inputs[0]) / k, 0.0, 1.0)
+        return _mix(inputs[1], inputs[0], weight) - k * weight * (1.0 - weight)
+
+    def _clear(self, params):
+        return _rgb_to_lab(self._color(params["color"])) + np.zeros(
+            (self.size[1], self.size[0], 4)
+        )
+
+    def _generate_mask(self, inputs, params):
+        return _lab_to_rgb(
+            self._fill(
+                inputs[0],
+                {
+                    "fg_color": params["color1"],
+                    "bg_color": params["color0"],
+                    "inflate": params["inflate"],
+                },
             )
-        if op == "fill":
-            return self._fill(inputs[0], params)
-        if op == "generate_mask":
-            return _lab_to_rgb(
-                self._fill(
-                    inputs[0],
-                    {
-                        "fg_color": params["color1"],
-                        "bg_color": params["color0"],
-                        "inflate": params["inflate"],
-                    },
-                )
-            )
-        if op == "to_rgb":
-            return _lab_to_rgb(inputs[0])
-        if op == "to_lab":
-            return _rgb_to_lab(inputs[0])
-        if op == "transparency":
-            return _rgba(
-                inputs[0][..., :3], inputs[0][..., 3] * _tensor(params["alpha"])
-            )
+        )
+
+    def _layer_operation(self, op, inputs, modes):
         rgb_inputs = tuple(
             _lab_to_rgb(value) if mode != ColorSpaceMode.RGB else value
             for value, mode in zip(inputs, modes)
         )
         if op == "multiply":
             return rgb_inputs[0] * rgb_inputs[1]
-        if op == "alpha_overlay":
-            base, top = rgb_inputs
-            alpha = top[..., 3] + (1.0 - top[..., 3]) * base[..., 3]
-            positive = alpha.data > 0.0
-            numerator = (
-                top[..., :3] * top[..., 3:4]
-                + base[..., :3] * (1.0 - top[..., 3:4]) * base[..., 3:4]
-            )
-            rgb = where(
-                positive[..., None],
-                numerator / where(positive, alpha, 1.0)[..., None],
-                0.0,
-            )
-            return _rgba(rgb, alpha)
-        raise UnsupportedGradientError(f"Unsupported gradient operation '{op}'")
+        return self._alpha_overlay(*rgb_inputs)
+
+    @staticmethod
+    def _alpha_overlay(base, top):
+        alpha = top[..., 3] + (1.0 - top[..., 3]) * base[..., 3]
+        positive = alpha.data > 0.0
+        numerator = (
+            top[..., :3] * top[..., 3:4]
+            + base[..., :3] * (1.0 - top[..., 3:4]) * base[..., 3:4]
+        )
+        rgb = where(
+            positive[..., None], numerator / where(positive, alpha, 1.0)[..., None], 0.0
+        )
+        return _rgba(rgb, alpha)
 
     def _transform(self, op, source, params):
         distance_scale = 1.0

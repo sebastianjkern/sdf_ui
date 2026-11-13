@@ -246,56 +246,63 @@ class Objective:
         raise KeyError(f"Unknown loss '{name}'")
 
     def signature(self, *, portable=False, target_overrides=None):
-        result = []
-        for term in self.pixel_losses:
-            mask = None
-            if isinstance(term.mask, Image):
-                source = (target_overrides or {}).get(("mask", term.name), term.mask)
-                mask = (
-                    (source.shape, sha256(source.read().tobytes()).hexdigest())
-                    if portable
-                    else ("gpu", term.mask.shape, term.mask.generation)
-                )
-            elif term.mask is not None:
-                mask = (term.mask.shape, sha256(term.mask.tobytes()).hexdigest())
-            if isinstance(term.target, Image):
-                source = (target_overrides or {}).get(term.name, term.target)
-                if portable:
-                    target = (source.shape, sha256(source.read().tobytes()).hexdigest())
-                else:
-                    target = ("gpu", term.target.shape, term.target.generation)
-            else:
-                target = (term.target.shape, sha256(term.target.tobytes()).hexdigest())
-            result.append(
-                (
-                    term.name,
-                    term.output,
-                    term.kind,
-                    term.weight,
-                    term.delta,
-                    target,
-                    mask,
-                    term.normalization,
-                )
-            )
-        for term in self.geometry_losses:
-            if portable and term.identity is None:
-                raise ValueError(
-                    f"Geometry loss '{term.name}' requires an explicit identity for checkpoints"
-                )
-            code = getattr(term.callback, "__code__", None)
-            code = None if code is None else sha256(marshal.dumps(code)).hexdigest()
-            result.append(
-                (
-                    term.name,
-                    term.weight,
-                    None
-                    if portable
-                    else getattr(
-                        term.callback, "__qualname__", type(term.callback).__name__
-                    ),
-                    None if portable else code,
-                    term.identity,
-                )
-            )
+        result = self._pixel_signatures(portable, target_overrides)
+        result.extend(self._geometry_signatures(portable))
         return sha256(json.dumps(result, sort_keys=True).encode()).hexdigest()
+
+    def _pixel_signatures(self, portable, target_overrides):
+        return [
+            self._pixel_signature(term, portable, target_overrides or {})
+            for term in self.pixel_losses
+        ]
+
+    @staticmethod
+    def _pixel_signature(term, portable, target_overrides):
+        mask = _image_signature(
+            term.mask, portable, target_overrides.get(("mask", term.name))
+        )
+        target = _image_signature(
+            term.target, portable, target_overrides.get(term.name)
+        )
+        return (
+            term.name,
+            term.output,
+            term.kind,
+            term.weight,
+            term.delta,
+            target,
+            mask,
+            term.normalization,
+        )
+
+    def _geometry_signatures(self, portable):
+        return [_geometry_signature(term, portable) for term in self.geometry_losses]
+
+
+def _image_signature(value, portable, override):
+    if value is None:
+        return None
+    if isinstance(value, Image):
+        source = override or value
+        if portable:
+            return source.shape, sha256(source.read().tobytes()).hexdigest()
+        return "gpu", value.shape, value.generation
+    return value.shape, sha256(value.tobytes()).hexdigest()
+
+
+def _geometry_signature(term, portable):
+    if portable and term.identity is None:
+        raise ValueError(
+            f"Geometry loss '{term.name}' requires an explicit identity for checkpoints"
+        )
+    code = getattr(term.callback, "__code__", None)
+    code = None if code is None else sha256(marshal.dumps(code)).hexdigest()
+    return (
+        term.name,
+        term.weight,
+        None
+        if portable
+        else getattr(term.callback, "__qualname__", type(term.callback).__name__),
+        None if portable else code,
+        term.identity,
+    )

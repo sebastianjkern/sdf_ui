@@ -157,6 +157,13 @@ class Tensor:
             seed = _array(grad, "gradient")
             if seed.shape != self.shape:
                 raise ValueError("gradient shape must match output shape")
+        order = self._topological_order()
+        adjoints = self._propagate_gradients(order, seed)
+        updates = self._validated_gradient_updates(adjoints)
+        for node, contribution in updates.items():
+            node.grad = contribution
+
+    def _topological_order(self):
         order = []
         visited = set()
         pending = [(self, False)]
@@ -168,34 +175,41 @@ class Tensor:
                 visited.add(node)
                 pending.append((node, True))
                 pending.extend((p, False) for p in node._parents if p.requires_grad)
+
+        return order
+
+    def _propagate_gradients(self, order, seed):
         adjoints = {self: seed}
         with np.errstate(all="ignore"):
             for node in reversed(order):
                 upstream = adjoints.get(node)
                 if upstream is None or node._pullback is None:
                     continue
-                contributions = node._pullback(upstream)
-                for parent, contribution in zip(node._parents, contributions):
-                    if not parent.requires_grad or contribution is None:
-                        continue
-                    contribution = _finite(contribution, "gradient")
-                    if contribution.shape != parent.shape:
-                        raise RuntimeError("internal gradient shape mismatch")
-                    if parent in adjoints:
-                        contribution = _finite(
-                            adjoints[parent] + contribution, "gradient"
-                        )
-                    adjoints[parent] = contribution
-            updates = {}
-            for node, contribution in adjoints.items():
-                if node.grad is not None:
-                    previous = _array(node.grad, "existing gradient")
-                    if previous.shape != node.shape:
-                        raise ValueError("existing gradient shape mismatch")
-                    contribution = previous + contribution
-                updates[node] = _finite(contribution, "accumulated gradient").copy()
-        for node, contribution in updates.items():
-            node.grad = contribution
+                self._accumulate_parent_gradients(node, upstream, adjoints)
+        return adjoints
+
+    @staticmethod
+    def _validated_gradient_updates(adjoints):
+        updates = {}
+        for node, contribution in adjoints.items():
+            if node.grad is not None:
+                previous = _array(node.grad, "existing gradient")
+                if previous.shape != node.shape:
+                    raise ValueError("existing gradient shape mismatch")
+                contribution = previous + contribution
+            updates[node] = _finite(contribution, "accumulated gradient").copy()
+        return updates
+
+    def _accumulate_parent_gradients(self, node, upstream, adjoints):
+        for parent, contribution in zip(node._parents, node._pullback(upstream)):
+            if not parent.requires_grad or contribution is None:
+                continue
+            contribution = _finite(contribution, "gradient")
+            if contribution.shape != parent.shape:
+                raise RuntimeError("internal gradient shape mismatch")
+            if parent in adjoints:
+                contribution = _finite(adjoints[parent] + contribution, "gradient")
+            adjoints[parent] = contribution
 
     def _binary(self, other: Any, forward: Callable, derivative: Callable) -> "Tensor":
         other = as_tensor(other)

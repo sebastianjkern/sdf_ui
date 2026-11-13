@@ -1,7 +1,7 @@
 """Scalar dual arithmetic shared by native GLSL derivative kernels."""
 
-from .dual_glsl import PRELUDE
 from ..base import shape_size
+from .dual_glsl import PRELUDE
 
 
 def derivative_source(contract, body):
@@ -11,56 +11,14 @@ def derivative_source(contract, body):
         int(shape_size(argument.shape)) for argument in contract.parameters
     ]
     count = sum(parameter_sizes)
-    output_components = [
-        (i, channel)
-        for i, arg in enumerate(contract.outputs)
-        for channel in range(int(shape_size(arg.shape)))
-    ]
-    declarations, reads, macros = [], [], []
-    for index, argument in enumerate(contract.inputs):
-        format_ = "r32f" if not argument.shape else "rgba32f"
-        declarations.append(
-            f"layout({format_},binding={index}) readonly uniform image2D source{index};"
-        )
-        reads.append(f"if(which=={index}) return imageLoad(source{index},p)[channel];")
-    offset = 0
-    for argument, n in zip(contract.parameters, parameter_sizes):
-        name = "U_" + argument.name
-        if len(argument.shape) == 1 and argument.kind == "float":
-            macros.append(f"#define {name}(i) dp({offset}+(i))")
-        elif n == 1:
-            macros.append(f"#define {name} dp({offset})")
-        else:
-            macros.append(
-                f"#define {name} D{n}("
-                + ",".join(f"dp({offset + i})" for i in range(n))
-                + ")"
-            )
-        offset += n
-    zero_indices = []
-    offset = 0
-    for argument, n in zip(contract.parameters, parameter_sizes):
-        if argument.name in contract.zero_gradient_parameters:
-            zero_indices.extend(range(offset, offset + n))
-        offset += n
-    zero_check = " || ".join(f"i=={i}" for i in zero_indices) or "false"
-    zero_parameter = " || ".join(f"parameter=={i}" for i in zero_indices) or "false"
-    seeds = "\n".join(
-        f"upstream[{j}]=uintBitsToFloat(adjoints[outputOffsets[{i}]+pixel*{shape_size(contract.outputs[i].shape)}+{channel}]);"
-        for j, (i, channel) in enumerate(output_components)
-    )
-    weighted = (
-        "+".join(
-            f"(upstream[{i}]==0.0?0.0:outv[{i}].d*upstream[{i}])"
-            for i in range(len(output_components))
-        )
-        or "0.0"
-    )
+    output_components = _output_components(contract)
+    declarations, reads = _input_declarations(contract)
+    macros = _parameter_macros(contract, parameter_sizes)
+    zero_check, zero_parameter = _zero_gradient_conditions(contract, parameter_sizes)
+    seeds = _output_seed_code(contract, output_components)
+    weighted = _weighted_outputs(len(output_components))
     input_channels = ",".join(str(c) for c in channels) if channels else "1"
-    any_upstream = (
-        " || ".join(f"upstream[{i}]!=0.0" for i in range(len(output_components)))
-        or "false"
-    )
+    any_upstream = _any_upstream(len(output_components))
     return (
         "#version 430\n"
         + PRELUDE
@@ -150,6 +108,73 @@ void main() {{
 }}
 """
     )
+
+
+def _output_components(contract):
+    return [
+        (index, channel)
+        for index, argument in enumerate(contract.outputs)
+        for channel in range(int(shape_size(argument.shape)))
+    ]
+
+
+def _input_declarations(contract):
+    declarations, reads = [], []
+    for index, argument in enumerate(contract.inputs):
+        format_ = "r32f" if not argument.shape else "rgba32f"
+        declarations.append(
+            f"layout({format_},binding={index}) readonly uniform image2D source{index};"
+        )
+        reads.append(f"if(which=={index}) return imageLoad(source{index},p)[channel];")
+    return declarations, reads
+
+
+def _parameter_macros(contract, parameter_sizes):
+    macros = []
+    offset = 0
+    for argument, size in zip(contract.parameters, parameter_sizes):
+        name = "U_" + argument.name
+        if len(argument.shape) == 1 and argument.kind == "float":
+            macros.append(f"#define {name}(i) dp({offset}+(i))")
+        elif size == 1:
+            macros.append(f"#define {name} dp({offset})")
+        else:
+            values = ",".join(f"dp({offset + index})" for index in range(size))
+            macros.append(f"#define {name} D{size}({values})")
+        offset += size
+    return macros
+
+
+def _zero_gradient_conditions(contract, parameter_sizes):
+    indices, offset = [], 0
+    for argument, size in zip(contract.parameters, parameter_sizes):
+        if argument.name in contract.zero_gradient_parameters:
+            indices.extend(range(offset, offset + size))
+        offset += size
+    index_test = " || ".join(f"i=={index}" for index in indices) or "false"
+    parameter_test = " || ".join(f"parameter=={index}" for index in indices) or "false"
+    return index_test, parameter_test
+
+
+def _output_seed_code(contract, output_components):
+    return "\n".join(
+        f"upstream[{slot}]=uintBitsToFloat(adjoints[outputOffsets[{index}]+pixel*{shape_size(contract.outputs[index].shape)}+{channel}]);"
+        for slot, (index, channel) in enumerate(output_components)
+    )
+
+
+def _weighted_outputs(count):
+    return (
+        "+".join(
+            f"(upstream[{index}]==0.0?0.0:outv[{index}].d*upstream[{index}])"
+            for index in range(count)
+        )
+        or "0.0"
+    )
+
+
+def _any_upstream(count):
+    return " || ".join(f"upstream[{index}]!=0.0" for index in range(count)) or "false"
 
 
 REDUCE = r"""#version 430

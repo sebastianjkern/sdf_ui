@@ -419,11 +419,7 @@ class PolicyGradientTrainer:
 
         return self.collect_episode(rollout)
 
-    def update(self, episodes):
-        """Consume a batch of fresh episodes and return scalar metrics."""
-        episodes = list(episodes)
-        if not episodes:
-            raise ValueError("An update requires at least one episode")
+    def _batch_data(self, episodes):
         signature = self.policy._signature()
         returns = []
         log_probs = []
@@ -436,6 +432,14 @@ class PolicyGradientTrainer:
             for transition in episode.transitions:
                 _scalar(transition.log_prob, "log probability")
                 log_probs.append(transition.log_prob)
+        return returns, log_probs
+
+    def update(self, episodes):
+        """Consume a batch of fresh episodes and return scalar metrics."""
+        episodes = list(episodes)
+        if not episodes:
+            raise ValueError("An update requires at least one episode")
+        returns, log_probs = self._batch_data(episodes)
         returns = np.asarray(returns)
         baseline = float(returns.mean()) if len(returns) > 1 else self.baseline
         advantages = returns - baseline

@@ -208,47 +208,8 @@ class _GPUOptimizer(_Optimizer):
     def load_state_dict(self, state):
         """Validate and stage all settings/state before replacing live buffers."""
         self._check_open()
-        if (
-            not isinstance(state, Mapping)
-            or type(state.get("format_version")) is not int
-            or state["format_version"] != 1
-            or state.get("type") != type(self).__name__
-            or state.get("parameters")
-            != {p.name: list(p.shape) for p in self.parameters}
-        ):
-            raise ValueError("incompatible optimizer state or parameters")
-        config = self._validate_config(state.get("hyperparameters"))
-        entries = state.get("state")
-        if not isinstance(entries, Mapping):
-            raise ValueError("invalid optimizer buffers")
-        parameters = {
-            p.name: (p, span) for p, span in zip(self.parameters, self._slices)
-        }
-        data = np.zeros(self._count, dtype=_SLOT)
-        for name, entry in entries.items():
-            if name not in parameters or not isinstance(entry, Mapping):
-                raise ValueError("invalid optimizer parameter state")
-            p, span = parameters[name]
-            if not p.size:
-                # JSON lists lose trailing dimensions after a zero-length axis;
-                # the parameter schema above supplies those dimensions.
-                entry = dict(entry)
-                for key in ("momentum_buffer", "exp_avg", "exp_avg_sq"):
-                    if key in entry:
-                        value = _array(entry[key], key)
-                        if not value.size:
-                            entry[key] = value.reshape(p.shape)
-            checked = self._validate_entry(entry, p.shape)
-            if isinstance(self, GPUAdam):
-                if checked["step"] > _MAX_STEP:
-                    raise ValueError("Adam step exceeds GPU counter range")
-                data["step"][span] = checked["step"]
-                fields = (("m", "exp_avg"), ("v", "exp_avg_sq"))
-            else:
-                data["step"][span] = 1
-                fields = (("m", "momentum_buffer"),)
-            for field, key in fields:
-                data[field][span][: p.size] = _f32(checked[key], key).reshape(-1)
+        config, entries = self._validated_state_header(state)
+        data = self._stage_state_data(entries)
         # Allocate/upload before touching the live state, including on GL errors.
         replacement = self._ctx.buffer(data.tobytes())
         old = self._current
@@ -257,6 +218,62 @@ class _GPUOptimizer(_Optimizer):
         for name, value in config.items():
             setattr(self, name, value)
         old.release()
+
+    def _validated_state_header(self, state):
+        expected = {parameter.name: list(parameter.shape) for parameter in self.parameters}
+        if (
+            not isinstance(state, Mapping)
+            or type(state.get("format_version")) is not int
+            or state["format_version"] != 1
+            or state.get("type") != type(self).__name__
+            or state.get("parameters") != expected
+        ):
+            raise ValueError("incompatible optimizer state or parameters")
+        config = self._validate_config(state.get("hyperparameters"))
+        entries = state.get("state")
+        if not isinstance(entries, Mapping):
+            raise ValueError("invalid optimizer buffers")
+        return config, entries
+
+    def _stage_state_data(self, entries):
+        parameters = {
+            parameter.name: (parameter, span)
+            for parameter, span in zip(self.parameters, self._slices)
+        }
+        data = np.zeros(self._count, dtype=_SLOT)
+        for name, entry in entries.items():
+            self._stage_parameter_state(data, name, entry, parameters)
+        return data
+
+    def _stage_parameter_state(self, data, name, entry, parameters):
+        if name not in parameters or not isinstance(entry, Mapping):
+            raise ValueError("invalid optimizer parameter state")
+        parameter, span = parameters[name]
+        checked = self._validate_entry(self._restore_empty_shapes(entry, parameter), parameter.shape)
+        if isinstance(self, GPUAdam):
+            if checked["step"] > _MAX_STEP:
+                raise ValueError("Adam step exceeds GPU counter range")
+            data["step"][span] = checked["step"]
+            fields = (("m", "exp_avg"), ("v", "exp_avg_sq"))
+        else:
+            data["step"][span] = 1
+            fields = (("m", "momentum_buffer"),)
+        for field, key in fields:
+            data[field][span][: parameter.size] = _f32(checked[key], key).reshape(-1)
+
+    @staticmethod
+    def _restore_empty_shapes(entry, parameter):
+        if parameter.size:
+            return entry
+        # JSON lists lose trailing dimensions after a zero-length axis; the
+        # parameter schema supplies those dimensions.
+        restored = dict(entry)
+        for key in ("momentum_buffer", "exp_avg", "exp_avg_sq"):
+            if key in restored:
+                value = _array(restored[key], key)
+                if not value.size:
+                    restored[key] = value.reshape(parameter.shape)
+        return restored
 
     def close(self):
         """Release owned buffers/program, leaving the caller's context alive."""

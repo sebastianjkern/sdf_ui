@@ -404,6 +404,23 @@ void main(){{ivec2 size=imageSize(sourceImage);int n=int(gl_GlobalInvocationID.x
 
     def forward(self, name, inputs=None, params=None, size=None):
         contract = self.contract(name)
+        inputs, size = self._validate_forward_request(name, contract, inputs, size)
+        uniforms = self.uniforms(name, params)
+        program = self._program(name)
+        outputs = tuple(
+            self.allocate(size, shape_size(arg.shape)) for arg in contract.outputs
+        )
+        try:
+            self._bind_forward_images(program, contract, inputs, outputs)
+            self._write_forward_uniforms(program, contract, uniforms)
+            self._dispatch_forward(name, program, size)
+        except Exception:
+            for image in outputs:
+                image.close()
+            raise
+        return outputs
+
+    def _validate_forward_request(self, name, contract, inputs, size):
         inputs = {} if inputs is None else dict(inputs)
         if set(inputs) != {argument.name for argument in contract.inputs}:
             raise ValueError(f"Shader '{name}' input names differ from its contract")
@@ -412,62 +429,58 @@ void main(){{ivec2 size=imageSize(sourceImage);int n=int(gl_GlobalInvocationID.x
                 next(iter(inputs.values())).size if inputs else tuple(self.canvas.size)
             )
         size = tuple(size)
-        if len(size) != 2 or any(int(v) != v or v <= 0 for v in size):
+        if len(size) != 2 or any(int(value) != value or value <= 0 for value in size):
             raise ValueError("GPU image size must be two positive integers")
+        self._validate_forward_inputs(name, contract, inputs, size)
+        return inputs, size
+
+    def _validate_forward_inputs(self, name, contract, inputs, size):
         for argument in contract.inputs:
             image = inputs[argument.name]
-            if (
-                image.closed
-                or image.backend.ctx is not self.ctx
-                or image.size != size
-                or image.channels != shape_size(argument.shape)
-            ):
+            if image.closed or image.backend.ctx is not self.ctx or image.size != size:
                 raise ValueError(f"Incompatible GPU input image '{argument.name}'")
-        uniforms = self.uniforms(name, params)
-        program = self._program(name)
-        outputs = []
-        try:
-            for argument in contract.outputs:
-                outputs.append(self.allocate(size, shape_size(argument.shape)))
-            # Bind by the locations declared in the original shader rather than
-            # assuming outputs precede inputs (masked union is multi-output).
-            location = 0
-            for argument, image in zip(contract.outputs, outputs):
-                image.texture.bind_to_image(location, read=False, write=True)
-                _set(program, argument.name, location)
-                location += 1
-            for argument in contract.inputs:
-                inputs[argument.name].texture.bind_to_image(
-                    location, read=True, write=False
-                )
-                _set(program, argument.name, location)
-                location += 1
-            for argument in contract.parameters:
-                value = uniforms[argument.name]
-                if argument.name in program:
-                    if argument.kind in {"int", "bool"}:
-                        if np.any(value != np.trunc(value)) or (
-                            argument.kind == "bool"
-                            and not np.all((value == 0) | (value == 1))
-                        ):
-                            raise ValueError(
-                                "Integer/boolean shader uniforms must contain exact control values"
-                            )
-                        value = value.astype(np.int32)
-                    program[argument.name].write(value.tobytes())
-            local_x, local_y, _ = self._forward_local_size[name]
-            program.run(
-                (size[0] + local_x - 1) // local_x,
-                (size[1] + local_y - 1) // local_y,
-                1,
+            if image.channels != shape_size(argument.shape):
+                raise ValueError(f"Incompatible GPU input image '{argument.name}'")
+
+    @staticmethod
+    def _bind_forward_images(program, contract, inputs, outputs):
+        location = 0
+        for argument, image in zip(contract.outputs, outputs):
+            image.texture.bind_to_image(location, read=False, write=True)
+            _set(program, argument.name, location)
+            location += 1
+        for argument in contract.inputs:
+            inputs[argument.name].texture.bind_to_image(
+                location, read=True, write=False
             )
-            self.ctx.memory_barrier()
-            self.stats["forward_dispatches"] += 1
-        except Exception:
-            for image in outputs:
-                image.close()
-            raise
-        return tuple(outputs)
+            _set(program, argument.name, location)
+            location += 1
+
+    @staticmethod
+    def _write_forward_uniforms(program, contract, uniforms):
+        for argument in contract.parameters:
+            if argument.name not in program:
+                continue
+            value = uniforms[argument.name]
+            if argument.kind in {"int", "bool"}:
+                if np.any(value != np.trunc(value)) or (
+                    argument.kind == "bool" and not np.all((value == 0) | (value == 1))
+                ):
+                    raise ValueError(
+                        "Integer/boolean shader uniforms must contain exact control values"
+                    )
+                value = value.astype(np.int32)
+            program[argument.name].write(value.tobytes())
+
+    def _dispatch_forward(self, name, program, size):
+        local_x, local_y, _ = self._forward_local_size[name]
+        program.run(
+            (size[0] + local_x - 1) // local_x,
+            (size[1] + local_y - 1) // local_y,
+            1,
+        )
+        self.ctx.memory_barrier()
+        self.stats["forward_dispatches"] += 1
 
     def clear_status(self):
         self.status.clear()
@@ -548,39 +561,21 @@ void main(){{ivec2 size=imageSize(sourceImage);int n=int(gl_GlobalInvocationID.x
     def vjp(self, name, inputs, params, output_gradients):
         """Standalone GPU VJP with explicit image upload/readback for checking."""
         contract = self.contract(name)
-        images, outputs = {}, ()
+        images = {}
+        outputs = ()
         buffers = []
         try:
-            for key, value in inputs.items():
-                images[key] = self.upload(
-                    value.numpy() if hasattr(value, "numpy") else value
-                )
+            self._upload_vjp_inputs(inputs, images)
             outputs = self.forward(name, images, params)
-            offset, input_offsets, output_offsets = 0, [], []
-            for argument in contract.inputs:
-                input_offsets.append(offset)
-                offset += int(np.prod(images[argument.name].shape))
-            for image in outputs:
-                output_offsets.append(offset)
-                offset += int(np.prod(image.shape))
+            input_offsets, output_offsets, offset = self._vjp_offsets(
+                contract, images, outputs
+            )
             adjoints = self.ctx.buffer(reserve=offset * 4)
             buffers.append(adjoints)
             adjoints.clear()
-            if isinstance(output_gradients, Mapping):
-                seeds = [output_gradients[a.name] for a in contract.outputs]
-            else:
-                seeds = (
-                    [output_gradients] if len(outputs) == 1 else list(output_gradients)
-                )
-            if len(seeds) != len(outputs):
-                raise ValueError("A seed is required for each shader output")
-            for seed, image, base in zip(seeds, outputs, output_offsets):
-                seed = np.asarray(seed, dtype=np.float32)
-                if seed.shape != image.shape or not np.all(np.isfinite(seed)):
-                    raise ValueError(
-                        "Upstream gradients must be finite and match output shapes"
-                    )
-                adjoints.write(np.ascontiguousarray(seed).tobytes(), offset=base * 4)
+            self._seed_vjp_outputs(
+                contract, outputs, output_gradients, output_offsets, adjoints
+            )
             n = sum(shape_size(a.shape) for a in contract.parameters)
             gradients = self.ctx.buffer(reserve=max(4, n * 4))
             buffers.append(gradients)
@@ -590,28 +585,67 @@ void main(){{ivec2 size=imageSize(sourceImage);int n=int(gl_GlobalInvocationID.x
                 name, images, params, adjoints, input_offsets, output_offsets, gradients
             )
             self.check_status()
-            raw = np.frombuffer(adjoints.read(), dtype=np.float32)
-            self.stats["image_readbacks"] += 1
-            input_grads = {
-                a.name: raw[base : base + int(np.prod(images[a.name].shape))].reshape(
-                    images[a.name].shape
-                )
-                for a, base in zip(contract.inputs, input_offsets)
-            }
-            raw = np.frombuffer(gradients.read(), dtype=np.float32)
-            parameter_grads, base = {}, 0
-            for argument in contract.parameters:
-                count = shape_size(argument.shape)
-                parameter_grads[argument.name] = raw[base : base + count].reshape(
-                    argument.shape
-                )
-                base += count
-            return ShaderGradients(input_grads, parameter_grads)
+            return self._read_vjp_gradients(
+                contract, images, input_offsets, adjoints, gradients
+            )
         finally:
             for image in (*images.values(), *outputs):
                 image.close()
             for buffer in buffers:
                 buffer.release()
+
+    def _upload_vjp_inputs(self, inputs, images):
+        for key, value in inputs.items():
+            images[key] = self.upload(
+                value.numpy() if hasattr(value, "numpy") else value
+            )
+
+    @staticmethod
+    def _vjp_offsets(contract, images, outputs):
+        input_offsets, output_offsets = [], []
+        offset = 0
+        for argument in contract.inputs:
+            input_offsets.append(offset)
+            offset += int(np.prod(images[argument.name].shape))
+        for image in outputs:
+            output_offsets.append(offset)
+            offset += int(np.prod(image.shape))
+        return input_offsets, output_offsets, offset
+
+    @staticmethod
+    def _seed_vjp_outputs(contract, outputs, output_gradients, offsets, adjoints):
+        if isinstance(output_gradients, Mapping):
+            seeds = [output_gradients[arg.name] for arg in contract.outputs]
+        else:
+            seeds = [output_gradients] if len(outputs) == 1 else list(output_gradients)
+        if len(seeds) != len(outputs):
+            raise ValueError("A seed is required for each shader output")
+        for seed, image, base in zip(seeds, outputs, offsets):
+            seed = np.asarray(seed, dtype=np.float32)
+            if seed.shape != image.shape or not np.all(np.isfinite(seed)):
+                raise ValueError(
+                    "Upstream gradients must be finite and match output shapes"
+                )
+            adjoints.write(np.ascontiguousarray(seed).tobytes(), offset=base * 4)
+
+    def _read_vjp_gradients(self, contract, images, input_offsets, adjoints, gradients):
+        raw = np.frombuffer(adjoints.read(), dtype=np.float32)
+        self.stats["image_readbacks"] += 1
+        input_grads = {
+            argument.name: raw[
+                base : base + int(np.prod(images[argument.name].shape))
+            ].reshape(images[argument.name].shape)
+            for argument, base in zip(contract.inputs, input_offsets)
+        }
+        raw = np.frombuffer(gradients.read(), dtype=np.float32)
+        parameter_grads, base = {}, 0
+        for argument in contract.parameters:
+            count = shape_size(argument.shape)
+            parameter_grads[argument.name] = raw[base : base + count].reshape(
+                argument.shape
+            )
+            base += count
+        return ShaderGradients(input_grads, parameter_grads)
 
     def close(self):
         if not self.closed:

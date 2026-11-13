@@ -16,9 +16,9 @@ from typing import Callable, Mapping, Optional, Tuple
 
 import numpy as np
 
-from ..core.expressions import Expr
 from ..backends.opengl.nodes.base import ShaderFile
 from ..backends.opengl.nodes.registry import registry
+from ..core.expressions import Expr
 from ..core.texture import MultiOutputResult, TextureNode
 from ..learning.autodiff import Tensor
 from ..learning.render import DifferentiableRenderer, _tensor
@@ -109,6 +109,18 @@ def _fixed_integer(value, name, minimum=0):
     return int(value)
 
 
+def _validate_transform_params(name, params):
+    if name == "scale":
+        factor = _tensor(params["factor"]).item()
+        if not np.isfinite(factor) or abs(factor) < 1e-12:
+            raise ValueError("scale factor must be finite and non-zero")
+    if name == "skew":
+        x, y = params["skew"]
+        determinant = _tensor(1 - x * y).item()
+        if not np.isfinite(determinant) or abs(determinant) < 1e-12:
+            raise ValueError("skew values produce a singular transform")
+
+
 _COLOR_UNIFORMS = frozenset(
     {
         "color",
@@ -141,26 +153,41 @@ class _Lowerer:
 
     def signature(self, value):
         if isinstance(value, Expr):
-            if value.op == "param":
-                self.parameter_names.add(value.args[0])
-                if value.args[1] is None:
-                    self.required_parameters.add(value.args[0])
-            return ("expr", value.op, self.signature(value.args))
+            return self._expression_signature(value)
         if isinstance(value, Tensor):
-            name = getattr(value, "name", None)
-            if name is not None:
-                self.parameter_names.add(name)
-            self.parameter_names.update(p.name for p in value._versions)
-            return ("tensor", name, value.shape)
+            return self._tensor_signature(value)
         if isinstance(value, Mapping):
-            return tuple(
-                (key, self.signature(val)) for key, val in sorted(value.items())
-            )
+            return self._mapping_signature(value)
         if isinstance(value, (tuple, list)):
-            return tuple(self.signature(item) for item in value)
+            return self._sequence_signature(value)
         if isinstance(value, np.ndarray):
-            return ("array", value.dtype.str, value.shape, value.tobytes().hex())
+            return self._array_signature(value)
         return value
+
+    def _expression_signature(self, value):
+        if value.op == "param":
+            name, default = value.args
+            self.parameter_names.add(name)
+            if default is None:
+                self.required_parameters.add(name)
+        return "expr", value.op, self.signature(value.args)
+
+    def _tensor_signature(self, value):
+        name = getattr(value, "name", None)
+        if name is not None:
+            self.parameter_names.add(name)
+        self.parameter_names.update(parameter.name for parameter in value._versions)
+        return "tensor", name, value.shape
+
+    def _mapping_signature(self, value):
+        return tuple((key, self.signature(item)) for key, item in sorted(value.items()))
+
+    def _sequence_signature(self, value):
+        return tuple(self.signature(item) for item in value)
+
+    @staticmethod
+    def _array_signature(value):
+        return "array", value.dtype.str, value.shape, value.tobytes().hex()
 
     def emit(self, shader, inputs=None, uniforms=None, mode=None):
         descriptor = self.shaders[shader] if isinstance(shader, str) else shader
@@ -169,6 +196,13 @@ class _Lowerer:
             raise ValueError(
                 f"Shader '{descriptor.name}' has no differentiation contract"
             )
+        ordered = self._ordered_shader_inputs(descriptor, contract, inputs)
+        index = len(self.passes)
+        self.passes.append(Pass(descriptor, ordered, uniforms or (lambda resolve: {})))
+        return self._output_ports(index, contract.outputs, mode)
+
+    @staticmethod
+    def _ordered_shader_inputs(descriptor, contract, inputs):
         inputs = {} if inputs is None else inputs
         expected = tuple(argument.name for argument in contract.inputs)
         if set(inputs) != set(expected):
@@ -182,16 +216,18 @@ class _Lowerer:
                 raise ValueError(
                     f"Shader '{descriptor.name}' input '{argument.name}' requires {kind}"
                 )
-        index = len(self.passes)
-        self.passes.append(Pass(descriptor, ordered, uniforms or (lambda resolve: {})))
+        return ordered
+
+    @staticmethod
+    def _output_ports(index, outputs, mode):
         return tuple(
             Port(
                 index,
-                i,
-                "sdf" if arg.kind == "r32f" else "color",
-                None if arg.kind == "r32f" else mode or "LAB",
+                output_index,
+                "sdf" if argument.kind == "r32f" else "color",
+                None if argument.kind == "r32f" else mode or "LAB",
             )
-            for i, arg in enumerate(contract.outputs)
+            for output_index, argument in enumerate(outputs)
         )
 
     def convert(self, port, mode):
@@ -238,37 +274,63 @@ class _Lowerer:
             raise ValueError(f"Cycle detected in texture graph at '{node.op}'")
         if key in self.memo:
             return self.memo[key]
-        if getattr(node, "tex", None) is not None:
-            context = getattr(node, "context", None)
-            if getattr(context, "_closed", False) or not callable(
-                getattr(context, "create_graph_backend", None)
-            ):
-                raise ValueError(
-                    "Materialized source textures require a live Canvas context"
-                )
-            if node.kind not in {"sdf", "color"}:
-                raise ValueError(
-                    "Materialized graph sources must be SDF or color textures"
-                )
-            index = len(self.sources)
-            mode = None if node.kind == "sdf" else node.mode
-            self.sources.append(node)
-            port = Port(-index - 1, 0, node.kind, mode)
-            self.memo[key] = port
-            self.structure.append(
-                (
-                    "source",
-                    node.kind,
-                    mode,
-                    node.tex.size,
-                    node.tex.components,
-                    node.tex.dtype,
-                    node.label,
-                )
-            )
-            return port
+        source = self._source_node(node)
+        if source is not None:
+            return source
         self.visiting.add(key)
+        try:
+            result = self._lower_plugin_node(node)
+            self.memo[key] = result
+            return result
+        finally:
+            self.visiting.remove(key)
+
+    def _source_node(self, node):
+        if getattr(node, "tex", None) is None:
+            return None
+        context = getattr(node, "context", None)
+        if getattr(context, "_closed", False) or not callable(
+            getattr(context, "create_graph_backend", None)
+        ):
+            raise ValueError(
+                "Materialized source textures require a live Canvas context"
+            )
+        if node.kind not in {"sdf", "color"}:
+            raise ValueError("Materialized graph sources must be SDF or color textures")
+        index = len(self.sources)
+        mode = None if node.kind == "sdf" else node.mode
+        self.sources.append(node)
+        port = Port(-index - 1, 0, node.kind, mode)
+        self.memo[id(node)] = port
+        self.structure.append(
+            (
+                "source",
+                node.kind,
+                mode,
+                node.tex.size,
+                node.tex.components,
+                node.tex.dtype,
+                node.label,
+            )
+        )
+        return port
+
+    def _lower_plugin_node(self, node):
         plugin = registry.get(node.op)
+        self._validate_plugin_inputs(plugin, node.inputs)
+        inputs = tuple(self.node(value) for value in node.inputs)
+        raw = _snapshot(dict(plugin.defaults or {}, **dict(node.params)))
+        self._record_plugin_structure(plugin, raw)
+
+        def values(resolve):
+            return {key: _resolve(value, resolve) for key, value in raw.items()}
+
+        if plugin.lowering_func is not None:
+            return plugin.lowering_func(self, plugin, inputs, raw, values)
+        return self._lower_shader_node(plugin, inputs, values)
+
+    @staticmethod
+    def _validate_plugin_inputs(plugin, inputs):
         composite = plugin.lowering_func is not None
         if plugin.render_func is not None and not composite:
             raise ValueError(
@@ -281,13 +343,13 @@ class _Lowerer:
             raise ValueError(
                 f"Plugin '{plugin.name}' needs a ShaderFile with known differentiation metadata"
             )
-        if len(node.inputs) != len(plugin.input_kinds):
+        if len(inputs) != len(plugin.input_kinds):
             raise ValueError(f"Plugin '{plugin.name}' has invalid input count")
-        for expected, value in zip(plugin.input_kinds, node.inputs):
+        for expected, value in zip(plugin.input_kinds, inputs):
             if getattr(value, "kind", None) != expected:
                 raise ValueError(f"Plugin '{plugin.name}' requires {expected} inputs")
-        inputs = tuple(self.node(value) for value in node.inputs)
-        raw = _snapshot(dict(plugin.defaults or {}, **dict(node.params)))
+
+    def _record_plugin_structure(self, plugin, raw):
         control_names = {
             "blur": ("base", "n"),
             "blur_9": ("n",),
@@ -301,246 +363,212 @@ class _Lowerer:
             self.topology_controls.append((plugin.name, control_names))
         self.structure.append((plugin.name, self.signature(raw)))
 
-        # Snapshot the parameter *bindings*. Exprs and Tensor leaves stay symbolic.
-        def values(resolve):
-            return {key: _resolve(value, resolve) for key, value in raw.items()}
+    def _lower_shader_node(self, plugin, inputs, values):
+        def uniforms(resolve):
+            params = values(resolve)
+            original = self._normalize_light_background(plugin, params)
+            result = dict(plugin.make_uniforms(params)) if plugin.make_uniforms else {}
+            self._restore_light_background(plugin, original, result)
+            self._normalize_shader_uniforms(result)
+            return result
 
-        if composite:
-            result = plugin.lowering_func(self, plugin, inputs, raw, values)
-        else:
-
-            def uniforms(resolve):
-                p = values(resolve)
-                original = p.get("shade_background")
-                if plugin.name == "light" and isinstance(original, Tensor):
-                    p["shade_background"] = original.item()
-                result = dict(plugin.make_uniforms(p)) if plugin.make_uniforms else {}
-                if plugin.name == "light" and isinstance(original, Tensor):
-                    result["shadeBackground"] = original
-                radius = result.get("corner_radius")
-                if isinstance(radius, Tensor) and radius.shape == ():
-                    result["corner_radius"] = _tensor((radius,) * 4)
-                for name in _COLOR_UNIFORMS.intersection(result):
-                    result[name] = _color(result[name])
-                return result
-
-            if len(plugin.input_uniforms) != len(inputs):
-                raise ValueError(
-                    f"Plugin '{plugin.name}' has invalid shader input bindings"
-                )
-            mode = plugin.mode or next(
-                (p.mode for p in inputs if isinstance(p, Port) and p.mode), "LAB"
+        if len(plugin.input_uniforms) != len(inputs):
+            raise ValueError(
+                f"Plugin '{plugin.name}' has invalid shader input bindings"
             )
-            ports = self.emit(
-                plugin.shader, dict(zip(plugin.input_uniforms, inputs)), uniforms, mode
-            )
-            result = ports[0] if len(ports) == 1 else ports
-        self.memo[key] = result
-        self.visiting.remove(key)
-        return result
+        mode = plugin.mode or next(
+            (port.mode for port in inputs if isinstance(port, Port) and port.mode),
+            "LAB",
+        )
+        ports = self.emit(
+            plugin.shader, dict(zip(plugin.input_uniforms, inputs)), uniforms, mode
+        )
+        return ports[0] if len(ports) == 1 else ports
+
+    @staticmethod
+    def _normalize_light_background(plugin, params):
+        original = params.get("shade_background")
+        if plugin.name == "light" and isinstance(original, Tensor):
+            params["shade_background"] = original.item()
+        return original
+
+    @staticmethod
+    def _restore_light_background(plugin, original, result):
+        if plugin.name == "light" and isinstance(original, Tensor):
+            result["shadeBackground"] = original
+
+    @staticmethod
+    def _normalize_shader_uniforms(result):
+        radius = result.get("corner_radius")
+        if isinstance(radius, Tensor) and radius.shape == ():
+            result["corner_radius"] = _tensor((radius,) * 4)
+        for name in _COLOR_UNIFORMS.intersection(result):
+            result[name] = _color(result[name])
 
     def composite(self, plugin, inputs, raw, values):
         name = plugin.name
-        if name == "output":
-            index = _fixed_integer(raw["index"], "output index")
-            if not isinstance(inputs[0], tuple) or index >= len(inputs[0]):
-                raise ValueError("output index does not select a multi-output port")
-            result = inputs[0][index]
-            if raw["kind"] != result.kind:
-                raise ValueError("output kind does not match selected port")
-            return result
-        if name == "masked_union":
-            return self.emit(
-                "masked_union", dict(zip(("sdf0", "sdf1"), inputs)), mode="RGB"
-            )
-        if name in {"translate", "scale", "rotate", "skew"}:
-
-            def uniforms(resolve):
-                p = values(resolve)
-                if name == "scale":
-                    factor = _tensor(p["factor"]).item()
-                    if not np.isfinite(factor) or abs(factor) < 1e-12:
-                        raise ValueError("scale factor must be finite and non-zero")
-                if name == "skew":
-                    x, y = p["skew"]
-                    det = _tensor(1 - x * y).item()
-                    if not np.isfinite(det) or abs(det) < 1e-12:
-                        raise ValueError("skew values produce a singular transform")
-                return dict(
-                    p,
-                    transform_kind=("translate", "scale", "rotate", "skew").index(name),
+        match name:
+            case "output":
+                return self._composite_output(inputs, raw)
+            case "masked_union":
+                return self.emit(
+                    "masked_union", dict(zip(("sdf0", "sdf1"), inputs)), mode="RGB"
                 )
+            case "translate" | "scale" | "rotate" | "skew":
+                return self._composite_transform(name, inputs, values)
+            case "mask" | "layer_mask" | "alpha_overlay" | "multiply":
+                return self._composite_layer(name, inputs)
+            case "fill_from_texture":
+                return self._composite_fill_texture(inputs, values)
+            case "generate_mask":
+                return self._composite_generated_mask(inputs, values)
+            case "blur" | "blur_9" | "blur_13":
+                return self._composite_blur(name, inputs, raw)
+            case "shadow":
+                return self._composite_shadow(inputs, raw, values)
+            case "radial_gradient":
+                return self._composite_radial_gradient(values)
+            case "linear_gradient":
+                return self._composite_linear_gradient(values)
+            case "convex_polygon" | "diamond" | "rhombus" | "parallelogram" | "ngon":
+                return self.polygon(name, raw, values)
+            case _:
+                raise ValueError(f"Plugin '{name}' needs an explicit shader lowering")
 
-            return self.emit("transform", {"sdf": inputs[0]}, uniforms)[0]
-        if name in {"mask", "layer_mask", "alpha_overlay", "multiply"}:
-            rgb = tuple(self.convert(port, "RGB") for port in inputs)
-            shader, bindings = {
-                "mask": ("layer_mask", ("tex0", "tex1", "mask")),
-                "layer_mask": ("layer_mask", ("tex0", "tex1", "mask")),
-                "alpha_overlay": ("overlay", ("tex1", "tex0")),
-                "multiply": ("multiply", ("mask1", "mask2")),
-            }[name]
-            return self.emit(shader, dict(zip(bindings, rgb)), mode="RGB")[0]
-        if name == "fill_from_texture":
+    def _composite_output(self, inputs, raw):
+        index = _fixed_integer(raw["index"], "output index")
+        if not isinstance(inputs[0], tuple) or index >= len(inputs[0]):
+            raise ValueError("output index does not select a multi-output port")
+        result = inputs[0][index]
+        if raw["kind"] != result.kind:
+            raise ValueError("output kind does not match selected port")
+        return result
 
-            def uniforms(resolve):
-                p = values(resolve)
-                return {"background": _color(p["background"]), "inflate": p["inflate"]}
-
-            return self.emit(
-                "fill_from_texture",
-                {"sdf": inputs[0], "origTex": self.convert(inputs[1], "RGB")},
-                uniforms,
-                "RGB",
-            )[0]
-        if name == "generate_mask":
-
-            def fill_values(resolve):
-                p = values(resolve)
-                return {
-                    "fg_color": p["color1"],
-                    "bg_color": p["color0"],
-                    "inflate": p["inflate"],
-                }
-
-            return self.convert(self.fill(inputs[0], fill_values), "RGB")
-        if name in {"blur_9", "blur_13", "blur"}:
-            if name != "blur":
-                return self.blur(inputs[0], 9 if name == "blur_9" else 13, raw["n"])
-            base = _fixed_integer(raw["base"], "blur base")
-            result = self.blur(
-                self.convert(inputs[0], "RGB"), 13 if base == 13 else 9, raw["n"]
+    def _composite_transform(self, name, inputs, values):
+        def uniforms(resolve):
+            params = values(resolve)
+            _validate_transform_params(name, params)
+            return dict(
+                params,
+                transform_kind=("translate", "scale", "rotate", "skew").index(name),
             )
-            return self.convert(result, inputs[0].mode)
-        if name == "shadow":
 
-            def fill_values(resolve):
-                return {
-                    "fg_color": (0, 0, 0, 1),
-                    "bg_color": (0, 0, 0, 0),
-                    "inflate": values(resolve)["inflate"],
-                }
+        return self.emit("transform", {"sdf": inputs[0]}, uniforms)[0]
 
-            mask = self.convert(self.fill(inputs[0], fill_values), "RGB")
-            blurred = self.blur(mask, 9, raw["distance"])
-            return self.emit(
-                "transparency",
-                {"tex0": blurred},
-                lambda resolve: {"alpha": values(resolve)["transparency"]},
-                "RGB",
-            )[0]
-        if name == "radial_gradient":
-            field = self.emit(
-                "circle",
-                uniforms=lambda resolve: {"offset": values(resolve)["a"], "radius": 0},
-            )[0]
+    def _composite_layer(self, name, inputs):
+        rgb = tuple(self.convert(port, "RGB") for port in inputs)
+        shader, bindings = {
+            "mask": ("layer_mask", ("tex0", "tex1", "mask")),
+            "layer_mask": ("layer_mask", ("tex0", "tex1", "mask")),
+            "alpha_overlay": ("overlay", ("tex1", "tex0")),
+            "multiply": ("multiply", ("mask1", "mask2")),
+        }[name]
+        return self.emit(shader, dict(zip(bindings, rgb)), mode="RGB")[0]
 
-            def fill_values(resolve):
-                p = values(resolve)
-                return {
-                    "fg_color": p["color1"],
-                    "bg_color": p["color2"],
-                    "inner": p["inner"],
-                    "outer": p["outer"],
-                }
+    def _composite_fill_texture(self, inputs, values):
+        def uniforms(resolve):
+            params = values(resolve)
+            return {
+                "background": _color(params["background"]),
+                "inflate": params["inflate"],
+            }
 
-            return self.fill(field, fill_values)
-        if name == "linear_gradient":
+        return self.emit(
+            "fill_from_texture",
+            {"sdf": inputs[0], "origTex": self.convert(inputs[1], "RGB")},
+            uniforms,
+            "RGB",
+        )[0]
 
-            def geometry(resolve):
-                p = values(resolve)
-                a, b = _tensor(p["a"]), _tensor(p["b"])
-                dx, dy = a[0] - b[0], a[1] - b[1]
-                return a, dx, dy
+    def _composite_generated_mask(self, inputs, values):
+        def fill_values(resolve):
+            params = values(resolve)
+            return {
+                "fg_color": params["color1"],
+                "bg_color": params["color0"],
+                "inflate": params["inflate"],
+            }
 
-            def line_uniforms(resolve):
-                a, dx, dy = geometry(resolve)
-                return {
-                    "a": _tensor((a[0] + dx, a[1] - dy)),
-                    "b": _tensor((a[0] - dx, a[1] + dy)),
-                }
+        return self.convert(self.fill(inputs[0], fill_values), "RGB")
 
-            field = self.emit("line", uniforms=line_uniforms)[0]
+    def _composite_blur(self, name, inputs, raw):
+        if name != "blur":
+            return self.blur(inputs[0], 9 if name == "blur_9" else 13, raw["n"])
+        base = _fixed_integer(raw["base"], "blur base")
+        result = self.blur(
+            self.convert(inputs[0], "RGB"), 13 if base == 13 else 9, raw["n"]
+        )
+        return self.convert(result, inputs[0].mode)
 
-            def fill_values(resolve):
-                p = values(resolve)
-                _, dx, dy = geometry(resolve)
-                return {
-                    "fg_color": p["color1"],
-                    "bg_color": p["color2"],
-                    "inner": 0,
-                    "outer": (dx * dx + dy * dy).sqrt(),
-                }
+    def _composite_shadow(self, inputs, raw, values):
+        def fill_values(resolve):
+            return {
+                "fg_color": (0, 0, 0, 1),
+                "bg_color": (0, 0, 0, 0),
+                "inflate": values(resolve)["inflate"],
+            }
 
-            return self.fill(field, fill_values)
-        if name in {"convex_polygon", "diamond", "rhombus", "parallelogram", "ngon"}:
-            return self.polygon(name, raw, values)
-        raise ValueError(f"Plugin '{name}' needs an explicit shader lowering")
+        mask = self.convert(self.fill(inputs[0], fill_values), "RGB")
+        blurred = self.blur(mask, 9, raw["distance"])
+        return self.emit(
+            "transparency",
+            {"tex0": blurred},
+            lambda resolve: {"alpha": values(resolve)["transparency"]},
+            "RGB",
+        )[0]
+
+    def _composite_radial_gradient(self, values):
+        field = self.emit(
+            "circle",
+            uniforms=lambda resolve: {"offset": values(resolve)["a"], "radius": 0},
+        )[0]
+
+        def fill_values(resolve):
+            params = values(resolve)
+            return {
+                "fg_color": params["color1"],
+                "bg_color": params["color2"],
+                "inner": params["inner"],
+                "outer": params["outer"],
+            }
+
+        return self.fill(field, fill_values)
+
+    def _composite_linear_gradient(self, values):
+        def geometry(resolve):
+            params = values(resolve)
+            a, b = _tensor(params["a"]), _tensor(params["b"])
+            dx, dy = a[0] - b[0], a[1] - b[1]
+            return a, dx, dy
+
+        def line_uniforms(resolve):
+            a, dx, dy = geometry(resolve)
+            return {
+                "a": _tensor((a[0] + dx, a[1] - dy)),
+                "b": _tensor((a[0] - dx, a[1] + dy)),
+            }
+
+        field = self.emit("line", uniforms=line_uniforms)[0]
+
+        def fill_values(resolve):
+            params = values(resolve)
+            _, dx, dy = geometry(resolve)
+            return {
+                "fg_color": params["color1"],
+                "bg_color": params["color2"],
+                "inner": 0,
+                "outer": (dx * dx + dy * dy).sqrt(),
+            }
+
+        return self.fill(field, fill_values)
 
     def polygon(self, name, raw, values):
-        if name == "ngon":
-            count = _fixed_integer(raw["sides"], "ngon sides", 3)
-        elif name == "convex_polygon":
-            points = raw["points"]
-            if isinstance(points, Expr):
-                raise ValueError(
-                    "convex_polygon points need a fixed compile-time vertex count"
-                )
-            if isinstance(points, Tensor):
-                count = points.shape[0] if points.shape else 0
-            else:
-                count = len(points)
-            if count < 3:
-                raise ValueError("convex_polygon requires at least 3 points")
-        else:
-            count = 4
+        count = self._polygon_count(name, raw)
 
         def vertices(resolve):
-            p = values(resolve)
-            if name == "convex_polygon":
-                points = _tensor(p["points"])
-            else:
-                cx, cy = _tensor(p["center"])
-                if name in {"diamond", "rhombus"}:
-                    rx, ry = _tensor(p["radii"])
-                    points = (
-                        (cx, cy - ry),
-                        (cx + rx, cy),
-                        (cx, cy + ry),
-                        (cx - rx, cy),
-                    )
-                elif name == "parallelogram":
-                    w, h = _tensor(p["size"]) * 0.5
-                    skew = p["skew"]
-                    points = (
-                        (cx - w + skew, cy - h),
-                        (cx + w + skew, cy - h),
-                        (cx + w - skew, cy + h),
-                        (cx - w - skew, cy + h),
-                    )
-                else:
-                    rotation, radius = _tensor(p["rotation"]), p["radius"]
-                    angles = tuple(
-                        rotation + 2 * np.pi * i / count for i in range(count)
-                    )
-                    points = tuple(
-                        (cx + radius * a.cos(), cy + radius * a.sin()) for a in angles
-                    )
-                points = _tensor(points)
-            if points.shape != (count, 2):
-                raise ValueError(f"{name} points must have shape ({count}, 2)")
-            area = (
-                sum(
-                    points[i, 0] * points[(i + 1) % count, 1]
-                    - points[(i + 1) % count, 0] * points[i, 1]
-                    for i in range(count)
-                )
-                * 0.5
-            )
-            signed_area = area.item()
-            if abs(signed_area) < 1e-9:
-                raise ValueError("convex_polygon points must not be collinear")
-            return points, 1 if signed_area > 0 else -1
+            params = values(resolve)
+            points = self._polygon_vertices(name, params, count)
+            return self._validate_polygon_points(name, points, count)
 
         planes = []
         for index in range(count):
@@ -554,10 +582,87 @@ class _Lowerer:
                 }
 
             planes.append(self.emit("half_plane", uniforms=uniforms)[0])
+        return self._intersect_planes(planes)
+
+    @staticmethod
+    def _polygon_count(name, raw):
+        if name == "ngon":
+            return _fixed_integer(raw["sides"], "ngon sides", 3)
+        if name != "convex_polygon":
+            return 4
+        points = raw["points"]
+        if isinstance(points, Expr):
+            raise ValueError(
+                "convex_polygon points need a fixed compile-time vertex count"
+            )
+        if isinstance(points, Tensor):
+            count = points.shape[0] if points.shape else 0
+        else:
+            count = len(points)
+        if count < 3:
+            raise ValueError("convex_polygon requires at least 3 points")
+        return count
+
+    @staticmethod
+    def _polygon_vertices(name, params, count):
+        if name == "convex_polygon":
+            return _tensor(params["points"])
+        cx, cy = _tensor(params["center"])
+        if name in {"diamond", "rhombus"}:
+            return _diamond_vertices(cx, cy, params["radii"])
+        if name == "parallelogram":
+            return _parallelogram_vertices(cx, cy, params["size"], params["skew"])
+        return _regular_polygon_vertices(cx, cy, params, count)
+
+    @staticmethod
+    def _validate_polygon_points(name, points, count):
+        if points.shape != (count, 2):
+            raise ValueError(f"{name} points must have shape ({count}, 2)")
+        area = (
+            sum(
+                points[index, 0] * points[(index + 1) % count, 1]
+                - points[(index + 1) % count, 0] * points[index, 1]
+                for index in range(count)
+            )
+            * 0.5
+        )
+        signed_area = area.item()
+        if abs(signed_area) < 1e-9:
+            raise ValueError("convex_polygon points must not be collinear")
+        return points, 1 if signed_area > 0 else -1
+
+    def _intersect_planes(self, planes):
         result = planes[0]
         for plane in planes[1:]:
             result = self.emit("intersection", {"sdf0": result, "sdf1": plane})[0]
         return result
+
+
+def _diamond_vertices(cx, cy, radii):
+    rx, ry = _tensor(radii)
+    return _tensor(((cx, cy - ry), (cx + rx, cy), (cx, cy + ry), (cx - rx, cy)))
+
+
+def _parallelogram_vertices(cx, cy, size, skew):
+    w, h = _tensor(size) * 0.5
+    return _tensor(
+        (
+            (cx - w + skew, cy - h),
+            (cx + w + skew, cy - h),
+            (cx + w - skew, cy + h),
+            (cx - w - skew, cy + h),
+        )
+    )
+
+
+def _regular_polygon_vertices(cx, cy, params, count):
+    rotation, radius = _tensor(params["rotation"]), params["radius"]
+    angles = tuple(rotation + 2 * np.pi * i / count for i in range(count))
+    return _tensor(
+        tuple(
+            (cx + radius * angle.cos(), cy + radius * angle.sin()) for angle in angles
+        )
+    )
 
 
 def lower_graph(outputs: Mapping[str, TextureNode]) -> GraphPlan:

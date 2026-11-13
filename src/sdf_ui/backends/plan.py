@@ -21,6 +21,68 @@ def _resolve(value, context, params):
     return value
 
 
+def _display_outputs(canvas, plan, pass_index, contract):
+    outputs = []
+    for argument in contract.outputs:
+        if argument.kind == "r32f":
+            outputs.append(SDFTexture(tex=canvas.r32f(), context=canvas))
+            continue
+        mode = next(
+            (
+                port.mode
+                for port in plan.outputs.values()
+                if port.pass_index == pass_index and port.output_index == len(outputs)
+            ),
+            None,
+        )
+        outputs.append(
+            ColorTexture(tex=canvas.rgba8(), context=canvas, mode=mode or "LAB")
+        )
+    return tuple(outputs)
+
+
+def _bind_display_images(program, outputs, contract, operation, get):
+    location = 0
+    for argument, texture in zip(contract.outputs, outputs):
+        texture.tex.bind_to_image(location, read=False, write=True)
+        if argument.name in program:
+            program[argument.name].value = location
+        location += 1
+    for argument, port in zip(contract.inputs, operation.inputs):
+        get(port).tex.bind_to_image(location, read=True, write=False)
+        if argument.name in program:
+            program[argument.name].value = location
+        location += 1
+
+
+def _write_display_uniforms(program, contract, uniforms):
+    _, defaults = _implementation(contract)
+    for argument in contract.parameters:
+        if argument.name not in program:
+            continue
+        value = uniforms.get(
+            argument.name, defaults.get(argument.name, np.zeros(argument.shape))
+        )
+        if isinstance(value, Tensor):
+            value = value.numpy()
+        dtype = np.int32 if argument.kind in {"int", "bool"} else np.float32
+        data = np.asarray(value, dtype=dtype)
+        if data.shape != argument.shape or not np.all(np.isfinite(data)):
+            raise ValueError(f"Invalid uniform '{argument.name}'")
+        program[argument.name].write(data.tobytes())
+
+
+def _dispatch_display(canvas, operation, program):
+    shader = operation.shader.operation
+    local_x, local_y, _ = shader.workgroup_size(shader.forward_source())
+    program.run(
+        (canvas.size[0] + local_x - 1) // local_x,
+        (canvas.size[1] + local_y - 1) // local_y,
+        1,
+    )
+    canvas._mgl_ctx.memory_barrier()
+
+
 def execute_reference(plan, renderer, sources=None):
     """Evaluate a GraphPlan with the independent analytic CPU oracle."""
     if not isinstance(plan, GraphPlan):
@@ -77,58 +139,11 @@ def execute_display(
     for operation in plan.passes:
         contract = operation.contract
         program = canvas.get_shader(operation.shader.name)
-        outputs = []
-        for argument in contract.outputs:
-            if argument.kind == "r32f":
-                outputs.append(SDFTexture(tex=canvas.r32f(), context=canvas))
-            else:
-                # Select the output mode from the plan's ports where available.
-                mode = next(
-                    (
-                        p.mode
-                        for p in plan.outputs.values()
-                        if p.pass_index == len(results)
-                        and p.output_index == len(outputs)
-                    ),
-                    None,
-                )
-                outputs.append(
-                    ColorTexture(tex=canvas.rgba8(), context=canvas, mode=mode or "LAB")
-                )
-        location = 0
-        for argument, texture in zip(contract.outputs, outputs):
-            texture.tex.bind_to_image(location, read=False, write=True)
-            if argument.name in program:
-                program[argument.name].value = location
-            location += 1
-        for argument, port in zip(contract.inputs, operation.inputs):
-            get(port).tex.bind_to_image(location, read=True, write=False)
-            if argument.name in program:
-                program[argument.name].value = location
-            location += 1
+        outputs = _display_outputs(canvas, plan, len(results), contract)
+        _bind_display_images(program, outputs, contract, operation, get)
         scope = canvas if expression_context is None else expression_context
         uniforms = operation.uniforms(lambda v: _resolve(v, scope, params))
-        _, defaults = _implementation(contract)
-        for argument in contract.parameters:
-            if argument.name not in program:
-                continue
-            value = uniforms.get(
-                argument.name, defaults.get(argument.name, np.zeros(argument.shape))
-            )
-            if isinstance(value, Tensor):
-                value = value.numpy()
-            dtype = np.int32 if argument.kind in {"int", "bool"} else np.float32
-            data = np.asarray(value, dtype=dtype)
-            if data.shape != argument.shape or not np.all(np.isfinite(data)):
-                raise ValueError(f"Invalid uniform '{argument.name}'")
-            program[argument.name].write(data.tobytes())
-        shader = operation.shader.operation
-        local_x, local_y, _ = shader.workgroup_size(shader.forward_source())
-        program.run(
-            (canvas.size[0] + local_x - 1) // local_x,
-            (canvas.size[1] + local_y - 1) // local_y,
-            1,
-        )
-        canvas._mgl_ctx.memory_barrier()
+        _write_display_uniforms(program, contract, uniforms)
+        _dispatch_display(canvas, operation, program)
         results.append(tuple(outputs))
     return {name: get(port) for name, port in plan.outputs.items()}

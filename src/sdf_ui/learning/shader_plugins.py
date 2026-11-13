@@ -88,97 +88,128 @@ def evaluate_plugin(renderer, plugin, inputs, params, input_modes):
     if not supports_plugin(plugin):
         raise ValueError(f"Plugin '{plugin.name}' needs an explicit derivative adapter")
     name = plugin.name
-    if name == "output":
-        index = _integer(params["index"], "output index")
-        return inputs[0][index], input_modes[0][index]
-    if name == "masked_union":
-        result = _shader(
-            renderer, "masked_union", {"sdf0": inputs[0], "sdf1": inputs[1]}
+    match name:
+        case "output":
+            return _output_plugin(inputs, params, input_modes)
+        case "masked_union":
+            return _masked_union_plugin(renderer, inputs)
+        case "translate" | "scale" | "rotate" | "skew":
+            return _transform_plugin(renderer, name, inputs, params)
+        case "mask" | "layer_mask" | "multiply" | "alpha_overlay":
+            return _layer_plugin(renderer, name, inputs, input_modes)
+        case "fill_from_texture":
+            return _fill_texture_plugin(renderer, inputs, params, input_modes)
+        case "blur_9" | "blur_13":
+            base = 9 if name == "blur_9" else 13
+            return _blur(renderer, inputs[0], base, params["n"]), input_modes[0]
+        case "blur":
+            return _iterated_blur_plugin(renderer, inputs, params, input_modes)
+        case "shadow":
+            return _shadow_plugin(renderer, inputs, params)
+        case "radial_gradient":
+            return _radial_gradient_plugin(renderer, params)
+        case "linear_gradient":
+            return _linear_gradient_plugin(renderer, params)
+        case _:
+            return _shader_plugin(renderer, plugin, inputs, params, input_modes)
+
+
+def _output_plugin(inputs, params, input_modes):
+    index = _integer(params["index"], "output index")
+    return inputs[0][index], input_modes[0][index]
+
+
+def _masked_union_plugin(renderer, inputs):
+    result = _shader(renderer, "masked_union", {"sdf0": inputs[0], "sdf1": inputs[1]})
+    return result, (None, "RGB")
+
+
+def _transform_plugin(renderer, name, inputs, params):
+    uniforms = {"transform_kind": ("translate", "scale", "rotate", "skew").index(name)}
+    uniforms.update(params)
+    return _shader(renderer, "transform", {"sdf": inputs[0]}, uniforms), None
+
+
+def _layer_plugin(renderer, name, inputs, input_modes):
+    values = tuple(_rgb(value, mode) for value, mode in zip(inputs, input_modes))
+    if name == "multiply":
+        ports, shader = {"mask1": values[0], "mask2": values[1]}, "multiply"
+    elif name == "alpha_overlay":
+        ports, shader = {"tex1": values[0], "tex0": values[1]}, "overlay"
+    else:
+        ports, shader = (
+            {"tex0": values[0], "tex1": values[1], "mask": values[2]},
+            "layer_mask",
         )
-        return result, (None, "RGB")
-    if name in {"translate", "scale", "rotate", "skew"}:
-        uniforms = {
-            "transform_kind": ("translate", "scale", "rotate", "skew").index(name)
-        }
-        uniforms.update(params)
-        return _shader(renderer, "transform", {"sdf": inputs[0]}, uniforms), None
-    if name in {"mask", "layer_mask", "multiply", "alpha_overlay"}:
-        values = tuple(_rgb(value, mode) for value, mode in zip(inputs, input_modes))
-        if name == "multiply":
-            ports, shader = {"mask1": values[0], "mask2": values[1]}, "multiply"
-        elif name == "alpha_overlay":
-            ports, shader = {"tex1": values[0], "tex0": values[1]}, "overlay"
-        else:
-            ports, shader = (
-                {"tex0": values[0], "tex1": values[1], "mask": values[2]},
-                "layer_mask",
-            )
-        return _shader(renderer, shader, ports), "RGB"
-    if name == "fill_from_texture":
-        return _shader(
-            renderer,
-            "fill_from_texture",
-            {
-                "sdf": inputs[0],
-                "origTex": _rgb(inputs[1], input_modes[1]),
-            },
-            {
-                "inflate": params["inflate"],
-                "background": renderer._color(params["background"]),
-            },
-        ), "RGB"
-    if name in {"blur_9", "blur_13"}:
-        return _blur(
-            renderer, inputs[0], 9 if name == "blur_9" else 13, params["n"]
-        ), input_modes[0]
-    if name == "blur":
-        base = _integer(params["base"], "blur base")
-        base = 13 if base == 13 else 9
-        result = _blur(renderer, _rgb(inputs[0], input_modes[0]), base, params["n"])
-        return (
-            (result, "RGB") if input_modes[0] == "RGB" else (_rgb_to_lab(result), "LAB")
-        )
-    if name == "shadow":
-        mask = _lab_to_rgb(
-            _fill(renderer, inputs[0], (0, 0, 0, 1), (0, 0, 0, 0), params["inflate"])
-        )
-        blurred = _blur(renderer, mask, 9, params["distance"])
-        return _shader(
-            renderer,
-            "transparency",
-            {"tex0": blurred},
-            {"alpha": params["transparency"]},
-        ), "RGB"
-    if name == "radial_gradient":
-        field = _shader(renderer, "circle", {}, {"offset": params["a"], "radius": 0})
-        return _fill(
-            renderer,
-            field,
-            params["color1"],
-            params["color2"],
-            first=params["inner"],
-            second=params["outer"],
-        ), "LAB"
-    if name == "linear_gradient":
-        a, b = _tensor(params["a"]), _tensor(params["b"])
-        dx, dy = a[0] - b[0], a[1] - b[1]
-        field = _shader(
-            renderer,
-            "line",
-            {},
-            {
-                "a": stack((a[0] + dx, a[1] - dy)),
-                "b": stack((a[0] - dx, a[1] + dy)),
-            },
-        )
-        return _fill(
-            renderer,
-            field,
-            params["color1"],
-            params["color2"],
-            first=0,
-            second=(dx * dx + dy * dy).sqrt(),
-        ), "LAB"
+    return _shader(renderer, shader, ports), "RGB"
+
+
+def _fill_texture_plugin(renderer, inputs, params, input_modes):
+    result = _shader(
+        renderer,
+        "fill_from_texture",
+        {"sdf": inputs[0], "origTex": _rgb(inputs[1], input_modes[1])},
+        {
+            "inflate": params["inflate"],
+            "background": renderer._color(params["background"]),
+        },
+    )
+    return result, "RGB"
+
+
+def _iterated_blur_plugin(renderer, inputs, params, input_modes):
+    base = _integer(params["base"], "blur base")
+    base = 13 if base == 13 else 9
+    result = _blur(renderer, _rgb(inputs[0], input_modes[0]), base, params["n"])
+    return (result, "RGB") if input_modes[0] == "RGB" else (_rgb_to_lab(result), "LAB")
+
+
+def _shadow_plugin(renderer, inputs, params):
+    mask = _lab_to_rgb(
+        _fill(renderer, inputs[0], (0, 0, 0, 1), (0, 0, 0, 0), params["inflate"])
+    )
+    blurred = _blur(renderer, mask, 9, params["distance"])
+    return _shader(
+        renderer,
+        "transparency",
+        {"tex0": blurred},
+        {"alpha": params["transparency"]},
+    ), "RGB"
+
+
+def _radial_gradient_plugin(renderer, params):
+    field = _shader(renderer, "circle", {}, {"offset": params["a"], "radius": 0})
+    return _fill(
+        renderer,
+        field,
+        params["color1"],
+        params["color2"],
+        first=params["inner"],
+        second=params["outer"],
+    ), "LAB"
+
+
+def _linear_gradient_plugin(renderer, params):
+    a, b = _tensor(params["a"]), _tensor(params["b"])
+    dx, dy = a[0] - b[0], a[1] - b[1]
+    field = _shader(
+        renderer,
+        "line",
+        {},
+        {"a": stack((a[0] + dx, a[1] - dy)), "b": stack((a[0] - dx, a[1] + dy))},
+    )
+    return _fill(
+        renderer,
+        field,
+        params["color1"],
+        params["color2"],
+        first=0,
+        second=(dx * dx + dy * dy).sqrt(),
+    ), "LAB"
+
+
+def _shader_plugin(renderer, plugin, inputs, params, input_modes):
+    name = plugin.name
     uniform_params = params
     if name == "light" and isinstance(params["shade_background"], Tensor):
         # The display adapter casts this mode to float. Preserve its continuous
