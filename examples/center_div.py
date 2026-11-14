@@ -1,7 +1,7 @@
-"""Animate a learned rounded rectangle moving to the center of a canvas.
+"""Learn a div's offset at one animated frame, then sweep the full motion.
 
 Run with ``uv run python -m examples.center_div --steps 60``. Every optimizer
-step is exported as a PNG before the frames are assembled into a GIF.
+step and every animation frame are exported as PNGs before GIF assembly.
 """
 
 import argparse
@@ -9,7 +9,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-from sdf_ui import Canvas, color, sdf
+from sdf_ui import Canvas, color, param, sdf
 from sdf_ui.learning import Adam, Parameter
 
 
@@ -17,10 +17,15 @@ def create_animation(steps=60, output=Path("out/center_div")):
     width, height = 640, 360
     div_half_size = (90, 56)
     div_size = (div_half_size[0] * 2, div_half_size[1] * 2)
-    center_x = Parameter("center_x", 135.0)
-    center_y = Parameter("center_y", 260.0)
+    training_progress = 0.5
+    offset = Parameter("offset", -180.0)
+    center_x = Parameter(
+        "center_x",
+        0.0,
+        animate=lambda progress: 120 + 400 * progress + offset,
+    )
 
-    div = sdf.rounded_rect((center_x, center_y), div_half_size, 18).fill(
+    div = sdf.rounded_rect((param("center_x"), height / 2), div_half_size, 18).fill(
         "#62bb47", "#14251b"
     )
     scene = color.clear("#111827").over(div).to_rgb()
@@ -31,55 +36,95 @@ def create_animation(steps=60, output=Path("out/center_div")):
     font_path = Path(__file__).parents[1] / "src/sdf_ui/assets/Roboto-Regular.ttf"
     title_font = ImageFont.truetype(str(font_path), 20)
     label_font = ImageFont.truetype(str(font_path), 15)
-    frame_paths = []
+    learning_frame_paths = []
+    motion_frame_paths = []
     losses = []
 
     def loss(graph):
-        del graph  # This objective depends on the layout parameters alone.
-        dx = (center_x - width / 2) / width
-        dy = (center_y - height / 2) / height
-        return dx**2 + dy**2
+        # The animation curve is fixed at this frame; only its learned offset moves.
+        dx = (graph.parameters["center_x"] - width / 2) / width
+        return dx**2
 
     with Canvas((width, height)) as canvas:
         with canvas.compile(
             {"div": div, "image": scene},
-            {"center_x": center_x, "center_y": center_y},
+            {"center_x": center_x, "offset": offset},
         ) as graph:
             optimizer = Adam(graph.trainable_parameters, lr=4.0)
             for step in range(steps):
                 optimizer.zero_grad()
-                with graph.run(loss=loss) as execution:
+                with graph.run(loss=loss, progress=training_progress) as execution:
                     execution.backward()
                     optimizer.step()
 
-                loss_value = ((center_x.item() - width / 2) / width) ** 2 + (
-                    (center_y.item() - height / 2) / height
-                ) ** 2
+                x_value = 120 + 400 * training_progress + offset.item()
+                loss_value = ((x_value - width / 2) / width) ** 2
                 frame_path = frames_dir / f"step_{step:04d}.png"
-                with graph.run() as execution:
+                with graph.run(progress=training_progress) as execution:
                     execution.save("image", frame_path)
                 _annotate_frame(
                     frame_path,
-                    step=step + 1,
-                    x=center_x.item(),
-                    y=center_y.item(),
-                    loss=loss_value,
+                    label=f"step {step + 1:03d}   fit progress {training_progress:.2f}",
+                    detail=f"loss {loss_value:.5f}",
+                    x=x_value,
+                    progress=training_progress,
                     size=(width, height),
                     div_size=div_size,
                     title_font=title_font,
                     label_font=label_font,
                 )
-                frame_paths.append(frame_path)
+                learning_frame_paths.append(frame_path)
                 losses.append(loss_value)
 
+    with Canvas((width, height)) as canvas:
+        with canvas.compile(
+            {"div": div, "image": scene},
+            {"center_x": center_x, "offset": offset},
+        ) as graph:
+            motion_dir = output / "motion"
+            motion_dir.mkdir(parents=True, exist_ok=True)
+            for frame_index in range(steps):
+                progress = frame_index / max(steps - 1, 1)
+                frame_path = motion_dir / f"frame_{frame_index:04d}.png"
+                with graph.run(progress=progress) as execution:
+                    execution.save("image", frame_path)
+                _annotate_frame(
+                    frame_path,
+                    label=f"animation frame {frame_index + 1:03d}/{steps:03d}",
+                    detail=f"progress {progress:.2f}",
+                    x=120 + 400 * progress + offset.item(),
+                    progress=progress,
+                    size=(width, height),
+                    div_size=div_size,
+                    title_font=title_font,
+                    label_font=label_font,
+                )
+                motion_frame_paths.append(frame_path)
+
     gif_path = output / "center_div.gif"
+    motion_gif_path = output / "center_div_motion.gif"
+    _assemble_gif(learning_frame_paths, gif_path)
+    _assemble_gif(motion_frame_paths, motion_gif_path)
+
+    print(
+        f"Saved {len(learning_frame_paths)} learning frames and "
+        f"{len(motion_frame_paths)} motion frames; "
+        f"GIFs: {gif_path}, {motion_gif_path}; "
+        f"center at progress {training_progress:.2f}="
+        f"({120 + 400 * training_progress + offset.item():.1f}, {height / 2:.1f}), "
+        f"loss={losses[-1]:.6f}"
+    )
+    return gif_path
+
+
+def _assemble_gif(frame_paths, path):
     frames = [
-        Image.open(path).convert("P", palette=Image.Palette.ADAPTIVE)
-        for path in frame_paths
+        Image.open(frame_path).convert("P", palette=Image.Palette.ADAPTIVE)
+        for frame_path in frame_paths
     ]
     try:
         frames[0].save(
-            gif_path,
+            path,
             save_all=True,
             append_images=frames[1:],
             duration=80,
@@ -90,21 +135,14 @@ def create_animation(steps=60, output=Path("out/center_div")):
         for frame in frames:
             frame.close()
 
-    print(
-        f"Saved {len(frame_paths)} frames and {gif_path}; "
-        f"center=({center_x.item():.1f}, {center_y.item():.1f}), "
-        f"loss={losses[-1]:.6f}"
-    )
-    return gif_path
-
 
 def _annotate_frame(
     path,
     *,
-    step,
+    label,
+    detail,
     x,
-    y,
-    loss,
+    progress,
     size,
     div_size,
     title_font,
@@ -135,18 +173,17 @@ def _annotate_frame(
         width=2,
     )
 
-    draw.rounded_rectangle((20, 18, 284, 78), radius=12, fill=(10, 16, 28, 220))
-    draw.text((36, 27), "CENTER A DIV", font=title_font, fill=(246, 248, 252))
-    draw.text(
-        (36, 54),
-        f"step {step + 1:03d}   loss {loss:.4f}",
-        font=label_font,
-        fill=(176, 191, 214),
-    )
+    draw.rounded_rectangle((20, 18, 390, 104), radius=12, fill=(10, 16, 28, 220))
+    draw.text((36, 24), "CENTER A DIV", font=title_font, fill=(246, 248, 252))
+    draw.text((36, 49), label, font=label_font, fill=(208, 218, 234))
+    draw.text((36, 74), detail, font=label_font, fill=(176, 191, 214))
 
-    footer = f"center = ({x:5.1f}, {y:5.1f})    target = ({target_x}, {target_y})"
+    footer = (
+        f"center = ({x:5.1f}, {target_y:5.1f})    "
+        f"target = ({target_x}, {target_y})    p={progress:.2f}"
+    )
     draw.rounded_rectangle(
-        (20, height - 48, 355, height - 18), radius=8, fill=(10, 16, 28, 220)
+        (20, height - 48, 435, height - 18), radius=8, fill=(10, 16, 28, 220)
     )
     draw.text((32, height - 42), footer, font=label_font, fill=(230, 236, 246))
 

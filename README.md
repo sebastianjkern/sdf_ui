@@ -160,32 +160,44 @@ with GPU shader gradients and optimizer updates.
 
 ```python
 from sdf_ui import Canvas, sdf
+from sdf_ui import param
 from sdf_ui.learning import Parameter
+from math import pi, sin
 
-radius = Parameter("radius", 4.0)
-scene = sdf.circle((16, 16), radius)
-target = sdf.circle((16, 16), 9.0)
+offset = Parameter("offset", 0.0)
+x = Parameter(
+    "x",
+    0.0,
+    animate=lambda progress: 120 + 80 * sin(progress * 2 * pi) + offset,
+)
+scene = sdf.circle((param("x"), 32), 12)
 
 def loss(graph):
-    prediction = graph[scene].output
-    expected = graph[target].output
-    return ((prediction - expected) ** 2).mean() + 0.01 * (radius - 9) ** 2
+    # x is evaluated at the selected frame; gradients flow to `offset`.
+    return (graph.parameters["x"] - 120) ** 2
 
-with Canvas((32, 32)) as canvas:
-    result = canvas.fit(
-        {"shape": scene, "target": target}, loss=loss, steps=150
-    )
+with Canvas((240, 64)) as canvas:
+    canvas.fit({"shape": scene}, loss, params={"x": x, "offset": offset},
+               progress=0.25, steps=50)
+    scene.save("frame.png", ctx=canvas, params={"x": x}, progress=0.25)
 
-print(radius.item())  # approximately 9
-print(result.final_loss)
+print(offset.item())
 ```
 
-The loss callback receives differentiable layer outputs and the scene's named
-parameters. It can combine image or field losses with arbitrary scalar terms;
-targets are optional. ``graph[scene]`` can reference any layer in the compiled
-scene, including intermediate layers. Accessing ``.output`` reads that layer
-back to a CPU Tensor for Python loss evaluation. For built-in losses that keep
-image data on the GPU, use ``canvas.training`` with an ``Objective``.
+An animated `Parameter` evaluates its callback at the normalized `progress`
+for each render or training step. Its callback value is fixed for that frame
+and is not itself trainable. Captured trainable parameters such as `offset`
+remain differentiable. Inside a custom loss, `graph.parameters` exposes the
+resolved values for the current frame. Set a frame per update with
+`session.step(progress=...)` or `graph.run(..., progress=...)`; a fit call
+uses one selected progress value for all of its steps.
+
+The loss callback also receives differentiable layer outputs. It can combine
+image or field losses with arbitrary scalar terms; targets are optional.
+``graph[scene]`` can reference any layer in the compiled scene, including
+intermediate layers. Accessing ``.output`` reads that layer back to a CPU Tensor
+for Python loss evaluation. For built-in losses that keep image data on the
+GPU, use ``canvas.training`` with an ``Objective``.
 
 The CPU reference backend evaluates a documented subset of the existing render
 operations as floating-point tensors. It has its own per-execution tape and
@@ -197,13 +209,16 @@ See [the learning guide](docs/learning.rst) for geometry optimization, continuou
 and discrete policies, graph training, checkpoints, and runnable
 examples.
 
-The custom-loss API can also drive a layout animation. This example optimizes
-the position of an SDF rounded rectangle and exports a frame after every step:
+The center div example uses an animated `Parameter` for its horizontal sweep
+and trains a separate offset at progress `0.5`. It exports both the learning
+curve at that frame and the final sweep:
 
 ![A rounded rectangle learning to center on the canvas](docs/assets/examples/center_div.gif)
 
+![The learned div sweeping across the canvas](docs/assets/examples/center_div_motion.gif)
+
 Run it with `uv run python -m examples.center_div --steps 60`; the script saves
-the GIF and individual PNG frames under `out/center_div/`. See
+both GIFs and individual PNG frames under `out/center_div/`. See
 [the example source](examples/center_div.py).
 
 For a larger procedural layout example, run

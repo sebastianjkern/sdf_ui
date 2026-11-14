@@ -228,6 +228,7 @@ class Context:
         self._image_generation = 0
         self.dispatch_config = DispatchConfig.from_value(dispatch_config)
         self.dispatch_groups = self.dispatch_config.groups_for_size(self.size)
+        self._active_progress = 0.0
         self.adapter = wgpu.gpu.request_adapter_sync(power_preference=power_preference)
         if self.adapter is None:
             raise RuntimeError("No WebGPU adapter is available")
@@ -471,6 +472,8 @@ class Context:
         params: dict[str, Any] | None = None,
         cache: dict[Any, Any] | None = None,
         evaluation_rect: tuple[int, int, int, int] | None = None,
+        *,
+        progress: float = 0.0,
     ) -> Any:
         """Render a node, optionally returning a cropped pixel rectangle.
 
@@ -485,6 +488,7 @@ class Context:
             params=params,
             cache=cache,
             evaluation_rect=evaluation_rect,
+            progress=progress,
         ).render(texture)
 
     def session(
@@ -492,6 +496,8 @@ class Context:
         params: dict[str, Any] | None = None,
         cache: dict[Any, Any] | None = None,
         evaluation_rect: tuple[int, int, int, int] | None = None,
+        *,
+        progress: float = 0.0,
     ) -> Renderer:
         from ..core.texture import Renderer
 
@@ -500,6 +506,7 @@ class Context:
             params=params,
             cache=cache,
             evaluation_rect=evaluation_rect,
+            progress=progress,
         )
 
     def compile(
@@ -520,11 +527,23 @@ class Context:
         plan: Any,
         params: dict[str, Any] | None = None,
         evaluation_rect: tuple[int, int, int, int] | None = None,
+        *,
+        progress: float = 0.0,
     ) -> Any:
+        from ..core.expressions import validate_progress
         from .plan import execute_display
 
-        with self._evaluation_scope(evaluation_rect):
-            return execute_display(plan, self, params=params)
+        previous_progress = self._active_progress
+        self._active_progress = validate_progress(progress)
+        try:
+            with self._evaluation_scope(evaluation_rect):
+                return execute_display(plan, self, params=params)
+        finally:
+            self._active_progress = previous_progress
+
+    @property
+    def progress(self):
+        return self._active_progress
 
     @contextmanager
     def _evaluation_scope(self, evaluation_rect):
@@ -565,6 +584,7 @@ class Context:
         params: Any = None,
         size: tuple[int, int] | None = None,
         inputs: Any = None,
+        progress: float | None = None,
     ) -> FitResult:
         """Optimize scene parameters with a custom scalar Tensor loss.
 
@@ -575,12 +595,20 @@ class Context:
         that should avoid pixel readback.
         """
         with self.compile(outputs, params, size=size, inputs=inputs) as graph:
-            return graph.fit(loss, steps=steps, lr=lr)
+            return graph.fit(loss, steps=steps, lr=lr, progress=progress)
 
-    def differentiate(self, texture: Any, params: dict[str, Any] | None = None) -> Any:
+    def differentiate(
+        self,
+        texture: Any,
+        params: dict[str, Any] | None = None,
+        *,
+        progress: float = 0.0,
+    ) -> Any:
         from ..learning.render import DifferentiableRenderer
 
-        return DifferentiableRenderer(self.size, params=params).render(texture)
+        return DifferentiableRenderer(
+            self.size, params=params, progress=progress
+        ).render(texture)
 
     def inspect_graph(self, outputs: Any, params: dict[str, Any] | None = None) -> Any:
         from ..graph.inspection import inspect_graph
@@ -595,9 +623,13 @@ class Context:
         *,
         size: tuple[int, int] | None = None,
         inputs: dict[str, Any] | None = None,
+        progress: float | None = None,
     ) -> Any:
+        graph_inputs = dict(inputs or {})
+        if progress is not None:
+            graph_inputs["progress"] = progress
         with self.compile(
-            {"target": scene}, params=params, size=size, inputs=inputs
+            {"target": scene}, params=params, size=size, inputs=graph_inputs
         ) as graph:
             with graph.snapshot("target") as image:
                 yield image

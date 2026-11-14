@@ -68,6 +68,47 @@ as ``relu(value)``, ``stack(values)``, ``matmul(left, right)``, ``reshape(value,
 shape)``, and ``where(condition, when_true, when_false)`` for composing these
 calculations without method chaining.
 
+Animated parameters
+-------------------
+
+Give a parameter an ``animate`` callback to derive its value from normalized
+frame progress. No timeline object is required; rendering and training calls
+accept ``progress`` in the range ``[0, 1]``::
+
+    from math import pi, sin
+    from sdf_ui import Canvas, param, sdf
+    from sdf_ui.learning import Parameter
+
+    offset = Parameter("offset", 0.0)
+    x = Parameter(
+        "x", 0.0,
+        animate=lambda progress: 120 + 80 * sin(2 * pi * progress) + offset,
+    )
+    scene = sdf.circle((param("x"), 32), 12)
+
+    def loss(graph):
+        return (graph.parameters["x"] - 120) ** 2
+
+    with Canvas((240, 64)) as canvas:
+        canvas.fit(
+            {"shape": scene}, loss,
+            params={"x": x, "offset": offset},
+            progress=0.25,
+            steps=50,
+        )
+        scene.save(
+            "frame.png", ctx=canvas, params={"x": x}, progress=0.25
+        )
+
+An animated parameter is fixed at the value returned for that frame, so the
+callback itself is not optimized. Any trainable ``Parameter`` captured by the
+callback remains in the autodiff graph and can be learned. In a custom graph
+loss, ``graph.parameters`` contains resolved current-frame values; use it when
+the loss needs the animated value. Keep callbacks deterministic and use
+``sdf_ui`` Tensor operations for differentiable work. ``fit`` holds one progress
+value constant across its optimization steps; use ``session.step(progress=...)``
+or ``graph.run(..., progress=...)`` to train one selected frame at a time.
+
 Tensor arithmetic is eager. Rebuild derived tensor computations inside the
 loss callback on every step. Use ``param(...)`` expressions for derived values
 stored in persistent scene or layout descriptions. Reusing a tape after one of

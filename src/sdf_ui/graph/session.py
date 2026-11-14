@@ -104,8 +104,11 @@ class TrainingSession:
         min_delta=0.0,
         restore_best=True,
         validation_interval=1,
+        progress=None,
     ):
         self._check()
+        if progress is not None:
+            self.graph.set_inputs(progress=progress)
         if self.trainer is None:
             self._lr = 0.01 if lr is None else lr
             self.trainer = self._stack.enter_context(
@@ -125,9 +128,23 @@ class TrainingSession:
             validation_interval=validation_interval,
         )
 
-    def evaluate(self):
+    def step(self, *, lr=None, progress=None):
+        """Apply one optimizer update at a fixed animation progress value."""
         self._check()
-        with self.graph.run(self.objective) as execution:
+        if self.trainer is None:
+            self._lr = 0.01 if lr is None else lr
+            self.trainer = self._stack.enter_context(
+                GraphTrainer(self.graph, self.objective, lr=self._lr)
+            )
+        elif lr is not None and lr != self._lr:
+            raise ValueError(
+                "Learning rate is fixed for this session; create another session to change it"
+            )
+        return self.trainer.step(progress=progress)
+
+    def evaluate(self, *, progress=None):
+        self._check()
+        with self.graph.run(self.objective, progress=progress) as execution:
             return {"loss": execution.loss, "terms": dict(execution.metrics)}
 
     def report(self, *, layout=None):

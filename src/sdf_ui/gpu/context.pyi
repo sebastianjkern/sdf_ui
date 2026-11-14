@@ -27,6 +27,7 @@ class DispatchConfig:
 
 class Context:
     size: tuple[int, int]
+    progress: float
     dispatch_config: DispatchConfig
     dispatch_groups: tuple[int, int, int]
     device_info: dict[str, Any]
@@ -99,12 +100,16 @@ class Context:
         params: dict[str, Any] | None = ...,
         cache: dict[Any, Any] | None = ...,
         evaluation_rect: tuple[int, int, int, int] | None = ...,
+        *,
+        progress: float = ...,
     ) -> TextureNode: ...
     def session(
         self,
         params: dict[str, Any] | None = ...,
         cache: dict[Any, Any] | None = ...,
         evaluation_rect: tuple[int, int, int, int] | None = ...,
+        *,
+        progress: float = ...,
     ) -> Renderer: ...
     def compile(
         self,
@@ -119,6 +124,8 @@ class Context:
         plan: Any,
         params: dict[str, Any] | None = ...,
         evaluation_rect: tuple[int, int, int, int] | None = ...,
+        *,
+        progress: float = ...,
     ) -> Any: ...
     def training(
         self,
@@ -138,10 +145,15 @@ class Context:
         params: Mapping[str, Any] | None = ...,
         size: tuple[int, int] | None = ...,
         inputs: Mapping[str, Any] | None = ...,
+        progress: float | None = ...,
     ) -> FitResult: ...
     def create_graph_backend(self) -> Any: ...
     def differentiate(
-        self, texture: Any, params: dict[str, Any] | None = ...
+        self,
+        texture: Any,
+        params: dict[str, Any] | None = ...,
+        *,
+        progress: float = ...,
     ) -> Any: ...
     def inspect_graph(
         self, outputs: Any, params: dict[str, Any] | None = ...
@@ -153,6 +165,7 @@ class Context:
         *,
         size: tuple[int, int] | None = ...,
         inputs: dict[str, Any] | None = ...,
+        progress: float | None = ...,
     ) -> AbstractContextManager[GPUImage]: ...
     def allocate_buffer(self, size: int, *, label: str = ...) -> GPUBuffer: ...
     def create_image(

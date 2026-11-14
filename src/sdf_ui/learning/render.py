@@ -169,7 +169,9 @@ class DifferentiableRenderer:
         }
     )
 
-    def __init__(self, size, params=None):
+    def __init__(self, size, params=None, *, progress=0.0):
+        from ..core.expressions import validate_progress
+
         if len(size) != 2 or any(
             isinstance(value, bool)
             or not np.isfinite(value)
@@ -180,6 +182,7 @@ class DifferentiableRenderer:
             raise ValueError("size must contain positive integer width and height")
         self.size = tuple(int(value) for value in size)
         self.params = {} if params is None else params
+        self.progress = validate_progress(progress)
         self.ctx = self  # expression context for position-dependent values
         y, x = np.indices((self.size[1], self.size[0]), dtype=float)
         self.x, self.y = as_tensor(x), as_tensor(y)

@@ -6,6 +6,7 @@ __docformat__ = "google"
 
 import math
 from dataclasses import dataclass
+from numbers import Real
 from typing import Any
 
 
@@ -83,6 +84,16 @@ def input_value(name: str) -> Expr:
     return Expr("input", (name,))
 
 
+def validate_progress(progress: Any) -> float:
+    """Validate normalized animation progress."""
+    if isinstance(progress, bool) or not isinstance(progress, Real):
+        raise ValueError("progress must be a finite number in [0, 1]")
+    progress = float(progress)
+    if not math.isfinite(progress) or not 0.0 <= progress <= 1.0:
+        raise ValueError("progress must be a finite number in [0, 1]")
+    return progress
+
+
 def percent(value: Any) -> Expr:
     """Scale ``value`` by the canvas width divided by 100."""
     return Expr("percent", (value,))
@@ -118,7 +129,18 @@ def evaluate_expr(expr, ctx, params, *, track_grad=False):
     them as Python values suitable for shader uniforms. No tape is cached on
     the expression itself.
     """
-    from ..learning.autodiff import Tensor
+    from ..learning.autodiff import Parameter, Tensor
+
+    if isinstance(expr, Parameter) and expr.animate is not None:
+        progress = getattr(ctx, "progress", None)
+        if progress is None:
+            progress = getattr(ctx, "inputs", {}).get("progress", 0.0)
+        resolve = getattr(ctx, "resolve_animated", None)
+        value = resolve(expr, progress) if callable(resolve) else expr.at(progress)
+        if track_grad:
+            return value
+        array = value.numpy()
+        return array.item() if array.ndim == 0 else array.tolist()
 
     if isinstance(expr, Tensor):
         if track_grad:

@@ -15,6 +15,7 @@ The first command lists the original rendering examples. The learning and GPU
 examples have their own command-line options; append `--help` for details.
 Generated images and checkpoints go under `out/`.
 
-``center_div`` exports one PNG per optimization step and assembles them into
-``out/center_div/center_div.gif``. The individual frames are kept alongside
-the animation for inspection or reuse by future animation tooling.
+``center_div`` trains an offset at progress 0.5, then sweeps the learned div
+across its animation curve. It exports ``center_div.gif`` for the learning
+curve and ``center_div_motion.gif`` for the timeline sweep. PNG frames are kept
+in ``out/center_div/frames`` and ``out/center_div/motion``.

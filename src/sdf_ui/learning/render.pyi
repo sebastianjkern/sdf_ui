@@ -18,10 +18,15 @@ class DifferentiableRenderer:
     size: tuple[int, int]
     params: Mapping[str, Any]
     ctx: DifferentiableRenderer
+    progress: float
     x: Tensor
     y: Tensor
     def __init__(
-        self, size: tuple[int, int], params: Mapping[str, Any] | None = ...
+        self,
+        size: tuple[int, int],
+        params: Mapping[str, Any] | None = ...,
+        *,
+        progress: float = ...,
     ) -> None: ...
     def percent(self, value: Any) -> Any: ...
     def percent_x(self, value: Any) -> Any: ...

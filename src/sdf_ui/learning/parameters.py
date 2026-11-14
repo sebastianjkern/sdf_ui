@@ -189,6 +189,7 @@ class ParameterStore(Mapping):
         return tuple(self._parameters.values())
 
     def state_dict(self):
+        """Serialize values; animation callbacks stay defined in user code."""
         return {
             "format_version": 1,
             "schema": self.schema(),
@@ -230,7 +231,9 @@ class ParameterStore(Mapping):
                 raise ValueError(f"Nonfinite checkpoint value for '{name}'")
             values[name] = value
         for name, value in values.items():
-            self[name].assign(value)
+            parameter = self[name]
+            if parameter.animate is None:
+                parameter.assign(value)
 
     def save(self, path):
         Path(path).write_text(json.dumps(self.state_dict(), indent=2), encoding="utf-8")

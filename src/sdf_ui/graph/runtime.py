@@ -11,7 +11,7 @@ from types import MappingProxyType
 import numpy as np
 from PIL import Image
 
-from ..core.expressions import Expr, evaluate_expr
+from ..core.expressions import Expr, evaluate_expr, validate_progress
 from ..core.image import Image as BackendImage
 from ..core.image import shape_size
 from ..core.texture import MultiOutputResult, TextureNode
@@ -89,15 +89,22 @@ class LossLayer:
 
 
 class LossContext:
-    """Differentiable layer outputs and parameter leaves for a loss callback."""
+    """Differentiable layer outputs and current-frame parameter values."""
 
     def __init__(self, execution):
         self._execution = execution
         self._names = tuple(execution.graph.plan.outputs)
         self._layers = {name: LossLayer(execution, name) for name in self._names}
-        self.parameters = MappingProxyType(
-            {parameter.name: parameter for parameter in execution.graph.parameters}
-        )
+        parameters: dict[str, Tensor] = {
+            parameter.name: parameter for parameter in execution.graph.parameters
+        }
+        for parameter in execution.graph._animated_parameters.values():
+            if parameter.name in parameters:
+                raise ValueError(
+                    f"Animated parameter name '{parameter.name}' conflicts with a graph parameter"
+                )
+            parameters[parameter.name] = parameter.at(execution.graph.progress)
+        self.parameters = MappingProxyType(parameters)
 
     @property
     def outputs(self):
@@ -254,6 +261,7 @@ class RenderGraph:
         self._offsets = {}
         self._uniform_offsets = []
         self._parameters = ()
+        self._animated_parameters = {}
         self._binding_schema = self._schema()
         try:
             self._collect_parameters()
@@ -269,7 +277,7 @@ class RenderGraph:
         leaves = {
             id(value): value
             for value in self.params.values()
-            if isinstance(value, Parameter)
+            if isinstance(value, Parameter) and value.animate is None
         }
         for values in self._uniforms():
             for value in values.values():
@@ -335,6 +343,10 @@ class RenderGraph:
     def inputs(self):
         return MappingProxyType(self._inputs)
 
+    @property
+    def progress(self):
+        return self._inputs.get("progress", 0.0)
+
     def _set_inputs(self, values):
         if not isinstance(values, Mapping):
             raise TypeError("Graph inputs must be a mapping")
@@ -348,7 +360,9 @@ class RenderGraph:
                 or not np.isfinite(value)
             ):
                 raise ValueError("Graph inputs must be named finite scalars")
-            checked[name] = float(value)
+            checked[name] = (
+                validate_progress(float(value)) if name == "progress" else float(value)
+            )
         self._inputs.update(checked)
         self._input_version += 1
 
@@ -472,6 +486,8 @@ class RenderGraph:
         return value / 100 * min(self.size)
 
     def _resolve(self, value):
+        if isinstance(value, Parameter) and value.animate is not None:
+            self._animated_parameters[id(value)] = value
         if isinstance(value, (Expr, str, Tensor)):
             value = evaluate_expr(value, self, self.params, track_grad=True)
         if isinstance(value, (tuple, list)):
@@ -481,6 +497,10 @@ class RenderGraph:
         if isinstance(value, str) and value.startswith("#"):
             return hex_col(value)
         return value
+
+    def resolve_animated(self, parameter, progress):
+        self._animated_parameters[id(parameter)] = parameter
+        return parameter.at(progress)
 
     def _uniforms(self):
         result = []
@@ -509,7 +529,7 @@ class RenderGraph:
             result.append(values)
         return result
 
-    def run(self, objective=None, *, loss=None):
+    def run(self, objective=None, *, loss=None, progress=None):
         self._check()
         if self._running or (self._active is not None and not self._active.closed):
             raise RuntimeError(
@@ -521,6 +541,8 @@ class RenderGraph:
             raise TypeError("Graph objective must be an Objective")
         if loss is not None and not callable(loss):
             raise TypeError("Graph loss must be callable")
+        if progress is not None:
+            self.set_inputs(progress=progress)
         self._running = True
         try:
             execution = GraphExecution(self, objective, loss=loss)
@@ -531,7 +553,7 @@ class RenderGraph:
 
     execute = run
 
-    def fit(self, loss, *, steps=100, lr=0.01):
+    def fit(self, loss, *, steps=100, lr=0.01, progress=None):
         """Fit graph parameters with a scalar Tensor loss callback.
 
         The callback receives a :class:`LossContext`. Reading a layer's
@@ -546,6 +568,8 @@ class RenderGraph:
         steps = int(steps)
         if not self.trainable_parameters:
             raise ValueError("Graph has no registered trainable parameters")
+        if progress is not None:
+            self.set_inputs(progress=progress)
 
         optimizer = self.backend.create_optimizer(self.trainable_parameters, lr=lr)
         history = []
@@ -608,7 +632,9 @@ class RenderGraph:
         from .execution import execute_reference
 
         sources = [image.read() for image in self._sources]
-        renderer = DifferentiableRenderer(self.size, self.params)
+        renderer = DifferentiableRenderer(
+            self.size, self.params, progress=self.progress
+        )
         renderer.inputs = self.inputs
         return execute_reference(self.plan, renderer, sources=sources)
 
@@ -1265,8 +1291,10 @@ class GraphTrainer:
         """Validate that this trainer and its graph are open."""
         self._check()
 
-    def step(self):
+    def step(self, *, progress=None):
         self._check()
+        if progress is not None:
+            self.graph.set_inputs(progress=progress)
         self.optimizer.zero_grad()
         with self.graph.run(self.objective) as execution:
             execution.backward()
@@ -1329,10 +1357,10 @@ class GraphTrainer:
                     gradients.get(parameter, 0) + parameter.grad * weight
                 )
 
-    def evaluate(self):
+    def evaluate(self, *, progress=None):
         """Evaluate the current objective without updating parameters."""
         self._check()
-        with self.graph.run(self.objective) as execution:
+        with self.graph.run(self.objective, progress=progress) as execution:
             return {"loss": execution.loss, "terms": dict(execution.metrics)}
 
     def fit(
@@ -1345,8 +1373,11 @@ class GraphTrainer:
         min_delta=0.0,
         restore_best=True,
         validation_interval=1,
+        progress=None,
     ):
         self._check()
+        if progress is not None:
+            self.graph.set_inputs(progress=progress)
         from ..learning.training import fit_steps
 
         return fit_steps(

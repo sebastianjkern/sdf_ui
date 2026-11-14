@@ -97,13 +97,18 @@ class Renderer:
     region, and ``stats`` and ``cache_info()`` expose work performed.
     """
 
-    def __init__(self, ctx, params=None, cache=None, evaluation_rect=None):
+    def __init__(
+        self, ctx, params=None, cache=None, evaluation_rect=None, progress=0.0
+    ):
         if ctx is None:
             raise ValueError("A Context is required to render a texture")
         self.ctx = ctx
         self.params = params or {}
         self.cache = {} if cache is None else cache
         self.evaluation_rect = evaluation_rect
+        from .expressions import validate_progress
+
+        self.progress = validate_progress(progress)
         self.stats = RenderStats()
         self._render_depth = 0
 
@@ -113,9 +118,33 @@ class Renderer:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
-    def render(self, value):
+    @property
+    def size(self):
+        return self.ctx.size
+
+    @property
+    def inputs(self):
+        return getattr(self.ctx, "inputs", {})
+
+    def percent(self, value):
+        return self.ctx.percent(value)
+
+    def percent_x(self, value):
+        return self.ctx.percent_x(value)
+
+    def percent_y(self, value):
+        return self.ctx.percent_y(value)
+
+    def percent_of_min(self, value):
+        return self.ctx.percent_of_min(value)
+
+    def render(self, value, *, progress=None):
         is_root_render = self._render_depth == 0
         if is_root_render:
+            from .expressions import validate_progress
+
+            if progress is not None:
+                self.progress = validate_progress(progress)
             start = perf_counter()
             previous_stats = getattr(self.ctx, "_active_render_stats", None)
             previous_rect = self.ctx._active_evaluation_rect
@@ -267,7 +296,7 @@ class Renderer:
         from .expressions import Expr, evaluate_expr
 
         if isinstance(value, (Expr, Tensor, str)):
-            value = evaluate_expr(value, self.ctx, self.params)
+            value = evaluate_expr(value, self, self.params)
         if isinstance(value, tuple):
             return tuple(self._resolve(item) for item in value)
         if isinstance(value, list):
@@ -402,7 +431,9 @@ class TextureNode(ABC):
         names.update(registry.method_names_for(self.kind))
         return sorted(names)
 
-    def render(self, ctx=None, params=None, cache=None, evaluation_rect=None) -> Self:
+    def render(
+        self, ctx=None, params=None, cache=None, evaluation_rect=None, *, progress=0.0
+    ) -> Self:
         """Materialize this node, optionally cropping to a canvas pixel rect.
 
         The rectangle is ``(x, y, width, height)``. All shaders in the render
@@ -422,7 +453,7 @@ class TextureNode(ABC):
             params=params,
             cache=cache,
             evaluation_rect=evaluation_rect,
-        ).render(self)
+        ).render(self, progress=progress)
 
     def read(self) -> NDArray[Any]:
         """Copy this materialized texture's pixels into a NumPy array.
@@ -470,6 +501,7 @@ class TextureNode(ABC):
         conversion: bool = True,
         size: tuple[int, int] | None = None,
         evaluation_rect: tuple[int, int, int, int] | None = None,
+        progress: float = 0.0,
     ) -> None:
         def _show(texture):
             converted = None
@@ -493,6 +525,7 @@ class TextureNode(ABC):
             cache=cache,
             size=size,
             evaluation_rect=evaluation_rect,
+            progress=progress,
         )
 
     def save(
@@ -504,6 +537,7 @@ class TextureNode(ABC):
         conversion: bool = True,
         size: tuple[int, int] | None = None,
         evaluation_rect: tuple[int, int, int, int] | None = None,
+        progress: float = 0.0,
     ) -> None:
         def _save(texture):
             converted = None
@@ -539,6 +573,7 @@ class TextureNode(ABC):
             cache=cache,
             size=size,
             evaluation_rect=evaluation_rect,
+            progress=progress,
         )
 
     def named(self, label: str):
@@ -550,19 +585,22 @@ class TextureNode(ABC):
     def uncached(self):
         return self._clone(label=self.label, should_cache=False)
 
-    def _render_for_io(self, ctx, params, cache, size, evaluation_rect):
+    def _render_for_io(self, ctx, params, cache, size, evaluation_rect, progress):
         return self.render(
             ctx,
             params=params,
             cache=cache,
             evaluation_rect=evaluation_rect,
+            progress=progress,
         )
 
     def _with_rendered_texture(
-        self, func, *, ctx, params, cache, size, evaluation_rect
+        self, func, *, ctx, params, cache, size, evaluation_rect, progress
     ):
         if ctx is not None:
-            texture = self._render_for_io(ctx, params, cache, size, evaluation_rect)
+            texture = self._render_for_io(
+                ctx, params, cache, size, evaluation_rect, progress
+            )
             try:
                 return func(texture)
             finally:
@@ -572,7 +610,9 @@ class TextureNode(ABC):
         if size is not None:
             with Context(size) as temp_ctx:
                 return func(
-                    self._render_for_io(temp_ctx, params, cache, size, evaluation_rect)
+                    self._render_for_io(
+                        temp_ctx, params, cache, size, evaluation_rect, progress
+                    )
                 )
 
         if self.context is None:
@@ -581,7 +621,9 @@ class TextureNode(ABC):
                 "pass ctx= or size= to create a temporary context"
             )
         return func(
-            self._render_for_io(self.context, params, cache, size, evaluation_rect)
+            self._render_for_io(
+                self.context, params, cache, size, evaluation_rect, progress
+            )
         )
 
     def _clone(self, *, label, should_cache):
@@ -648,13 +690,15 @@ class MultiOutputResult:
     should_cache: bool = True
     kind: str = "multi_output"
 
-    def render(self, ctx, params=None, cache=None, evaluation_rect=None):
+    def render(
+        self, ctx, params=None, cache=None, evaluation_rect=None, *, progress=0.0
+    ):
         return Renderer(
             ctx,
             params=params,
             cache=cache,
             evaluation_rect=evaluation_rect,
-        ).render(self)
+        ).render(self, progress=progress)
 
     def __iter__(self):
         if self.op != "masked_union":

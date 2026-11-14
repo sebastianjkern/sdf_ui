@@ -6,6 +6,7 @@ Backward accumulates gradients; clear them through an optimizer between
 training iterations. Non-scalar outputs require an explicit gradient seed.
 """
 
+from numbers import Real
 from typing import Any, Callable, Iterable, Optional, Sequence, Tuple
 
 import numpy as np
@@ -430,15 +431,35 @@ class Tensor:
 
 
 class Parameter(Tensor):
-    """A named graph weight; assignments preserve shape and increment version."""
+    """A named graph value or trainable weight.
 
-    def __init__(self, name: str, initial: Any, *, trainable: bool = True):
+    Animated parameters use ``animate(progress)`` to provide a fixed value for
+    one frame. Their ``initial`` value defines the expected output shape; the
+    callback is evaluated at render or training time. Captured trainable
+    parameters remain differentiable through the callback.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        initial: Any,
+        *,
+        trainable: bool | None = None,
+        animate: Callable[[float], Any] | None = None,
+    ):
         if not isinstance(name, str) or not name.strip():
             raise ValueError("parameter name must be a nonempty string")
+        if animate is not None and not callable(animate):
+            raise TypeError("animate must be callable")
+        if trainable is None:
+            trainable = animate is None
         if not isinstance(trainable, bool):
             raise TypeError("trainable must be a bool")
+        if animate is not None and trainable:
+            raise ValueError("Animated parameters are fixed per frame")
         super().__init__(initial, requires_grad=trainable)
         self._trainable = trainable
+        self.animate = animate
         self.name = name
         self._version = 0
         self._versions = {self: self._version}
@@ -451,7 +472,47 @@ class Parameter(Tensor):
     def trainable(self) -> bool:
         return self._trainable
 
+    def at(self, progress: float) -> Tensor:
+        """Evaluate this animated value at normalized progress in ``[0, 1]``.
+
+        A callback's own progress is fixed for the evaluation. Tensors captured
+        by the callback remain in the resulting autodiff graph.
+        """
+        if self.animate is None:
+            return self
+        if (
+            isinstance(progress, bool)
+            or not isinstance(progress, Real)
+            or not np.isfinite(progress)
+            or not 0.0 <= progress <= 1.0
+        ):
+            raise ValueError("animation progress must be a finite number in [0, 1]")
+        value = self.animate(float(progress))
+
+        def as_animated_tensor(value):
+            if isinstance(value, (tuple, list)):
+                return stack(tuple(as_animated_tensor(item) for item in value))
+            return as_tensor(value)
+
+        result = as_animated_tensor(value)
+        if result.shape != self.shape:
+            raise ValueError(
+                f"Animation for parameter '{self.name}' returned shape "
+                f"{result.shape}; expected {self.shape}"
+            )
+        if self in result._versions:
+            raise ValueError(
+                f"Animation for parameter '{self.name}' cannot depend on itself"
+            )
+        result._check_versions()
+        return result
+
     def assign(self, value: Any) -> "Parameter":
+        if self.animate is not None:
+            raise ValueError(
+                f"Animated parameter '{self.name}' is defined by its callback; "
+                "assign the trainable parameters captured by that callback instead"
+            )
         data = _array(value, "parameter value")
         if data.shape != self.shape:
             raise ValueError("assignment must preserve parameter shape")

@@ -23,6 +23,7 @@ class RenderGraph:
     parameters: tuple[Parameter, ...]
     trainable_parameters: tuple[Parameter, ...]
     inputs: Mapping[str, float]
+    progress: float
     closed: bool
     def __init__(
         self,
@@ -58,12 +59,14 @@ class RenderGraph:
         objective: Objective | None = ...,
         *,
         loss: Callable[[LossContext], Tensor] | None = ...,
+        progress: float | None = ...,
     ) -> GraphExecution: ...
     def execute(
         self,
         objective: Objective | None = ...,
         *,
         loss: Callable[[LossContext], Tensor] | None = ...,
+        progress: float | None = ...,
     ) -> GraphExecution: ...
     def fit(
         self,
@@ -71,6 +74,7 @@ class RenderGraph:
         *,
         steps: int = ...,
         lr: float = ...,
+        progress: float | None = ...,
     ) -> FitResult: ...
     @overload
     def render(
@@ -121,7 +125,7 @@ class LossLayer:
 
 class LossContext:
     outputs: Mapping[str, LossLayer]
-    parameters: Mapping[str, Parameter]
+    parameters: Mapping[str, Tensor]
     def __getitem__(
         self, key: str | int | TextureNode | MultiOutputResult
     ) -> LossLayer: ...
@@ -147,9 +151,9 @@ class GraphTrainer:
         lr: float = ...,
     ) -> None: ...
     def check(self) -> None: ...
-    def step(self) -> dict[str, Any]: ...
+    def step(self, *, progress: float | None = ...) -> dict[str, Any]: ...
     def step_batch(self, cases: Iterable[Any]) -> dict[str, Any]: ...
-    def evaluate(self) -> dict[str, Any]: ...
+    def evaluate(self, *, progress: float | None = ...) -> dict[str, Any]: ...
     def fit(
         self,
         steps: int,
@@ -160,6 +164,7 @@ class GraphTrainer:
         min_delta: float = ...,
         restore_best: bool = ...,
         validation_interval: int = ...,
+        progress: float | None = ...,
     ) -> list[dict[str, Any]]: ...
     def state_dict(self) -> dict[str, Any]: ...
     def load_state_dict(self, state: Mapping[str, Any]) -> None: ...
