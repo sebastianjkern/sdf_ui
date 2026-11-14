@@ -17,6 +17,12 @@
 - [x] Add fixed-box text wrapping and horizontal/vertical alignment using font ascent and descent metrics.
 - [x] Add text measurement, ordered font fallbacks, and configurable missing-glyph behavior.
 - [x] Shape text with HarfBuzz OpenType features, script/language/direction runs, variable font axes, and bidirectional ordering; rasterize TrueType and CFF glyph outlines.
+- [x] Wrap text at Unicode line-break boundaries and report or clip text-box overflow.
+- [x] Add justified text-box alignment, selectable overflow behavior, and trailing-space control.
+- [x] Add SDF text decorations using OpenType underline and strike metrics.
+- [x] Measure glyph ink bounds and return per-line metrics and paragraph ink bounds.
+- [x] Add styled inline text spans with per-run fonts, sizes, shaping settings, wrapping, and alignment.
+- [x] Resolve system fonts through Fontconfig or standard platform font directories.
 - [x] Add linear and radial gradient APIs using composed shading passes.
 - [x] Add RGB/LAB color-space conversion helpers.
 

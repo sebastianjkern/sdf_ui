@@ -3,8 +3,6 @@ from sdf_ui.fonts import default_font_path
 __docformat__ = "google"
 
 from functools import lru_cache
-from math import ceil
-
 import numpy as np
 import ttfquery
 from fontTools.pens.basePen import BasePen
@@ -23,7 +21,7 @@ def render_glyph(renderer, _inputs, params):
         float(params["scale"]),
         float(params["ox"]),
         float(params["oy"]),
-        int(params["samples"]),
+        max(1, round(int(params["samples"]) * getattr(ctx, "device_scale", 1.0))),
     )
 
     field = np.empty((height, width), dtype=np.float32)
@@ -92,33 +90,11 @@ class _SampledOutlinePen(BasePen):
 
     def _curveToOne(self, control1, control2, end):
         start = self._getCurrentPoint()
-        for index in range(1, self.samples + 1):
-            t = index / self.samples
-            u = 1.0 - t
-            self.current.append(
-                (
-                    u**3 * start[0]
-                    + 3 * u**2 * t * control1[0]
-                    + 3 * u * t**2 * control2[0]
-                    + t**3 * end[0],
-                    u**3 * start[1]
-                    + 3 * u**2 * t * control1[1]
-                    + 3 * u * t**2 * control2[1]
-                    + t**3 * end[1],
-                )
-            )
+        self.current.extend(_flatten_cubic(start, control1, control2, end, self.samples))
 
     def _qCurveToOne(self, control, end):
         start = self._getCurrentPoint()
-        for index in range(1, self.samples + 1):
-            t = index / self.samples
-            u = 1.0 - t
-            self.current.append(
-                (
-                    u * u * start[0] + 2 * u * t * control[0] + t * t * end[0],
-                    u * u * start[1] + 2 * u * t * control[1] + t * t * end[1],
-                )
-            )
+        self.current.extend(_flatten_quadratic(start, control, end, self.samples))
 
     def _closePath(self):
         self._finish(close=True)
@@ -132,6 +108,42 @@ class _SampledOutlinePen(BasePen):
                 self.current.append(self.current[0])
             self.contours.append(tuple(self.current))
         self.current = None
+
+
+def _point_line_distance(point, start, end):
+    dx, dy = end[0] - start[0], end[1] - start[1]
+    length = (dx * dx + dy * dy) ** 0.5
+    if length < 1e-9:
+        return ((point[0] - start[0]) ** 2 + (point[1] - start[1]) ** 2) ** 0.5
+    return (
+        abs(dy * point[0] - dx * point[1] + end[0] * start[1] - end[1] * start[0])
+        / length
+    )
+
+
+def _flatten_quadratic(start, control, end, quality, depth=0):
+    tolerance = 1000.0 / (max(2, quality) ** 2)
+    if depth >= 12 or _point_line_distance(control, start, end) <= tolerance:
+        return (end,)
+    a = ((start[0] + control[0]) / 2, (start[1] + control[1]) / 2)
+    b = ((control[0] + end[0]) / 2, (control[1] + end[1]) / 2)
+    mid = ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
+    return _flatten_quadratic(start, a, mid, quality, depth+1) + _flatten_quadratic(mid, b, end, quality, depth+1)
+
+
+def _flatten_cubic(start, control1, control2, end, quality, depth=0):
+    tolerance = 1000.0 / (max(2, quality) ** 2)
+    flatness = max(
+        _point_line_distance(control1, start, end),
+        _point_line_distance(control2, start, end),
+    )
+    if depth >= 12 or flatness <= tolerance:
+        return (end,)
+    mid = lambda a, b: ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
+    a, b, c = mid(start, control1), mid(control1, control2), mid(control2, end)
+    d, e = mid(a, b), mid(b, c)
+    f = mid(d, e)
+    return _flatten_cubic(start, a, d, f, quality, depth+1) + _flatten_cubic(f, e, c, end, quality, depth+1)
 
 
 @lru_cache(maxsize=64)
@@ -174,7 +186,7 @@ def _flatten_contour(contour, samples):
             raise ValueError(
                 "Expanded glyph contour contains adjacent off-curve points"
             )
-        flattened.extend(_sample_quadratic(current, point, end, samples))
+        flattened.extend(_flatten_quadratic(current, point, end, samples))
         current = end
         index += 2
 
@@ -210,24 +222,6 @@ def _expanded_contour(contour):
     first = expanded[0]
     expanded.append(first)
     return tuple(expanded)
-
-
-def _sample_quadratic(a, b, c, samples):
-    count = max(1, ceil(samples))
-    result = []
-    ax, ay = a
-    bx, by = b
-    cx, cy = c
-    for index in range(1, count + 1):
-        t = index / count
-        u = 1.0 - t
-        result.append(
-            (
-                u * u * ax + 2.0 * u * t * bx + t * t * cx,
-                u * u * ay + 2.0 * u * t * by + t * t * cy,
-            )
-        )
-    return result
 
 
 def _middle(x1, y1, x2, y2):

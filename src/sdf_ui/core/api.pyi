@@ -30,7 +30,25 @@ class SDFNamespace:
     def rounded_rect(self, center: Any, size: Any, corner_radius: Any, angle: Any = 0.0) -> SDFTexture: ...
     def sector(self, center: Any, radius: Any, start_angle: Any, end_angle: Any) -> SDFTexture: ...
     def segment(self, a: Any, b: Any, radius: Any) -> SDFTexture: ...
-    def text(self, value: Any, size: Any = 64, ox: Any = 0, oy: Any = 0, path: Any = None, samples: Any = 16, cache_size: Any = 128, line_height: Any = 1.2, oversample: Any = 2.0, min_render_size: Any = 64, box: tuple[float, float, float, float] | None = None, align: str = "left", valign: str = "middle", fallback_fonts: str | Path | tuple[str | Path, ...] | list[str | Path] = (), missing_glyph: str = "ignore", direction: str | None = None, script: str | None = None, language: str | None = None, features: dict[str, int | bool] | None = None, variations: dict[str, float] | None = None) -> SDFTexture: ...
+    def text(
+        self, value: Any, size: Any = 64, ox: Any = 0, oy: Any = 0,
+        path: Any = None, samples: Any = 16, cache_size: Any = 128,
+        line_height: Any = 1.2, oversample: Any = 2.5, min_render_size: Any = 64,
+        box: tuple[float, float, float, float] | None = None,
+        align: str = "left", valign: str = "middle",
+        fallback_fonts: str | Path | tuple[str | Path, ...] | list[str | Path] = (),
+        missing_glyph: str = "ignore", clip: bool = False,
+        overflow: str = "visible", trim_trailing_spaces: bool = True,
+        direction: str | None = None, script: str | None = None,
+        language: str | None = None,
+        features: dict[str, int | bool] | None = None,
+        variations: dict[str, float] | None = None,
+        white_space: str = "normal", first_line_indent: float = 0.0,
+        max_lines: int | None = None,
+        decoration: str | tuple[str, ...] = (),
+        decoration_thickness: float = 0.0, word_spacing: float = 0.0,
+        letter_spacing: float = 0.0, vertical_metrics: str = "hhea",
+    ) -> SDFTexture: ...
     def triangle(self, point_1: Any, point_2: Any, point_3: Any) -> SDFTexture: ...
     def wedge(self, center: Any, radius: Any, start_angle: Any, end_angle: Any) -> SDFTexture: ...
 

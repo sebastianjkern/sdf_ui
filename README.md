@@ -35,8 +35,11 @@ drivers; WSL is not currently supported by `wgpu-py`.
 
 For interactive work, prefer `Canvas.render(...)`, the built-in `.save(...)` method on render nodes, or a cached `Canvas.session(...)`.
 
-Text and glyph rendering use the bundled Roboto font by default. Text accepts
-TrueType or OpenType fonts, ordered fallback fonts, and OpenType shaping controls:
+Text and glyph rendering use the bundled Roboto font by default. The glyph SDF
+cache renders at 2.5x the effective text size by default to leave a small quality
+margin; increase ``oversample`` for unusually large resizes, at additional cache
+cost. Text accepts TrueType or OpenType fonts, ordered fallback fonts, line
+wrapping and clipping, and OpenType shaping controls:
 
 ```python
 from sdf_ui import sdf
@@ -44,9 +47,22 @@ from sdf_ui import sdf
 sdf.text("office AVATAR", features={"liga": False, "kern": True})
 ```
 
+For denser output without changing scene coordinates, set a device scale on the
+canvas. Geometry, text, and pixel-sized effects are scaled together; percentage
+helpers continue to refer to the logical canvas dimensions:
+
+```python
+with Canvas((640, 360), device_scale=2) as canvas:
+    scene.save("out@2x.png", ctx=canvas)
+```
+
 Use `direction`, `script`, and `language` to override inferred shaping runs, and
 `variations={"wght": 650}` to set variable font axes. See
 [`text_opentype`](examples/README.md) for a rendered example.
+
+For fixed boxes, `align="justify"` expands word spacing on non-final lines.
+`overflow="visible"`, `"clip"`, and `"error"` select box overflow behavior;
+`trim_trailing_spaces=False` preserves the final space advance.
 
 
 For development from a checkout, install [uv](https://docs.astral.sh/uv/getting-started/installation/) and run:
@@ -358,7 +374,18 @@ export. The ideas below are the remaining work; they are grouped by area.
 
 #### Text and Typography
 
+`text([...])` accepts `span(...)` runs with per-run font paths, sizes, OpenType
+settings, and decorations. Runs wrap, align, and clip in the same text box as
+plain text. `measure_text(...)` reports line metrics and ink bounds, while
+`measure_glyph(...)` measures a grapheme. `system_font(...)` resolves an
+installed family when platform fonts are preferred; Roboto remains the stable
+default.
+
 - [x] Add OpenType shaping for script runs, ligatures, combining marks, and bidirectional text.
+- [x] Add configurable text decorations, glyph and paragraph measurement, and first-line paragraph indentation.
+- [x] Add optional system font resolution through `system_font()` and `path="system:Family Name"`.
+- [x] Add inline rich-text spans with per-range font, size, and decoration styles.
+- [ ] Add a shared glyph SDF cache or atlas to reduce repeated text-rendering work.
 - [ ] Build a custom SDF font pipeline.
 
 #### Animation and Motion

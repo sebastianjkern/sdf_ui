@@ -14,7 +14,7 @@ import weakref
 from collections.abc import Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
-from numbers import Integral, Number
+from numbers import Integral, Number, Real
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -203,6 +203,7 @@ class Context:
         dispatch_config: DispatchConfig | dict[str, Any] | None = None,
         *,
         power_preference: str = "high-performance",
+        device_scale: float = 1.0,
     ) -> None:
         try:
             values = tuple(size)
@@ -217,11 +218,22 @@ class Context:
             raise ValueError(
                 "size must be a pair of positive integer width and height values"
             )
-        self.size = (int(values[0]), int(values[1]))
-        if min(self.size) <= 0:
+        self.logical_size = (int(values[0]), int(values[1]))
+        if min(self.logical_size) <= 0:
             raise ValueError(
                 "size must be a pair of positive integer width and height values"
             )
+        if (
+            isinstance(device_scale, bool)
+            or not isinstance(device_scale, Real)
+            or not math.isfinite(device_scale)
+            or device_scale <= 0
+        ):
+            raise ValueError("device_scale must be a finite positive number")
+        self.device_scale = float(device_scale)
+        self.size = tuple(
+            max(1, round(value * self.device_scale)) for value in self.logical_size
+        )
         self._closed = False
         self.ctx = self
         self._training_graphs: weakref.WeakSet[Any] = weakref.WeakSet()
@@ -755,19 +767,19 @@ class Context:
 
     def percent(self, alpha: Any) -> Any:
         """Return ``alpha`` percent of the canvas width."""
-        return alpha / 100 * self.size[0]
+        return alpha / 100 * self.logical_size[0]
 
     def percent_of_min(self, alpha: Any) -> Any:
         """Return ``alpha`` percent of the smaller canvas dimension."""
-        return alpha / 100 * min(self.size)
+        return alpha / 100 * min(self.logical_size)
 
     def percent_x(self, alpha: Any) -> Any:
         """Return ``alpha`` percent of the canvas width."""
-        return alpha / 100 * self.size[0]
+        return alpha / 100 * self.logical_size[0]
 
     def percent_y(self, alpha: Any) -> Any:
         """Return ``alpha`` percent of the canvas height."""
-        return alpha / 100 * self.size[1]
+        return alpha / 100 * self.logical_size[1]
 
     def copy_image(self, image: Any, *, label: str = "image copy") -> Any:
         """Copy a GPU image without mapping or reading pixels on the CPU."""

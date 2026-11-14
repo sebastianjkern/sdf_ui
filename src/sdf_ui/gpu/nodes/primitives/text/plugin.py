@@ -13,6 +13,7 @@ from sdf_ui.fonts import (
     font_paths,
     layout_font_paths,
     layout_text,
+    text_decoration_metrics,
     text_vertical_metrics,
 )
 from sdf_ui.fonts import (
@@ -33,7 +34,7 @@ def render_text(renderer, _inputs, params):
     ox = float(params["ox"])
     oy = float(params["oy"])
     paths = font_paths(params["path"], params["fallback_fonts"])
-    samples = int(params["samples"])
+    samples = max(1, round(int(params["samples"]) * getattr(ctx, "device_scale", 1.0)))
     cache_size = int(params["cache_size"])
     line_height = float(params["line_height"])
     oversample = float(params["oversample"])
@@ -42,10 +43,28 @@ def render_text(renderer, _inputs, params):
     align = params["align"]
     valign = params["valign"]
     missing_glyph = params["missing_glyph"]
+    overflow = params["overflow"]
+    clip_alias = params["clip"]
+    trim_trailing_spaces = params["trim_trailing_spaces"]
+    white_space = params.get("white_space", "normal")
+    first_line_indent = float(params.get("first_line_indent", 0.0))
+    decorations = params.get("decoration", ())
+    if isinstance(decorations, str):
+        decorations = () if decorations in {"none", ""} else (decorations,)
+    if not isinstance(decorations, (tuple, list)) or any(
+        item not in {"underline", "overline", "line-through"} for item in decorations
+    ):
+        raise ValueError(
+            "text decoration must be underline, overline, line-through, or a sequence"
+        )
+    decoration_thickness = float(params.get("decoration_thickness", 0.0))
+    vertical_metrics_mode = params.get("vertical_metrics", "hhea")
     shape_options = {
         key: params[key]
         for key in ("direction", "script", "language", "features", "variations")
     }
+    shape_options["word_spacing"] = params.get("word_spacing", 0.0)
+    shape_options["letter_spacing"] = params.get("letter_spacing", 0.0)
     for key in ("features", "variations"):
         if isinstance(shape_options[key], tuple):
             shape_options[key] = dict(shape_options[key])
@@ -54,6 +73,18 @@ def render_text(renderer, _inputs, params):
         raise ValueError("text size must be a finite positive number")
     if not np.isfinite(line_height) or line_height <= 0:
         raise ValueError("text line_height must be a finite positive number")
+    if not isinstance(clip_alias, bool):
+        raise TypeError("text clip must be a bool")
+    if not isinstance(trim_trailing_spaces, bool):
+        raise TypeError("trim_trailing_spaces must be a bool")
+    if overflow not in {"visible", "clip", "error", "ellipsis"}:
+        raise ValueError("unsupported text overflow mode")
+    if clip_alias and overflow not in {"visible", "clip"}:
+        raise ValueError("clip=True conflicts with overflow='error'")
+    if clip_alias:
+        overflow = "clip"
+    if overflow != "visible" and box is None:
+        raise ValueError("text overflow modes require a box")
 
     effective_font_size = max(font_size, min_render_size)
     field = np.full((height, width), max(width, height), dtype=np.float32)
@@ -68,12 +99,19 @@ def render_text(renderer, _inputs, params):
         font_size,
         box_width=box[2] if box is not None else None,
         missing_glyph=missing_glyph,
+        trim_trailing_spaces=trim_trailing_spaces,
+        white_space=white_space,
+        first_line_indent=first_line_indent,
+        max_lines=params.get("max_lines"),
+        overflow=overflow,
         **shape_options,
     )
-    ascent, descent = text_vertical_metrics(layout_font_paths(paths, lines), font_size)
+    ascent, descent = text_vertical_metrics(
+        layout_font_paths(paths, lines), font_size, vertical_metrics_mode
+    )
 
-    if align not in {"left", "center", "right"}:
-        raise ValueError("text align must be 'left', 'center', or 'right'")
+    if align not in {"left", "center", "right", "justify"}:
+        raise ValueError("text align must be 'left', 'center', 'right', or 'justify'")
     if valign not in {"top", "middle", "bottom"}:
         raise ValueError("text valign must be 'top', 'middle', or 'bottom'")
     if box is None and align != "left":
@@ -84,6 +122,12 @@ def render_text(renderer, _inputs, params):
         first_baseline = oy
     else:
         block_height = ascent - descent + max(len(lines) - 1, 0) * line_advance
+        exceeds_box = block_height > box_height or any(
+            line[1] + (first_line_indent if line[5] else 0.0) > box_width
+            for line in lines
+        )
+        if overflow == "error" and exceeds_box:
+            raise ValueError("text layout exceeds the configured box")
         if valign == "top":
             first_baseline = y + box_height - ascent
         elif valign == "middle":
@@ -94,18 +138,35 @@ def render_text(renderer, _inputs, params):
         else:
             first_baseline = y - descent + max(len(lines) - 1, 0) * line_advance
 
-    for line_index, (placements, line_width, _line_text) in enumerate(lines):
+    for line_index, (
+        placements,
+        line_width,
+        line_text,
+        paragraph_last,
+        _truncated,
+        paragraph_first,
+    ) in enumerate(lines):
+        if align == "justify":
+            placements, line_width = _justify_placements(
+                placements,
+                line_text,
+                line_width,
+                box_width - (first_line_indent if paragraph_first else 0.0),
+                paragraph_last=paragraph_last,
+            )
         if box is None:
             line_x = ox
-        elif align == "left":
-            line_x = x
+        elif align in {"left", "justify"}:
+            line_x = x + (
+                params.get("first_line_indent", 0.0) if paragraph_first else 0.0
+            )
         elif align == "center":
             line_x = x + (box_width - line_width) / 2
         else:
             line_x = x + box_width - line_width
 
         baseline = first_baseline - line_index * line_advance
-        for glyph_id, glyph_path, glyph_x, glyph_y in placements:
+        for glyph_id, glyph_path, glyph_x, glyph_y, _cluster in placements:
             glyph_metrics = _font_metrics(glyph_path)
             glyph_scale = font_size / glyph_metrics["units_per_em"]
             glyph_distance_scale = effective_font_size / glyph_metrics["units_per_em"]
@@ -124,7 +185,36 @@ def render_text(renderer, _inputs, params):
                     baseline + glyph_y,
                     glyph_scale,
                     glyph_distance_scale,
+                    clip_rect=(x, y, x + box_width, y + box_height)
+                    if overflow == "clip"
+                    else None,
                 )
+
+        decoration_metrics = text_decoration_metrics(paths[0], font_size)
+        for decoration in decorations:
+            offset = {
+                "underline": decoration_metrics["underline_offset"],
+                "overline": ascent * 0.9,
+                "line-through": decoration_metrics["strike_offset"],
+            }[decoration]
+            thickness = (
+                decoration_thickness
+                or decoration_metrics[
+                    "strike_thickness"
+                    if decoration == "line-through"
+                    else "underline_thickness"
+                ]
+            )
+            _composite_rule(
+                field,
+                line_x,
+                baseline + offset,
+                line_width,
+                thickness,
+                clip_rect=(x, y, x + box_width, y + box_height)
+                if overflow == "clip"
+                else None,
+            )
 
     tex = ctx.r32f()
     tex.write(field.tobytes())
@@ -158,7 +248,33 @@ def _glyph_cache_size(font_size, oversample, cache_size, min_render_size=0.0):
     return target_size
 
 
-def _composite_glyph(field, patch, x, y, scale, distance_scale):
+@lru_cache(maxsize=64)
+def _space_glyph_id(path):
+    from sdf_ui.fonts import glyph_id_for_char
+
+    return glyph_id_for_char(path, " ")
+
+
+def _justify_placements(
+    placements, line_text, line_width, box_width, *, paragraph_last
+):
+    space_count = line_text.rstrip(" ").count(" ")
+    if paragraph_last or space_count == 0 or box_width <= line_width:
+        return placements, line_width
+
+    extra_space = (box_width - line_width) / space_count
+    spaces_before = 0
+    adjusted = []
+    for placement in placements:
+        glyph_id, path, x, y = placement[:4]
+        shifted = (glyph_id, path, x + spaces_before * extra_space, y)
+        adjusted.append(shifted + placement[4:] if len(placement) > 4 else shifted)
+        if glyph_id == _space_glyph_id(path) and spaces_before < space_count:
+            spaces_before += 1
+    return adjusted, line_width + spaces_before * extra_space
+
+
+def _composite_glyph(field, patch, x, y, scale, distance_scale, clip_rect=None):
     glyph_field = patch["field"]
     source_units_per_pixel = patch["units_per_pixel"]
     source_to_dest = scale * source_units_per_pixel
@@ -176,6 +292,12 @@ def _composite_glyph(field, patch, x, y, scale, distance_scale):
     y0 = max(0, int(floor(top)))
     x1 = min(width, int(ceil(right)))
     y1 = min(height, int(ceil(bottom)))
+    if clip_rect is not None:
+        clip_left, clip_bottom, clip_right, clip_top = clip_rect
+        x0 = max(x0, int(ceil(clip_left)))
+        y0 = max(y0, int(ceil(clip_bottom)))
+        x1 = min(x1, int(ceil(clip_right)))
+        y1 = min(y1, int(ceil(clip_top)))
     if x0 >= x1 or y0 >= y1:
         return
 
@@ -185,6 +307,30 @@ def _composite_glyph(field, patch, x, y, scale, distance_scale):
     distances = _sample_sdf(glyph_field, source_x, source_y, source_to_dest)
     distances = distances * distance_to_dest
     field[y0:y1, x0:x1] = np.minimum(field[y0:y1, x0:x1], distances)
+
+
+def _composite_rule(field, x, y, rule_width, thickness, clip_rect=None):
+    """Union a rectangular typographic rule into the text SDF."""
+    half_width = max(rule_width, 0.0) / 2
+    half_thickness = max(thickness, 0.1) / 2
+    left, right = x, x + max(rule_width, 0.0)
+    top, bottom = y - half_thickness, y + half_thickness
+    height, width = field.shape
+    x0, x1 = max(0, int(floor(left))), min(width, int(ceil(right)))
+    y0, y1 = max(0, int(floor(top))), min(height, int(ceil(bottom)))
+    if clip_rect is not None:
+        clip_left, clip_bottom, clip_right, clip_top = clip_rect
+        x0, x1 = max(x0, int(ceil(clip_left))), min(x1, int(ceil(clip_right)))
+        y0, y1 = max(y0, int(ceil(clip_bottom))), min(y1, int(ceil(clip_top)))
+    if x0 >= x1 or y0 >= y1:
+        return
+    yy, xx = np.mgrid[y0:y1, x0:x1]
+    qx = np.abs(xx + 0.5 - (x + half_width)) - half_width
+    qy = np.abs(yy + 0.5 - y) - half_thickness
+    distance = np.hypot(np.maximum(qx, 0), np.maximum(qy, 0)) + np.minimum(
+        np.maximum(qx, qy), 0
+    )
+    field[y0:y1, x0:x1] = np.minimum(field[y0:y1, x0:x1], distance)
 
 
 def _sample_sdf(values, x, y, source_to_dest):
@@ -288,6 +434,17 @@ def register_plugins(registry):
                 "valign",
                 "fallback_fonts",
                 "missing_glyph",
+                "clip",
+                "overflow",
+                "trim_trailing_spaces",
+                "white_space",
+                "first_line_indent",
+                "max_lines",
+                "decoration",
+                "decoration_thickness",
+                "word_spacing",
+                "letter_spacing",
+                "vertical_metrics",
                 "direction",
                 "script",
                 "language",
@@ -302,13 +459,24 @@ def register_plugins(registry):
                 "samples": 16,
                 "cache_size": 128,
                 "line_height": 1.2,
-                "oversample": 2.0,
+                "oversample": 2.5,
                 "min_render_size": 64,
                 "box": None,
                 "align": "left",
                 "valign": "middle",
                 "fallback_fonts": (),
                 "missing_glyph": "ignore",
+                "clip": False,
+                "overflow": "visible",
+                "trim_trailing_spaces": True,
+                "white_space": "normal",
+                "first_line_indent": 0.0,
+                "max_lines": None,
+                "decoration": (),
+                "decoration_thickness": 0.0,
+                "word_spacing": 0.0,
+                "letter_spacing": 0.0,
+                "vertical_metrics": "hhea",
                 "direction": None,
                 "script": None,
                 "language": None,

@@ -89,6 +89,49 @@ class RenderCacheInfo:
     skips: int
 
 
+_SPATIAL_PARAMS = {
+    "center", "radius", "r", "radii", "a", "b", "c", "point",
+    "point_1", "point_2", "point_3", "start", "end", "points",
+    "vertices", "size", "width", "height", "offset", "ox", "oy",
+    "box", "scale", "inflate", "inner", "outer", "line_width",
+    "thickness", "corner_radius", "k", "s",
+    "feather", "spacing", "distance", "blur", "base", "first_line_indent",
+    "decoration_thickness", "word_spacing", "letter_spacing", "min_render_size",
+}
+
+
+def _scale_spatial_params(op, params, scale):
+    """Scale scene-space measurements while leaving colors and quality controls alone."""
+
+    def scaled(value):
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return value * scale
+        if isinstance(value, tuple):
+            return tuple(scaled(item) for item in value)
+        if isinstance(value, list):
+            return [scaled(item) for item in value]
+        return value
+
+    result = dict(params)
+    for key in _SPATIAL_PARAMS.intersection(result):
+        result[key] = scaled(result[key])
+    if op == "text":
+
+        def scale_span(value):
+            if isinstance(value, dict):
+                return {
+                    key: scaled(item) if key in _SPATIAL_PARAMS else scale_span(item)
+                    for key, item in value.items()
+                }
+            if isinstance(value, (tuple, list)):
+                return type(value)(scale_span(item) for item in value)
+            return value
+
+        if "value" in result:
+            result["value"] = scale_span(result["value"])
+    return result
+
+
 class Renderer:
     """Render nodes on one context while reusing a caller-provided cache.
 
@@ -281,6 +324,9 @@ class Renderer:
         plugin = registry.get(node.op)
         inputs = tuple(self.render(input_) for input_ in node.inputs)
         params = dict((key, self._resolve(value)) for key, value in node.params)
+        scale = getattr(self.ctx, "device_scale", 1.0)
+        if scale != 1.0:
+            params = _scale_spatial_params(node.op, params, scale)
         result = plugin.render(self, inputs, params)
 
         if node.should_cache:
@@ -288,6 +334,7 @@ class Renderer:
             self.stats.cache_writes += 1
 
         return result
+
 
     def _resolve(self, value):
         if isinstance(value, TextureNode) or isinstance(value, MultiOutputResult):

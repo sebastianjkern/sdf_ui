@@ -27,6 +27,8 @@ class DispatchConfig:
 
 class Context:
     size: tuple[int, int]
+    logical_size: tuple[int, int]
+    device_scale: float
     progress: float
     dispatch_config: DispatchConfig
     dispatch_groups: tuple[int, int, int]
@@ -37,6 +39,7 @@ class Context:
         dispatch_config: DispatchConfig | dict[str, Any] | None = ...,
         *,
         power_preference: str = ...,
+        device_scale: float = ...,
     ) -> None: ...
     def create_shader_module(self, code: str, *, label: str = ...) -> Any: ...
     def compute_pipeline(

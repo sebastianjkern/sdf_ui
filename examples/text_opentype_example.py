@@ -10,15 +10,16 @@ def text_opentype_example(output=Path("out/examples/text_opentype.png")):
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
 
-    with Canvas((720, 300)) as canvas:
+    with Canvas((720, 360)) as canvas:
         scene = color.clear("#111827")
         rows = (
             ("Default OpenType", "office AVATAR", {}),
             ("Ligatures disabled", "office AVATAR", {"liga": False}),
             ("Kerning disabled", "AVATAR To Wa", {"kern": False}),
+            ("Combining mark", "cafe\u0301", {}),
         )
         for index, (label, value, features) in enumerate(rows):
-            center_y = 235 - index * 88
+            center_y = 300 - index * 78
             scene = scene.over(
                 sdf.text(
                     label,

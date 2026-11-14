@@ -46,6 +46,12 @@ class _OperationNamespace:
 class SDFNamespace(_OperationNamespace):
     kind = TextureKind.SDF
 
+    def text(self, *args, **kwargs):
+        """Create text, including inline spans, through the user-facing API."""
+        from ..text import text
+
+        return text(*args, **kwargs)
+
 
 class ColorNamespace(_OperationNamespace):
     kind = TextureKind.COLOR

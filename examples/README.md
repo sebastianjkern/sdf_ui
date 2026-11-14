@@ -21,12 +21,27 @@ Generated images and checkpoints go under `out/`.
 alignment in fixed lower-left-origin text boxes. It uses ``measure_text`` to
 size boxes from the actual line layout; ``sdf.text`` also accepts ordered
 ``fallback_fonts`` and can raise on unsupported characters with
-``missing_glyph="error"``.
+``missing_glyph="error"``. Text boxes can clip explicitly with ``clip=True``;
+``measure_text(..., width=..., height=...)`` reports whether the layout overflows.
+Use ``align="justify"`` to expand word spaces on non-final lines, or choose
+``overflow="visible"``, ``"clip"``, or ``"error"`` for a text box. Set
+``trim_trailing_spaces=False`` to retain line-ending space advances.
 
 ``text_opentype`` shows standard ligature and kerning behavior and how to
 override OpenType feature tags with ``features={"liga": False}``. Text shaping
 also accepts explicit ``direction``, ``script``, ``language``, and variable
 font ``variations``; measurement and rendering share the same shaping options.
+
+Text can add SDF-native ``underline``, ``overline``, and ``line-through`` rules.
+For inline styling, build runs from ``span("Large", size=38)`` and
+``span(" regular", size=22)`` and pass them to ``text([...])``. Inline runs
+can wrap and align in text boxes and select font paths, sizes, OpenType features,
+and decorations.
+``measure_text`` reports line widths, ascent/descent, baselines, and glyph ink
+bounds; ``measure_glyph`` reports a grapheme's advance and ink bounds. To use
+the host's fonts, resolve one with ``from sdf_ui.text import system_font`` and
+pass ``path=system_font("Noto Sans")``. The bundled Roboto remains the default
+for consistent output between systems.
 
 ``center_div`` trains an offset at progress 0.5, then sweeps the learned div
 across its animation curve. It exports ``center_div.gif`` for the learning

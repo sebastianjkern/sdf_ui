@@ -52,8 +52,17 @@ void main() {
     }
 
     float distance = imageLoad(sdf, texelPos).r - inflate;
-
-    float fill = smoothstep(first, second + SMOOTHSTEP_OFFSET, distance);
+    ivec2 sdfSize = imageSize(sdf);
+    ivec2 leftPos = max(texelPos - ivec2(1, 0), ivec2(0));
+    ivec2 rightPos = min(texelPos + ivec2(1, 0), sdfSize - ivec2(1));
+    ivec2 downPos = max(texelPos - ivec2(0, 1), ivec2(0));
+    ivec2 upPos = min(texelPos + ivec2(0, 1), sdfSize - ivec2(1));
+    float gradientX = (imageLoad(sdf, rightPos).r - imageLoad(sdf, leftPos).r) /
+                      max(float(rightPos.x - leftPos.x), 1.0);
+    float gradientY = (imageLoad(sdf, upPos).r - imageLoad(sdf, downPos).r) /
+                      max(float(upPos.y - downPos.y), 1.0);
+    float edgeWidth = max(0.5 * (abs(gradientX) + abs(gradientY)), SMOOTHSTEP_OFFSET);
+    float fill = smoothstep(max(first, second - edgeWidth), second + edgeWidth, distance);
 
     vec4 fg_lab = vec4(rgb2lab(color.rgb), color.a);
     vec4 bg_lab = vec4(rgb2lab(background.rgb), background.a);
