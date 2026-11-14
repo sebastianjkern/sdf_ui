@@ -1,20 +1,28 @@
-from sdf_ui.fonts import default_font_path
-
 __docformat__ = "google"
 
 from functools import lru_cache
 from math import ceil, floor
+from numbers import Real
 
 import numpy as np
-import ttfquery
-from ttfquery import describe
 
+from sdf_ui.fonts import (
+    font_metrics as _font_metrics,
+)
+from sdf_ui.fonts import (
+    font_paths,
+    layout_font_paths,
+    layout_text,
+    text_vertical_metrics,
+)
+from sdf_ui.fonts import (
+    glyph_metrics as _glyph_metrics,
+)
 from sdf_ui.gpu.nodes.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.gpu.nodes.primitives.glyph.plugin import (
     _contour_distance_sq,
     _contour_winding,
-    _flatten_contour,
-    _raw_glyph_contours,
+    _raw_glyph_contours_by_id,
 )
 
 
@@ -24,52 +32,99 @@ def render_text(renderer, _inputs, params):
     font_size = float(params["size"])
     ox = float(params["ox"])
     oy = float(params["oy"])
-    path = params["path"] or default_font_path()
+    paths = font_paths(params["path"], params["fallback_fonts"])
     samples = int(params["samples"])
     cache_size = int(params["cache_size"])
     line_height = float(params["line_height"])
     oversample = float(params["oversample"])
     min_render_size = float(params["min_render_size"])
+    box = _normalize_box(params["box"])
+    align = params["align"]
+    valign = params["valign"]
+    missing_glyph = params["missing_glyph"]
+    shape_options = {
+        key: params[key]
+        for key in ("direction", "script", "language", "features", "variations")
+    }
+    for key in ("features", "variations"):
+        if isinstance(shape_options[key], tuple):
+            shape_options[key] = dict(shape_options[key])
 
-    metrics = _font_metrics(path)
-    scale = font_size / metrics["units_per_em"]
+    if not np.isfinite(font_size) or font_size <= 0:
+        raise ValueError("text size must be a finite positive number")
+    if not np.isfinite(line_height) or line_height <= 0:
+        raise ValueError("text line_height must be a finite positive number")
+
     effective_font_size = max(font_size, min_render_size)
-    distance_scale = effective_font_size / metrics["units_per_em"]
     field = np.full((height, width), max(width, height), dtype=np.float32)
     glyph_cache_size = _glyph_cache_size(
         font_size, oversample, cache_size, min_render_size
     )
 
-    previous = None
-    pen_x = 0.0
-    pen_y = 0.0
-    line_advance = metrics["units_per_em"] * line_height
+    line_advance = font_size * line_height
+    lines = layout_text(
+        params["value"],
+        paths,
+        font_size,
+        box_width=box[2] if box is not None else None,
+        missing_glyph=missing_glyph,
+        **shape_options,
+    )
+    ascent, descent = text_vertical_metrics(layout_font_paths(paths, lines), font_size)
 
-    for char in params["value"]:
-        if char == "\n":
-            previous = None
-            pen_x = 0.0
-            pen_y -= line_advance
-            continue
+    if align not in {"left", "center", "right"}:
+        raise ValueError("text align must be 'left', 'center', or 'right'")
+    if valign not in {"top", "middle", "bottom"}:
+        raise ValueError("text valign must be 'top', 'middle', or 'bottom'")
+    if box is None and align != "left":
+        raise ValueError("text alignment requires a box")
 
-        glyph_metrics = _glyph_metrics(path, char)
-        if previous is not None:
-            pen_x += _kerning(path, previous, char)
+    x, y, box_width, box_height = box if box is not None else (ox, oy, None, None)
+    if box is None:
+        first_baseline = oy
+    else:
+        block_height = ascent - descent + max(len(lines) - 1, 0) * line_advance
+        if valign == "top":
+            first_baseline = y + box_height - ascent
+        elif valign == "middle":
+            block_bottom = y + (box_height - block_height) / 2
+            first_baseline = (
+                block_bottom - descent + max(len(lines) - 1, 0) * line_advance
+            )
+        else:
+            first_baseline = y - descent + max(len(lines) - 1, 0) * line_advance
 
-        if glyph_metrics["name"] is not None:
-            patch = _cached_glyph_sdf(path, char, samples, glyph_cache_size)
+    for line_index, (placements, line_width, _line_text) in enumerate(lines):
+        if box is None:
+            line_x = ox
+        elif align == "left":
+            line_x = x
+        elif align == "center":
+            line_x = x + (box_width - line_width) / 2
+        else:
+            line_x = x + box_width - line_width
+
+        baseline = first_baseline - line_index * line_advance
+        for glyph_id, glyph_path, glyph_x, glyph_y in placements:
+            glyph_metrics = _font_metrics(glyph_path)
+            glyph_scale = font_size / glyph_metrics["units_per_em"]
+            glyph_distance_scale = effective_font_size / glyph_metrics["units_per_em"]
+            patch = _cached_glyph_sdf(
+                glyph_path,
+                glyph_id,
+                samples,
+                glyph_cache_size,
+                tuple(sorted((shape_options["variations"] or {}).items())),
+            )
             if patch["field"].size:
                 _composite_glyph(
                     field,
                     patch,
-                    ox + pen_x * scale,
-                    oy + pen_y * scale,
-                    scale,
-                    distance_scale,
+                    line_x + glyph_x,
+                    baseline + glyph_y,
+                    glyph_scale,
+                    glyph_distance_scale,
                 )
-
-        pen_x += glyph_metrics["advance"]
-        previous = char
 
     tex = ctx.r32f()
     tex.write(field.tobytes())
@@ -77,6 +132,22 @@ def render_text(renderer, _inputs, params):
     from sdf_ui.core.sdf import SDFTexture
 
     return SDFTexture(tex=tex, context=ctx)
+
+
+def _normalize_box(box):
+    if box is None:
+        return None
+    if not isinstance(box, (tuple, list)) or len(box) != 4:
+        raise TypeError("text box must be (x, y, width, height)")
+    if any(
+        isinstance(value, bool) or not isinstance(value, Real) or not np.isfinite(value)
+        for value in box
+    ):
+        raise ValueError("text box values must be finite numbers")
+    x, y, width, height = map(float, box)
+    if width <= 0 or height <= 0:
+        raise ValueError("text box width and height must be positive")
+    return x, y, width, height
 
 
 def _glyph_cache_size(font_size, oversample, cache_size, min_render_size=0.0):
@@ -150,10 +221,10 @@ def _sample_bilinear(values, x, y):
     return top * (1.0 - ty) + bottom * ty
 
 
-@lru_cache(maxsize=512)
-def _cached_glyph_sdf(path, char, samples, glyph_cache_size):
-    raw_contours = _raw_glyph_contours(path, char)
-    glyph_metrics = _glyph_metrics(path, char)
+@lru_cache(maxsize=1024)
+def _cached_glyph_sdf(path, glyph_id, samples, glyph_cache_size, variation_items=()):
+    raw_contours = _raw_glyph_contours_by_id(path, glyph_id, samples, variation_items)
+    glyph_metrics = _glyph_metrics(path, glyph_id, variation_items)
     if not raw_contours or glyph_metrics["name"] is None:
         return {
             "field": np.empty((0, 0), dtype=np.float32),
@@ -176,7 +247,7 @@ def _cached_glyph_sdf(path, char, samples, glyph_cache_size):
                 (point[0] - origin[0]) / units_per_pixel,
                 (point[1] - origin[1]) / units_per_pixel,
             )
-            for point in _flatten_contour(contour, samples)
+            for point in contour
         )
         for contour in raw_contours
     )
@@ -193,53 +264,6 @@ def _cached_glyph_sdf(path, char, samples, glyph_cache_size):
     field = np.sqrt(distance_sq).astype(np.float32)
     field[winding != 0] *= -1.0
     return {"field": field, "origin": origin, "units_per_pixel": units_per_pixel}
-
-
-@lru_cache(maxsize=64)
-def _font_metrics(path):
-    font = describe.openFont(path)
-    return {
-        "units_per_em": float(font["head"].unitsPerEm),
-        "ascent": float(font["hhea"].ascent),
-        "descent": float(font["hhea"].descent),
-    }
-
-
-@lru_cache(maxsize=512)
-def _glyph_metrics(path, char):
-    font = describe.openFont(path)
-    glyph_name = ttfquery.glyphquery.glyphName(font, char)
-    if glyph_name is None:
-        return {"name": None, "advance": 0.0, "bbox": (0.0, 0.0, 0.0, 0.0)}
-
-    advance, _left_side_bearing = font["hmtx"].metrics.get(glyph_name, (0, 0))
-    glyph = font["glyf"][glyph_name]
-    if glyph.numberOfContours == 0:
-        bbox = (0.0, 0.0, 0.0, 0.0)
-    else:
-        bbox = (
-            float(glyph.xMin),
-            float(glyph.yMin),
-            float(glyph.xMax),
-            float(glyph.yMax),
-        )
-    return {"name": glyph_name, "advance": float(advance), "bbox": bbox}
-
-
-@lru_cache(maxsize=2048)
-def _kerning(path, left, right):
-    font = describe.openFont(path)
-    left_name = ttfquery.glyphquery.glyphName(font, left)
-    right_name = ttfquery.glyphquery.glyphName(font, right)
-    if left_name is None or right_name is None or "kern" not in font:
-        return 0.0
-
-    kern_table = font["kern"]
-    for table in getattr(kern_table, "kernTables", ()):
-        value = getattr(table, "kernTable", {}).get((left_name, right_name))
-        if value is not None:
-            return float(value)
-    return 0.0
 
 
 def register_plugins(registry):
@@ -259,6 +283,16 @@ def register_plugins(registry):
                 "line_height",
                 "oversample",
                 "min_render_size",
+                "box",
+                "align",
+                "valign",
+                "fallback_fonts",
+                "missing_glyph",
+                "direction",
+                "script",
+                "language",
+                "features",
+                "variations",
             ),
             defaults={
                 "size": 64,
@@ -270,6 +304,16 @@ def register_plugins(registry):
                 "line_height": 1.2,
                 "oversample": 2.0,
                 "min_render_size": 64,
+                "box": None,
+                "align": "left",
+                "valign": "middle",
+                "fallback_fonts": (),
+                "missing_glyph": "ignore",
+                "direction": None,
+                "script": None,
+                "language": None,
+                "features": None,
+                "variations": None,
             },
             public=True,
             render_func=render_text,

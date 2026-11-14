@@ -19,7 +19,10 @@ dependencies = [
     "opencv-python>=4.5.1.48",
     "pillow>=13.0.0",
     "wgpu>=0.33,<0.34",
-    "console"
+    "console",
+    "uharfbuzz>=0.50",
+    "fonttools>=4.0",
+    "python-bidi>=0.6",
 ]
 
 [dependency-groups]

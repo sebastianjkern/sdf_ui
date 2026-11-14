@@ -27,6 +27,8 @@ from examples.ring_example import ring_example
 from examples.rotation_example import rotation_example
 from examples.sector_example import sector_example
 from examples.striped_circles_example import striped_circles_example
+from examples.text_layout_example import text_layout_example
+from examples.text_opentype_example import text_opentype_example
 from examples.text_rendering_example import text_rendering_example
 from examples.transparency_example import transparency_example
 from examples.voronoi_example import voronoi_example
@@ -41,6 +43,8 @@ examples = {
     "rotation": rotation_example,
     "voronoi": voronoi_example,
     "text": text_rendering_example,
+    "text_layout": text_layout_example,
+    "text_opentype": text_opentype_example,
     "transparency": transparency_example,
     "font": font_example,
     "complex": complex_shapes_example,

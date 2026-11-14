@@ -35,8 +35,18 @@ drivers; WSL is not currently supported by `wgpu-py`.
 
 For interactive work, prefer `Canvas.render(...)`, the built-in `.save(...)` method on render nodes, or a cached `Canvas.session(...)`.
 
-Text and glyph rendering use the bundled Roboto font by default. Pass an explicit
-TrueType font path to use a different font.
+Text and glyph rendering use the bundled Roboto font by default. Text accepts
+TrueType or OpenType fonts, ordered fallback fonts, and OpenType shaping controls:
+
+```python
+from sdf_ui import sdf
+
+sdf.text("office AVATAR", features={"liga": False, "kern": True})
+```
+
+Use `direction`, `script`, and `language` to override inferred shaping runs, and
+`variations={"wght": 650}` to set variable font axes. See
+[`text_opentype`](examples/README.md) for a rendered example.
 
 
 For development from a checkout, install [uv](https://docs.astral.sh/uv/getting-started/installation/) and run:
@@ -348,9 +358,7 @@ export. The ideas below are the remaining work; they are grouped by area.
 
 #### Text and Typography
 
-- [ ] Improve baseline handling and text shaping.
-- [ ] Add line wrapping, alignment, and text-box support.
-- [ ] Add font fallback and missing-glyph handling.
+- [x] Add OpenType shaping for script runs, ligatures, combining marks, and bidirectional text.
 - [ ] Build a custom SDF font pipeline.
 
 #### Animation and Motion

@@ -1,0 +1,54 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+from .core.sdf import SDFTexture
+
+def glyph(
+    char: str,
+    scale: Any,
+    ox: Any,
+    oy: Any,
+    path: str | Path | None = ...,
+    samples: int = ...,
+) -> SDFTexture: ...
+
+def text(
+    value: str,
+    size: Any = ...,
+    ox: Any = ...,
+    oy: Any = ...,
+    path: str | Path | None = ...,
+    samples: int = ...,
+    cache_size: int = ...,
+    line_height: float = ...,
+    oversample: float = ...,
+    min_render_size: float = ...,
+    box: tuple[float, float, float, float] | None = ...,
+    align: str = ...,
+    valign: str = ...,
+    fallback_fonts: str | Path | tuple[str | Path, ...] | list[str | Path] = ...,
+    missing_glyph: str = ...,
+    direction: str | None = ...,
+    script: str | None = ...,
+    language: str | None = ...,
+    features: dict[str, int | bool] | None = ...,
+    variations: dict[str, float] | None = ...,
+) -> SDFTexture: ...
+
+def measure_text(
+    value: str,
+    size: float = ...,
+    path: str | Path | None = ...,
+    *,
+    width: float | None = ...,
+    line_height: float = ...,
+    fallback_fonts: str | Path | tuple[str | Path, ...] | list[str | Path] = ...,
+    missing_glyph: str = ...,
+    direction: str | None = ...,
+    script: str | None = ...,
+    language: str | None = ...,
+    features: dict[str, int | bool] | None = ...,
+    variations: dict[str, float] | None = ...,
+) -> dict[str, Any]: ...

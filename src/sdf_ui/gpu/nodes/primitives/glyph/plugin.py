@@ -7,6 +7,8 @@ from math import ceil
 
 import numpy as np
 import ttfquery
+from fontTools.pens.basePen import BasePen
+from fontTools.ttLib import TTFont
 from ttfquery import describe, glyph
 
 from sdf_ui.gpu.nodes.base import Plugin, PluginFamily, TextureKind
@@ -69,6 +71,86 @@ def _raw_glyph_contours(font_file_path, char):
     return tuple(
         tuple(contour) for contour in glyph.Glyph(glyph_name).calculateContours(font)
     )
+
+
+class _SampledOutlinePen(BasePen):
+    """Decompose a font glyph into sampled line contours, including CFF curves."""
+
+    def __init__(self, glyph_set, samples):
+        super().__init__(glyph_set)
+        self.samples = max(1, int(samples))
+        self.contours = []
+        self.current = None
+
+    def _moveTo(self, point):
+        if self.current:
+            self._finish()
+        self.current = [tuple(map(float, point))]
+
+    def _lineTo(self, point):
+        self.current.append(tuple(map(float, point)))
+
+    def _curveToOne(self, control1, control2, end):
+        start = self._getCurrentPoint()
+        for index in range(1, self.samples + 1):
+            t = index / self.samples
+            u = 1.0 - t
+            self.current.append(
+                (
+                    u**3 * start[0]
+                    + 3 * u**2 * t * control1[0]
+                    + 3 * u * t**2 * control2[0]
+                    + t**3 * end[0],
+                    u**3 * start[1]
+                    + 3 * u**2 * t * control1[1]
+                    + 3 * u * t**2 * control2[1]
+                    + t**3 * end[1],
+                )
+            )
+
+    def _qCurveToOne(self, control, end):
+        start = self._getCurrentPoint()
+        for index in range(1, self.samples + 1):
+            t = index / self.samples
+            u = 1.0 - t
+            self.current.append(
+                (
+                    u * u * start[0] + 2 * u * t * control[0] + t * t * end[0],
+                    u * u * start[1] + 2 * u * t * control[1] + t * t * end[1],
+                )
+            )
+
+    def _closePath(self):
+        self._finish(close=True)
+
+    def _endPath(self):
+        self._finish(close=True)
+
+    def _finish(self, close=False):
+        if self.current:
+            if close and self.current[0] != self.current[-1]:
+                self.current.append(self.current[0])
+            self.contours.append(tuple(self.current))
+        self.current = None
+
+
+@lru_cache(maxsize=64)
+def _outline_font(font_file_path):
+    return TTFont(font_file_path, lazy=False)
+
+
+@lru_cache(maxsize=128)
+def _raw_glyph_contours_by_id(font_file_path, glyph_id, samples, variation_items=()):
+    font = _outline_font(font_file_path)
+    order = font.getGlyphOrder()
+    if glyph_id < 0 or glyph_id >= len(order):
+        return ()
+    location = dict(variation_items) if variation_items else None
+    glyph_set = font.getGlyphSet(location=location)
+    pen = _SampledOutlinePen(glyph_set, samples)
+    glyph_set[order[glyph_id]].draw(pen)
+    pen._finish(close=True)
+    return tuple(contour for contour in pen.contours if len(contour) > 1)
 
 
 def _flatten_contour(contour, samples):

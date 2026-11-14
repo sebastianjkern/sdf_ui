@@ -14,6 +14,9 @@
 - [x] Add scale, translation, and rotation transforms across shape graphs.
 - [x] Add segment-width and shape-outline operations.
 - [x] Cache glyph contours and glyph SDFs by font, size, and character; add basic kerning and multi-glyph text runs.
+- [x] Add fixed-box text wrapping and horizontal/vertical alignment using font ascent and descent metrics.
+- [x] Add text measurement, ordered font fallbacks, and configurable missing-glyph behavior.
+- [x] Shape text with HarfBuzz OpenType features, script/language/direction runs, variable font axes, and bidirectional ordering; rasterize TrueType and CFF glyph outlines.
 - [x] Add linear and radial gradient APIs using composed shading passes.
 - [x] Add RGB/LAB color-space conversion helpers.
 
