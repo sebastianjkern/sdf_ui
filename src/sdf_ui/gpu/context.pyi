@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from contextlib import AbstractContextManager
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Callable, Iterable, Mapping
 
 from ..core.texture import Renderer, TextureNode
-from ..graph.runtime import RenderGraph
+from ..graph.runtime import FitResult, LossContext, RenderGraph
 from ..graph.session import TrainingSession
+from ..learning.autodiff import Tensor
 from .image import GPUImage
 from .resources import GPUBuffer
 
@@ -127,6 +128,17 @@ class Context:
         size: tuple[int, int] | None = ...,
         inputs: Any = ...,
     ) -> TrainingSession: ...
+    def fit(
+        self,
+        outputs: Any,
+        loss: Callable[[LossContext], Tensor],
+        *,
+        steps: int = ...,
+        lr: float = ...,
+        params: Mapping[str, Any] | None = ...,
+        size: tuple[int, int] | None = ...,
+        inputs: Mapping[str, Any] | None = ...,
+    ) -> FitResult: ...
     def create_graph_backend(self) -> Any: ...
     def differentiate(
         self, texture: Any, params: dict[str, Any] | None = ...

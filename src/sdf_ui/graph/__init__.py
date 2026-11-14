@@ -17,12 +17,15 @@ if TYPE_CHECKING:
     from .lowering import GraphPlan as GraphPlan
     from .lowering import Port as Port
     from .lowering import lower_graph as lower_graph
+    from .runtime import FitResult as FitResult
     from .runtime import (
         GraphExecution as GraphExecution,
     )
     from .runtime import (
         GraphTrainer as GraphTrainer,
     )
+    from .runtime import LossContext as LossContext
+    from .runtime import LossLayer as LossLayer
     from .runtime import (
         RenderGraph as RenderGraph,
     )
@@ -42,6 +45,9 @@ _EXPORTS = {
     "GraphExecution": "runtime",
     "GraphTrainer": "runtime",
     "inspect_graph": "inspection",
+    "FitResult": "runtime",
+    "LossContext": "runtime",
+    "LossLayer": "runtime",
 }
 __all__ = list(_EXPORTS)
 

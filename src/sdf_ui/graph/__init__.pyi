@@ -13,8 +13,11 @@ from .inspection import inspect_graph as inspect_graph
 from .lowering import GraphPlan as GraphPlan
 from .lowering import Port as Port
 from .lowering import lower_graph as lower_graph
+from .runtime import FitResult as FitResult
 from .runtime import GraphExecution as GraphExecution
 from .runtime import GraphTrainer as GraphTrainer
+from .runtime import LossContext as LossContext
+from .runtime import LossLayer as LossLayer
 from .runtime import RenderGraph as RenderGraph
 from .session import TrainingSession as TrainingSession
 

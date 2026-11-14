@@ -6,7 +6,7 @@ from typing import Any, Literal, Self, overload
 
 from numpy.typing import NDArray
 
-from ..core.texture import TextureNode
+from ..core.texture import MultiOutputResult, TextureNode
 from ..gpu.image import GPUImage
 from ..learning.autodiff import Parameter, Tensor
 from ..learning.objective import Objective
@@ -53,8 +53,25 @@ class RenderGraph:
     def percent_x(self, value: Any) -> Any: ...
     def percent_y(self, value: Any) -> Any: ...
     def percent_of_min(self, value: Any) -> Any: ...
-    def run(self, objective: Objective | None = ...) -> GraphExecution: ...
-    def execute(self, objective: Objective | None = ...) -> GraphExecution: ...
+    def run(
+        self,
+        objective: Objective | None = ...,
+        *,
+        loss: Callable[[LossContext], Tensor] | None = ...,
+    ) -> GraphExecution: ...
+    def execute(
+        self,
+        objective: Objective | None = ...,
+        *,
+        loss: Callable[[LossContext], Tensor] | None = ...,
+    ) -> GraphExecution: ...
+    def fit(
+        self,
+        loss: Callable[[LossContext], Tensor],
+        *,
+        steps: int = ...,
+        lr: float = ...,
+    ) -> FitResult: ...
     @overload
     def render(
         self, *, backend: Literal["display"] = ...
@@ -78,6 +95,7 @@ class RenderGraph:
 class GraphExecution:
     graph: RenderGraph
     objective: Objective | None
+    loss_callback: Callable[[LossContext], Tensor] | None
     outputs: Mapping[str, GPUImage]
     loss: float | None
     metrics: dict[str, float]
@@ -96,6 +114,22 @@ class GraphExecution:
     def close(self) -> None: ...
     def __enter__(self) -> Self: ...
     def __exit__(self, *_: Any) -> None: ...
+
+class LossLayer:
+    name: str | None
+    output: Tensor
+
+class LossContext:
+    outputs: Mapping[str, LossLayer]
+    parameters: Mapping[str, Parameter]
+    def __getitem__(
+        self, key: str | int | TextureNode | MultiOutputResult
+    ) -> LossLayer: ...
+
+class FitResult:
+    history: tuple[float, ...]
+    steps: int
+    final_loss: float
 
 class GraphTrainer:
     graph: RenderGraph

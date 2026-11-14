@@ -22,6 +22,7 @@ import wgpu
 
 if TYPE_CHECKING:
     from ..core.texture import Renderer
+    from ..graph.runtime import FitResult
 
 
 def _wgsl_functions(code):
@@ -553,6 +554,28 @@ class Context:
         from ..graph.session import TrainingSession
 
         return TrainingSession(self, outputs, params, size=size, inputs=inputs)
+
+    def fit(
+        self,
+        outputs: Any,
+        loss,
+        *,
+        steps: int = 100,
+        lr: float = 0.01,
+        params: Any = None,
+        size: tuple[int, int] | None = None,
+        inputs: Any = None,
+    ) -> FitResult:
+        """Optimize scene parameters with a custom scalar Tensor loss.
+
+        The loss callback receives named/indexed scene outputs through a
+        ``LossContext`` and may use any of its parameters. Requested layer
+        outputs are copied to differentiable CPU Tensors for the callback;
+        use native ``training`` with an ``Objective`` for loss-heavy renders
+        that should avoid pixel readback.
+        """
+        with self.compile(outputs, params, size=size, inputs=inputs) as graph:
+            return graph.fit(loss, steps=steps, lr=lr)
 
     def differentiate(self, texture: Any, params: dict[str, Any] | None = None) -> Any:
         from ..learning.render import DifferentiableRenderer

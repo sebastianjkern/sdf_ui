@@ -4,6 +4,7 @@ import json
 import weakref
 from collections.abc import Mapping
 from hashlib import sha256
+from numbers import Integral
 from pathlib import Path
 from types import MappingProxyType
 
@@ -13,7 +14,8 @@ from PIL import Image
 from ..core.expressions import Expr, evaluate_expr
 from ..core.image import Image as BackendImage
 from ..core.image import shape_size
-from ..learning.autodiff import Parameter, Tensor
+from ..core.texture import MultiOutputResult, TextureNode
+from ..learning.autodiff import Parameter, Tensor, as_tensor
 from ..learning.objective import Objective
 from ..learning.render import _tensor
 from ..util import hex_col
@@ -45,6 +47,96 @@ def _validate_shared_graph_case(case, graph):
         id(parameter) for parameter in case.graph.parameters
     } != {id(parameter) for parameter in graph.parameters}:
         raise ValueError("Cases must share a Canvas and parameter leaves")
+
+
+class FitResult:
+    """Detached loss history from a one-shot graph fit."""
+
+    def __init__(self, history):
+        self.history = tuple(float(value) for value in history)
+        self.steps = len(self.history)
+
+    @property
+    def final_loss(self):
+        """Loss measured before the final optimizer update."""
+        return self.history[-1]
+
+
+class LossLayer:
+    """A named graph output exposed as a differentiable Tensor during loss evaluation."""
+
+    def __init__(self, execution, name=None, port=None):
+        self._execution = execution
+        self.name = name
+        self._port = port
+
+    @property
+    def output(self):
+        execution = self._execution
+        execution._check()
+        port = (
+            self._port
+            if self._port is not None
+            else execution.graph.plan.outputs[self.name]
+        )
+        key = (port.pass_index, port.output_index)
+        if key not in execution._custom_output_tensors:
+            image = execution._port_image(port)
+            execution._custom_output_tensors[key] = as_tensor(
+                image.read(), requires_grad=True
+            )
+        return execution._custom_output_tensors[key]
+
+
+class LossContext:
+    """Differentiable layer outputs and parameter leaves for a loss callback."""
+
+    def __init__(self, execution):
+        self._execution = execution
+        self._names = tuple(execution.graph.plan.outputs)
+        self._layers = {name: LossLayer(execution, name) for name in self._names}
+        self.parameters = MappingProxyType(
+            {parameter.name: parameter for parameter in execution.graph.parameters}
+        )
+
+    @property
+    def outputs(self):
+        return MappingProxyType(self._layers)
+
+    def __getitem__(self, key):
+        if isinstance(key, (TextureNode, MultiOutputResult)):
+            ports = self._execution.graph.plan._node_outputs.get(id(key))
+            if ports is None:
+                name = self._execution.graph._output_nodes.get(id(key))
+                ports = (
+                    (self._execution.graph.plan.outputs[name],)
+                    if name is not None
+                    else None
+                )
+            if not ports:
+                raise KeyError("Scene node is not part of the compiled graph")
+            if len(ports) != 1:
+                raise ValueError(
+                    "Select one output from a multi-output scene node before using it in a loss"
+                )
+            name = self._execution.graph._output_nodes.get(id(key))
+            return LossLayer(self._execution, name=name, port=ports[0])
+        if isinstance(key, str):
+            try:
+                return self._layers[key]
+            except KeyError as exc:
+                raise KeyError(
+                    f"Unknown graph output '{key}'. Available outputs: "
+                    + ", ".join(self._names)
+                ) from exc
+        if isinstance(key, bool) or not isinstance(key, int):
+            raise TypeError(
+                "Loss graph indexes must be output names or integer indexes"
+            )
+        try:
+            return self._layers[self._names[key]]
+        except IndexError as exc:
+            raise IndexError("Loss graph output index is out of range") from exc
 
 
 def _validate_trainer_checkpoint(trainer, state, parameter_store_type):
@@ -124,6 +216,13 @@ class RenderGraph:
         self.params = {} if params is None else params
         if not isinstance(self.params, Mapping):
             raise TypeError("Graph params must be a mapping")
+        if isinstance(outputs, (TextureNode, MultiOutputResult)):
+            outputs = {"output": outputs}
+        self._output_nodes = (
+            {id(node): name for name, node in outputs.items()}
+            if isinstance(outputs, Mapping)
+            else {}
+        )
         self._inputs = {}
         self._input_version = 0
         self._set_inputs({} if inputs is None else inputs)
@@ -410,23 +509,63 @@ class RenderGraph:
             result.append(values)
         return result
 
-    def run(self, objective=None):
+    def run(self, objective=None, *, loss=None):
         self._check()
         if self._running or (self._active is not None and not self._active.closed):
             raise RuntimeError(
                 "Close the previous graph execution before starting another"
             )
+        if objective is not None and loss is not None:
+            raise ValueError("Pass either an Objective or a loss callback, not both")
         if objective is not None and not isinstance(objective, Objective):
             raise TypeError("Graph objective must be an Objective")
+        if loss is not None and not callable(loss):
+            raise TypeError("Graph loss must be callable")
         self._running = True
         try:
-            execution = GraphExecution(self, objective)
+            execution = GraphExecution(self, objective, loss=loss)
             self._active = execution
             return execution
         finally:
             self._running = False
 
     execute = run
+
+    def fit(self, loss, *, steps=100, lr=0.01):
+        """Fit graph parameters with a scalar Tensor loss callback.
+
+        The callback receives a :class:`LossContext`. Reading a layer's
+        ``output`` creates a differentiable CPU Tensor and transfers that
+        output from the GPU for the callback.
+        """
+        self._check()
+        if not callable(loss):
+            raise TypeError("loss must be callable")
+        if isinstance(steps, bool) or not isinstance(steps, Integral) or steps <= 0:
+            raise ValueError("steps must be a positive integer")
+        steps = int(steps)
+        if not self.trainable_parameters:
+            raise ValueError("Graph has no registered trainable parameters")
+
+        optimizer = self.backend.create_optimizer(self.trainable_parameters, lr=lr)
+        history = []
+        try:
+            for _ in range(steps):
+                optimizer.zero_grad()
+                with self.run(loss=loss) as execution:
+                    execution.backward()
+                    if not any(
+                        parameter.grad is not None
+                        for parameter in self.trainable_parameters
+                    ):
+                        raise ValueError(
+                            "Loss has no gradient path to graph parameters"
+                        )
+                    optimizer.step()
+                    history.append(execution.loss)
+        finally:
+            optimizer.close()
+        return FitResult(history)
 
     def render(self, *, backend="display"):
         """Render all roots as display textures, reference Tensors or FP32 GPU images.
@@ -674,15 +813,18 @@ class RenderGraph:
 class GraphExecution:
     """One versioned forward/loss/backward tape; images remain on GPU."""
 
-    def __init__(self, graph, objective):
+    def __init__(self, graph, objective, *, loss=None):
         self.graph = graph
         self.closed = False
         self.backward_called = False
         self.objective = objective
+        self.loss_callback = loss
         self._objective_version = None if objective is None else objective.version
         self.uniforms = []
         self.geometry = []
         self.outputs = MappingProxyType({})
+        self._custom_output_tensors = {}
+        self.loss_context = None
         self.loss = None
         self.metrics = {}
         self._start_stats = dict(graph.backend.stats)
@@ -694,6 +836,8 @@ class GraphExecution:
             self._forward()
             if objective is not None:
                 self._evaluate_objective()
+            elif loss is not None:
+                self._evaluate_custom_loss()
             self._validate_completion()
         except BaseException:
             self.close()
@@ -774,6 +918,23 @@ class GraphExecution:
         self._evaluate_geometry_losses()
         self.loss = float(sum(self.metrics.values()))
 
+    def _evaluate_custom_loss(self):
+        self.graph._adjoints.clear()
+        self.graph._uniform_gradients.clear()
+        self.loss_context = LossContext(self)
+        value = _tensor(self.loss_callback(self.loss_context))
+        if value.size != 1 or not np.isfinite(value.item()):
+            raise ValueError("Loss callback must return a finite scalar Tensor")
+        if not value.requires_grad:
+            raise ValueError("Loss callback must return a differentiable Tensor")
+        if set(value._versions) - set(self.graph.parameters):
+            raise ValueError(
+                "Loss callback uses parameters absent from the scene graph"
+            )
+        value.backward()
+        self.loss = float(value.item())
+        self.metrics["loss"] = self.loss
+
     def _seed_pixel_losses(self):
         graph = self.graph
         for index, term in enumerate(self.objective.pixel_losses):
@@ -851,13 +1012,26 @@ class GraphExecution:
     def backward(self):
         self._check()
         self._check_versions()
-        if self.objective is None:
-            raise ValueError("Backward requires an objective")
-        if self.objective.version != self._objective_version:
+        if self.objective is None and self.loss_callback is None:
+            raise ValueError("Backward requires an objective or loss callback")
+        if (
+            self.objective is not None
+            and self.objective.version != self._objective_version
+        ):
             raise RuntimeError("Objective changed after forward; execute it again")
         if self.backward_called:
             raise RuntimeError("This execution's backward pass was already consumed")
         graph = self.graph
+        if self.loss_callback is not None:
+            for (
+                pass_index,
+                output_index,
+            ), value in self._custom_output_tensors.items():
+                if value.grad is None:
+                    continue
+                offset = graph._offsets[(pass_index, output_index)]
+                gradient = np.asarray(value.grad, dtype=np.float32)
+                graph._adjoints.write(gradient.tobytes(order="C"), offset * 4)
         needed = self._needed_passes()
         reaches_source = self._passes_reaching_sources()
         graph.backend.clear_status()
@@ -879,10 +1053,18 @@ class GraphExecution:
     def _needed_passes(self):
         graph = self.graph
         needed = set()
-        pending = [
-            graph.plan.outputs[term.output].pass_index
-            for term in self.objective.pixel_losses
-        ]
+        pending = []
+        if self.objective is not None:
+            pending.extend(
+                graph.plan.outputs[term.output].pass_index
+                for term in self.objective.pixel_losses
+            )
+        if self.loss_callback is not None:
+            pending.extend(
+                pass_index
+                for (pass_index, _), value in self._custom_output_tensors.items()
+                if value.grad is not None
+            )
         while pending:
             index = pending.pop()
             if index < 0 or index in needed:

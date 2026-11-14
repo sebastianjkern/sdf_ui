@@ -54,6 +54,51 @@ Resume with the same model and targets::
 
     uv run python -m examples.gpu_graph --steps 50 --resume out/learning/gpu_graph/checkpoint.json
 
+Custom loss callbacks
+---------------------
+
+For custom objectives, ``Canvas.fit`` calls a Python loss function with the
+current graph outputs and parameter leaves. The callback returns one scalar
+Tensor and can combine image, field, parameter, or other differentiable terms::
+
+    from sdf_ui import Canvas, sdf
+    from sdf_ui.learning import Parameter
+
+    radius = Parameter("radius", 4.0)
+    field = sdf.circle((16, 16), radius)
+    target = sdf.circle((16, 16), 9.0)
+
+    def loss(graph):
+        prediction = graph[field].output
+        expected = graph[target].output
+        return (
+            ((prediction - expected) ** 2).mean()
+            + 0.01 * (radius - 9) ** 2
+        )
+
+    with Canvas((32, 32)) as canvas:
+        result = canvas.fit(
+            {"field": field, "target": target}, loss=loss, steps=150
+        )
+    print(radius.item(), result.final_loss)
+
+``graph[0].output`` and ``graph["field"].output`` are also supported. Passing a
+scene node to ``graph[...]`` dereferences that node's current output, including
+intermediate layers. Parameters can be referenced directly in the closure, or
+read by name through ``graph.parameters``. A callback may omit pixel outputs
+entirely and optimize any scalar expression of the scene parameters.
+
+Custom Python losses read each requested layer output from the GPU into a
+differentiable CPU Tensor on every step. This is convenient for arbitrary
+objectives, but can be slow for large images. Use ``Objective`` with
+``canvas.training`` for built-in pixel losses that keep image data and their
+gradients on the GPU.
+
+``Canvas.fit`` defaults to 100 steps and GPU Adam at learning rate ``0.01``.
+It owns and closes its temporary graph and optimizer; the Canvas and Parameters
+remain usable after it returns. ``FitResult.history`` contains the loss
+measured before each update, and ``final_loss`` is the last of those values.
+
 High-level training session
 ---------------------------
 

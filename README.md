@@ -46,6 +46,7 @@ uv sync
 uv run pytest
 uv run python -m examples render_api
 uv run python -m examples.learned_dashboard --steps 80
+uv run python -m examples.center_div --steps 60
 uv build
 ```
 
@@ -159,20 +160,32 @@ with GPU shader gradients and optimizer updates.
 
 ```python
 from sdf_ui import Canvas, sdf
-from sdf_ui.learning import ParameterStore
+from sdf_ui.learning import Parameter
 
-weights = ParameterStore()
-radius = weights.scalar("radius", initial=4.0, min=0)
+radius = Parameter("radius", 4.0)
 scene = sdf.circle((16, 16), radius)
+target = sdf.circle((16, 16), 9.0)
+
+def loss(graph):
+    prediction = graph[scene].output
+    expected = graph[target].output
+    return ((prediction - expected) ** 2).mean() + 0.01 * (radius - 9) ** 2
 
 with Canvas((32, 32)) as canvas:
-    with canvas.training(scene, weights) as fit:
-        fit.match(sdf.circle((16, 16), 9.0))
-        fit.fit(150, lr=0.1)
+    result = canvas.fit(
+        {"shape": scene, "target": target}, loss=loss, steps=150
+    )
 
-weights.save("weights.json")
-print(weights.value("radius"))  # approximately 9
+print(radius.item())  # approximately 9
+print(result.final_loss)
 ```
+
+The loss callback receives differentiable layer outputs and the scene's named
+parameters. It can combine image or field losses with arbitrary scalar terms;
+targets are optional. ``graph[scene]`` can reference any layer in the compiled
+scene, including intermediate layers. Accessing ``.output`` reads that layer
+back to a CPU Tensor for Python loss evaluation. For built-in losses that keep
+image data on the GPU, use ``canvas.training`` with an ``Objective``.
 
 The CPU reference backend evaluates a documented subset of the existing render
 operations as floating-point tensors. It has its own per-execution tape and
@@ -183,6 +196,15 @@ full GPU renderer because its reward callback does not need pixel gradients.
 See [the learning guide](docs/learning.rst) for geometry optimization, continuous
 and discrete policies, graph training, checkpoints, and runnable
 examples.
+
+The custom-loss API can also drive a layout animation. This example optimizes
+the position of an SDF rounded rectangle and exports a frame after every step:
+
+![A rounded rectangle learning to center on the canvas](docs/assets/examples/center_div.gif)
+
+Run it with `uv run python -m examples.center_div --steps 60`; the script saves
+the GIF and individual PNG frames under `out/center_div/`. See
+[the example source](examples/center_div.py).
 
 For a larger procedural layout example, run
 `uv run python -m examples.learned_dashboard --steps 80`. It learns how to distribute

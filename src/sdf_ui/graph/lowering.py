@@ -9,6 +9,7 @@ the uniform closures. Plans retain symbolic parameter bindings, never a tape.
 """
 
 from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from hashlib import sha256
 from numbers import Real
 from types import MappingProxyType
@@ -59,6 +60,10 @@ class GraphPlan:
     sources: tuple = ()
     topology_controls: tuple = ()
     required_parameters: tuple = ()
+    _node_outputs: Mapping[int, Tuple[Port, ...]] = dataclass_field(
+        default_factory=dict, compare=False, repr=False
+    )
+    _node_refs: tuple = dataclass_field(default=(), compare=False, repr=False)
 
     def __post_init__(self):
         object.__setattr__(self, "passes", tuple(self.passes))
@@ -67,6 +72,10 @@ class GraphPlan:
         object.__setattr__(self, "sources", tuple(self.sources))
         object.__setattr__(self, "topology_controls", tuple(self.topology_controls))
         object.__setattr__(self, "required_parameters", tuple(self.required_parameters))
+        object.__setattr__(
+            self, "_node_outputs", MappingProxyType(dict(self._node_outputs))
+        )
+        object.__setattr__(self, "_node_refs", tuple(self._node_refs))
 
 
 def _snapshot(value):
@@ -139,6 +148,8 @@ class _Lowerer:
         self.sources = []
         self.topology_controls = []
         self.memo = {}
+        self.node_outputs = {}
+        self.node_refs = []
         self.visiting = set()
         self.conversions = {}
         self.parameter_names = set()
@@ -276,11 +287,17 @@ class _Lowerer:
             return self.memo[key]
         source = self._source_node(node)
         if source is not None:
+            self.node_outputs[key] = (source,)
+            self.node_refs.append(node)
             return source
         self.visiting.add(key)
         try:
             result = self._lower_plugin_node(node)
             self.memo[key] = result
+            self.node_outputs[key] = (
+                (result,) if isinstance(result, Port) else tuple(result)
+            )
+            self.node_refs.append(node)
             return result
         finally:
             self.visiting.remove(key)
@@ -700,4 +717,6 @@ def lower_graph(outputs: Mapping[str, TextureNode]) -> GraphPlan:
         tuple(lowerer.sources),
         tuple(lowerer.topology_controls),
         tuple(sorted(lowerer.required_parameters)),
+        lowerer.node_outputs,
+        tuple(lowerer.node_refs),
     )
