@@ -6,5 +6,5 @@ def convex_polygon_example():
         sdf.convex_polygon(((400, 110), (620, 250), (400, 390), (180, 250))).fill(
             (15, 23, 42, 255),
             (248, 250, 252, 255),
-        ).show(ctx)
+        ).show(ctx=ctx)
 

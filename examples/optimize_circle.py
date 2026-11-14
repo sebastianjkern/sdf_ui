@@ -1,36 +1,43 @@
-"""Fit a circle radius with the compiled render-graph API."""
+"""Fit a circle radius with a custom loss over scene output and parameters."""
 
 import argparse
 from pathlib import Path
 
-from sdf_ui import Canvas, sdf
-from sdf_ui.graph import GraphTrainer
-from sdf_ui.learning import Objective, ParameterStore
+from sdf_ui import Canvas, param, sdf
+from sdf_ui.learning import Parameter
 
 
 def optimize(steps=150, output=None):
-    parameters = ParameterStore()
-    radius = parameters.bind("radius", 4.0)
-    field = sdf.circle((16, 16), radius)
-    image = field.fill("#72c497", "#17212b").to_rgb()
+    radius = Parameter("radius", 4.0)
+    field = sdf.circle((16, 16), param("radius"))
+
     with Canvas((32, 32)) as canvas:
         with canvas.capture(sdf.circle((16, 16), 9)) as target:
-            objective = Objective().mse("field", target, name="field_fit")
-            with canvas.compile({"field": field, "image": image}, parameters) as graph:
-                with GraphTrainer(graph, objective, lr=0.1) as trainer:
-                    history = trainer.fit(steps)
-                    with graph.run(objective) as execution:
-                        final_loss = execution.loss
-                    if output is not None:
-                        output = Path(output)
-                        output.parent.mkdir(parents=True, exist_ok=True)
-                        graph.save("image", output)
-                    return {
-                        "radius": parameters["radius"].item(),
-                        "initial_loss": history[0]["loss"] if history else final_loss,
-                        "final_loss": final_loss,
-                        "gradient_info": graph.explain()["parameters"],
-                    }
+            target_pixels = target.read()
+
+            def loss(graph):
+                image_error = ((graph["field"].output - target_pixels) ** 2).mean()
+                radius_prior = (radius - 9) ** 2
+                return image_error + radius_prior * 0.01
+
+            result = canvas.fit(
+                {"field": field},
+                loss,
+                params={"radius": radius},
+                steps=steps,
+                lr=0.1,
+            )
+
+        if output is not None:
+            output = Path(output)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            field.save(output, ctx=canvas, params={"radius": radius})
+
+    return {
+        "radius": radius.item(),
+        "loss_before_last_update": result.final_loss,
+        "steps": result.steps,
+    }
 
 
 def main():

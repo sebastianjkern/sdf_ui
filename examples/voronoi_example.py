@@ -18,4 +18,4 @@ def voronoi_example():
         backdrop = color.radial_gradient((540, 540), (0.16, 0.18, 0.22, 1.0), (0.03, 0.04, 0.06, 1.0), outer=640)
         cache = {}
         scene = backdrop.alpha_overlay(filled)
-        scene.save(str(OUTPUT_DIR / "voronoi_square.png"), ctx, cache=cache)
+        scene.save(OUTPUT_DIR / "voronoi_square.png", ctx=ctx, cache=cache)

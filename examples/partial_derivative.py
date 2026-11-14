@@ -11,4 +11,4 @@ def partial_derivative_example():
         discs = [sdf.circle(point, 20).cache(f"disc_{index}") for index, point in enumerate(points)]
 
         combined_discs = reduce(lambda x, y: x | y, discs).cache("combined_discs")
-        combined_discs.partial_derivative().show(ctx)
+        combined_discs.partial_derivative().show(ctx=ctx)

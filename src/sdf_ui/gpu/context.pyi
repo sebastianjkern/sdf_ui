@@ -119,6 +119,15 @@ class Context:
         size: tuple[int, int] | None = ...,
         inputs: dict[str, Any] | None = ...,
     ) -> RenderGraph: ...
+    def save_animation(
+        self,
+        scene: TextureNode,
+        path: str | Path,
+        *,
+        frames: int = ...,
+        params: dict[str, Any] | None = ...,
+        fps: float = ...,
+    ) -> Path: ...
     def render_plan(
         self,
         plan: Any,

@@ -15,4 +15,4 @@ def isolines_example():
             line_width=4,
             feather=0,
             phase=0.0,
-        ).save(str(OUTPUT_DIR / "isolines_square.png"), ctx)
+        ).save(OUTPUT_DIR / "isolines_square.png", ctx=ctx)

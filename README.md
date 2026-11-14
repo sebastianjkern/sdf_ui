@@ -318,29 +318,66 @@ ___
     </tr>
 </table>
 
-### Performance Improvements
+### Ideas for Further Development
 
+The renderer already supports progress-driven animated parameters and GIF/MP4
+export. The ideas below are the remaining work; they are grouped by area.
 
-- [ ] Changing Local Size can (in theory) improve performance
-- [ ] Dirty-region rendering so unchanged parts of the canvas can be skipped
+#### Graph Architecture and Performance
 
-- [ ] Voronoi bounding box based subframe rendering
-- [ ] Subframe rendering (Smaller feature set but far better performance in most tasks)
+- [ ] Establish clear shader and loss adapter boundaries around the rendering core.
+- [ ] Finish organizing NumPy learning around graph nodes, including intermediate-value losses.
+- [ ] Add incremental dirty-region rendering so unchanged canvas areas can be reused.
+- [ ] Add bounds-aware shaders and clipping to skip work outside visible regions.
+- [ ] Explore bounds-driven subframe rendering for procedural scenes such as Voronoi fields.
 
-- [ ] Render-graph caching for repeated subtrees and reusable procedural scenes
+#### Procedural Fields
 
-### Ideas for further development
+- [ ] Add first-class Voronoi SDF support.
+- [ ] Add vector-field and flow-field primitives for distortion and motion.
+- [ ] Add domain warping, turbulence, and contour-map operators.
+- [ ] Add field-debug views for distance values, seams, and boolean transitions.
 
-- [x] Black and white to sdf conversion using go (solved via reverse sdf)
-- [x] Fill with images through GPU texture uploads
-- [x] Text rendering (Stroke rendering of single letters already possible)
-- [x] Freeform Gradients (Overlay of Different gradients, possible trough half transparent fills of sdfs)
+#### Shape Composition
 
-- [ ] Vector Fields
-- [ ] Voronoi sdf (Basically many overlayed circle sdfs)
-- [ ] Rendering of text with custom sdf font
-- [ ] Ortographic Projection of 3D SDFs
-- [ ] Domain warping and turbulence for procedural field-based scenes
-- [ ] First-class glow, bevel, and inner-shadow effects
-- [ ] Native animation timelines and time-based shader controls
-- [ ] Native Support for animation
+- [ ] Add variable-radius capsules.
+- [ ] Add a stroke/combine pipeline for layered shape construction.
+- [ ] Improve masked blending modes and masked-union antialiasing.
+- [ ] Add per-path smoothing controls for joins and transitions.
+- [ ] Convert layered masks into distance fields.
+
+#### Text and Typography
+
+- [ ] Improve baseline handling and text shaping.
+- [ ] Add line wrapping, alignment, and text-box support.
+- [ ] Add font fallback and missing-glyph handling.
+- [ ] Build a custom SDF font pipeline.
+
+#### Animation and Motion
+
+- [ ] Add native timelines and keyframe interpolation for positions, colors, transforms, and opacity.
+- [ ] Add time-based shader uniforms and reusable easing functions.
+- [ ] Add a public frame-sequence export API.
+
+#### Shading, Effects, and Images
+
+- [ ] Add screen, darken, lighten, soft-light, and richer multiply blend modes.
+- [ ] Add explicit sRGB color management and color-space previews.
+- [ ] Add noise variants beyond Perlin noise and film grain.
+- [ ] Add standalone bevel, glow, inner-shadow, sharpen, and edge-detect effects, plus a reusable effect stack.
+- [ ] Add XOR as a first-class layer or boolean operation.
+- [ ] Improve image-to-SDF conversion beyond threshold-based tracing.
+- [ ] Add image sampling, scaling, aspect-ratio, alpha, tint, and inflation controls.
+- [ ] Improve texture loading for common formats and embedded color profiles.
+
+#### 2.5D, Tooling, and Examples
+
+- [ ] Add orthographic projection of 3D SDFs, height-to-normal shading, and depth-aware composition.
+- [ ] Add a camera model and world-space transform stack.
+- [ ] Add script hot reload for faster visual iteration.
+- [ ] Add parameterized example presets and side-by-side comparisons.
+- [ ] Add convenience helpers for icons, badges, and glyphs.
+- [ ] Add palette-driven coloring helpers.
+- [ ] Make texture resource cleanup easier to reason about and safer by default.
+- [ ] Normalize naming across shader files, constants, and public methods.
+- [ ] Add more generative-art showcase examples and a boid/swarm demo.

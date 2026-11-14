@@ -6,5 +6,5 @@ def half_plane_example():
         sdf.half_plane((320, 250), (1, 0)).fill(
             (15, 23, 42, 255),
             (248, 250, 252, 255),
-        ).show(ctx)
+        ).show(ctx=ctx)
 

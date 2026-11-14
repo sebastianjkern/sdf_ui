@@ -28,4 +28,4 @@ def masked_union_example():
         mask = reduce(lambda m1, m2: m1.multiply(m2), masks).uncached()
         cache = {}
 
-        combined_discs.save(str(OUTPUT_DIR / "masked_union_square.png"), ctx, cache=cache)
+        combined_discs.save(OUTPUT_DIR / "masked_union_square.png", ctx=ctx, cache=cache)

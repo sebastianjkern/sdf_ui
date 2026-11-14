@@ -37,7 +37,7 @@ def text_rendering_example():
         )
         with ctx.session(cache=cache) as renderer:
             rendered = renderer.render(scene.to_rgb())
-            rendered.save(str(OUTPUT_DIR / "text_square.png"), conversion=False)
+            rendered.save(OUTPUT_DIR / "text_square.png", conversion=False)
 
             stats = renderer.stats
             cache_info = renderer.cache_info()

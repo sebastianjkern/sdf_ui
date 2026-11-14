@@ -23,7 +23,7 @@ def font_example():
             hex_col("#e9c46a"), (0.0, 0.0, 0.0, 0.0), inflation
         )
 
-        glyph_shape.save("font_glyph.png", ctx, cache=cache)
+        glyph_shape.save("font_glyph.png", ctx=ctx, cache=cache)
         bg.alpha_overlay(shadow).alpha_overlay(colored_glyph).to_rgb().show(
             ctx, cache=cache
         )

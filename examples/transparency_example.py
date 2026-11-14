@@ -77,7 +77,7 @@ def transparency_example():
         gradient_fill = mask_sdf.fill_from_texture(gradient)
         cache = {}
 
-        gradient_fill.save(str(OUTPUT_DIR / "transparency_square.png"), ctx, cache=cache)
+        gradient_fill.save(OUTPUT_DIR / "transparency_square.png", ctx=ctx, cache=cache)
 
         for i in range(10):
             x, y = random.randint(50, width - 50), random.randint(50, height - 50)
@@ -96,4 +96,4 @@ def transparency_example():
             outline
         )  # .alpha_overlay(film_grain(ctx).to_lab().transparency(5 / 255)).to_rgb()
 
-        image.save(str(OUTPUT_DIR / "transparency_square.png"), ctx, cache=cache)
+        image.save(OUTPUT_DIR / "transparency_square.png", ctx=ctx, cache=cache)

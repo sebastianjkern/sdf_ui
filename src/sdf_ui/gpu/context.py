@@ -522,6 +522,20 @@ class Context:
 
         return RenderGraph(self, outputs, params=params, size=size, inputs=inputs)
 
+    def save_animation(
+        self,
+        scene: Any,
+        path: str | Path,
+        *,
+        frames: int = 60,
+        params: dict[str, Any] | None = None,
+        fps: float = 30,
+    ) -> Path:
+        """Render a scene's animated parameters to a GIF or MP4."""
+        from ..anim import save_animation
+
+        return save_animation(self, scene, path, frames=frames, params=params, fps=fps)
+
     def render_plan(
         self,
         plan: Any,

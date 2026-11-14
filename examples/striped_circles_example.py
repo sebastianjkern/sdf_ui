@@ -31,4 +31,4 @@ def striped_circles_example():
             circle = striped_circle(circle_color, center, ctx.percent(10))
             image = image.alpha_overlay(circle)
 
-        image.show(ctx)
+        image.show(ctx=ctx)

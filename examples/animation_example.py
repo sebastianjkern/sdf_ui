@@ -1,33 +1,42 @@
+"""Render a parameter animation as a sequence of frames and an MP4."""
+
 import math
+from pathlib import Path
 
-from sdf_ui.anim import convert_to_video
-from sdf_ui import Canvas, color, sdf
-from sdf_ui.util import hex_col
+from sdf_ui import Canvas, color, param, sdf
+from sdf_ui.learning import Parameter
 
-def animation_example():
-    with Canvas((int(1280 / 2), int(720 / 2))) as ctx:
+
+def animation_example(frames=180, output=Path("out/anim")):
+    output = Path(output)
+    output.mkdir(parents=True, exist_ok=True)
+    with Canvas((640, 360)) as canvas:
         background = color.clear((1.0, 1.0, 1.0, 1.0)).cache("background")
+        disc1 = sdf.circle(
+            (canvas.percent_x(10), canvas.percent_y(50)), canvas.percent_of_min(35)
+        ).cache("disc1")
+        center_x = Parameter(
+            "center_x",
+            0.0,
+            animate=lambda progress: (
+                640 * (0.35 + 0.25 * math.sin(progress * 2 * math.pi))
+            ),
+        )
+        disc2 = sdf.circle(
+            (param("center_x"), canvas.percent_y(50)), canvas.percent_of_min(15)
+        )
+        image = background.alpha_overlay(
+            disc1.smooth_union(disc2).fill("#62bb47", (0.0, 0.0, 0.0, 0.0))
+        )
 
-        disc1 = sdf.circle((ctx.percent_x(10), ctx.percent_y(50)), ctx.percent_of_min(35)).cache("disc1")
+        canvas.save_animation(
+            image,
+            output / "animation.mp4",
+            frames=frames,
+            params={"center_x": center_x},
+            fps=30,
+        )
 
-        cache = {}
-        images = []
 
-        # Keep one cache alive for the whole frame loop so the static graph stays hot.
-        for i in range(1000):
-            name_of_frame = f"out/anim/{str(i).zfill(5)}.png"
-
-            disc2 = sdf.circle(
-                (ctx.percent_x(35) + ctx.percent_x(25 * math.sin(i / (math.pi * 2 * 15))), ctx.percent_y(50)),
-                ctx.percent_of_min(15),
-            ).uncached()
-
-            col = hex_col("#62bb47")[:3]
-            col1 = (*col, 1.0)
-            col2 = (*col, 0.0)
-
-            image = background.alpha_overlay(disc1.smooth_union(disc2).fill(col1, col2)).uncached()
-            image.save(name_of_frame, ctx, cache=cache)
-            images.append(name_of_frame)
-
-        convert_to_video("out", images)
+if __name__ == "__main__":
+    animation_example()

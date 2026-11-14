@@ -24,4 +24,4 @@ def complex_shapes_example():
         c1 = union.outline(hex_col(COLORS[0]), (0.0, 0.0, 0.0, 0.0), 0)
         c2 = union.outline(hex_col(COLORS[0]), (0.0, 0.0, 0.0, 0.0), 50)
         c = c0.alpha_overlay(c1).alpha_overlay(c2)
-        c.save(str(OUTPUT_DIR / "complex_square.png"), ctx)
+        c.save(OUTPUT_DIR / "complex_square.png", ctx=ctx)

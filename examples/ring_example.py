@@ -11,4 +11,4 @@ def ring_example():
         sdf.ring((540, 540), 280, 84).fill(
             (15, 23, 42, 255),
             (248, 250, 252, 255),
-        ).save(str(OUTPUT_DIR / "ring_square.png"), ctx)
+        ).save(OUTPUT_DIR / "ring_square.png", ctx=ctx)

@@ -22,4 +22,4 @@ def polygon_example():
         ).fill(
             (15, 23, 42, 255),
             (248, 250, 252, 255),
-        ).save(str(OUTPUT_DIR / "polygon_square.png"), ctx)
+        ).save(OUTPUT_DIR / "polygon_square.png", ctx=ctx)

@@ -22,6 +22,6 @@ def render_api_example():
         cache = {}
 
         # Reuse one cache across both renders so the shared base scene only runs once.
-        base_scene.save("out/render_api_base.png", ctx, cache=cache)
-        framed_scene.save("out/render_api_framed.png", ctx, cache=cache)
+        base_scene.save("out/render_api_base.png", ctx=ctx, cache=cache)
+        framed_scene.save("out/render_api_framed.png", ctx=ctx, cache=cache)
         framed_scene.show(ctx, cache=cache)

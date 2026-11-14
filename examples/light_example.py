@@ -49,4 +49,4 @@ def light_example():
             bevel="3.5%min",
         )
 
-        large_disc.alpha_overlay(small_disc).alpha_overlay(ring).save(str(OUTPUT_DIR / "light_square.png"), ctx)
+        large_disc.alpha_overlay(small_disc).alpha_overlay(ring).save(OUTPUT_DIR / "light_square.png", ctx=ctx)
