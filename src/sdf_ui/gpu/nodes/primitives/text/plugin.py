@@ -5,6 +5,7 @@ from math import ceil, floor
 from numbers import Real
 
 import numpy as np
+from PIL import ImageFont
 
 from sdf_ui.fonts import (
     font_metrics as _font_metrics,
@@ -168,15 +169,31 @@ def render_text(renderer, _inputs, params):
         baseline = first_baseline - line_index * line_advance
         for glyph_id, glyph_path, glyph_x, glyph_y, _cluster in placements:
             glyph_metrics = _font_metrics(glyph_path)
-            glyph_scale = font_size / glyph_metrics["units_per_em"]
-            glyph_distance_scale = effective_font_size / glyph_metrics["units_per_em"]
-            patch = _cached_glyph_sdf(
-                glyph_path,
-                glyph_id,
-                samples,
-                glyph_cache_size,
-                tuple(sorted((shape_options["variations"] or {}).items())),
-            )
+            variations = tuple(sorted((shape_options["variations"] or {}).items()))
+            patch = None
+            if font_size <= 64 and not variations:
+                patch = _cached_hinted_glyph_sdf(
+                    glyph_path, glyph_id, max(1, round(font_size)), 4
+                )
+            if patch is None:
+                glyph_scale = font_size / glyph_metrics["units_per_em"]
+                # Distance values must follow the same transform as glyph
+                # geometry. Using effective_font_size here widened the
+                # fill shader's antialias ramp whenever size < min_render_size.
+                glyph_distance_scale = glyph_scale
+                patch = _cached_glyph_sdf(
+                    glyph_path,
+                    glyph_id,
+                    samples,
+                    glyph_cache_size,
+                    variations,
+                )
+            else:
+                # Hinting is performed at the target pixel size. Keep the
+                # hinted shape at that size instead of scaling it to the
+                # large outline-SDF cache's minimum render size.
+                glyph_scale = patch["hinted_size"] / glyph_metrics["units_per_em"]
+                glyph_distance_scale = glyph_scale
             if patch["field"].size:
                 _composite_glyph(
                     field,
@@ -304,7 +321,13 @@ def _composite_glyph(field, patch, x, y, scale, distance_scale, clip_rect=None):
     yy, xx = np.mgrid[y0:y1, x0:x1]
     source_x = (xx - left) / source_to_dest
     source_y = (yy - top) / source_to_dest
-    distances = _sample_sdf(glyph_field, source_x, source_y, source_to_dest)
+    if patch.get("hinted_size") is not None:
+        # The hinted mask already carries pixel-scale coverage. Min-filtering
+        # its upsampled distance field would expand thin strokes and close
+        # counters, so sample that field bilinearly.
+        distances = _sample_bilinear(glyph_field, source_x, source_y)
+    else:
+        distances = _sample_sdf(glyph_field, source_x, source_y, source_to_dest)
     distances = distances * distance_to_dest
     field[y0:y1, x0:x1] = np.minimum(field[y0:y1, x0:x1], distances)
 
@@ -338,7 +361,7 @@ def _sample_sdf(values, x, y, source_to_dest):
         return _sample_bilinear(values, x, y)
 
     source_pixels_per_dest = 1.0 / source_to_dest
-    radius = max(1, int(ceil(source_pixels_per_dest * 0.5)))
+    radius = max(1, int(ceil(source_pixels_per_dest * 0.25)))
     sampled = _sample_bilinear(values, x, y)
     for offset_y in range(-radius, radius + 1):
         for offset_x in range(-radius, radius + 1):
@@ -365,6 +388,92 @@ def _sample_bilinear(values, x, y):
     top = values[y0, x0] * (1.0 - tx) + values[y0, x1] * tx
     bottom = values[y1, x0] * (1.0 - tx) + values[y1, x1] * tx
     return top * (1.0 - ty) + bottom * ty
+
+
+@lru_cache(maxsize=128)
+def _glyph_character_map(path):
+    """Return Unicode characters that map directly to each font glyph ID."""
+    from fontTools.ttLib import TTFont
+
+    font = TTFont(path, lazy=True)
+    try:
+        glyph_order = font.getGlyphOrder()
+        name_to_id = {name: index for index, name in enumerate(glyph_order)}
+        result = {}
+        for codepoint, name in sorted(font.getBestCmap().items()):
+            if codepoint < 32 or codepoint > 0x10FFFF or codepoint in {0x7F}:
+                continue
+            glyph_id = name_to_id.get(name)
+            if glyph_id is not None:
+                result.setdefault(glyph_id, chr(codepoint))
+        return tuple(sorted(result.items()))
+    finally:
+        font.close()
+
+
+@lru_cache(maxsize=1024)
+def _cached_hinted_glyph_sdf(path, glyph_id, hinted_size, supersample):
+    """Build a high-resolution SDF from FreeType-rendered glyph coverage."""
+    character = dict(_glyph_character_map(path)).get(glyph_id)
+    if character is None:
+        return None
+
+    scale = max(1, int(supersample))
+    # Rasterize the outline at the higher working resolution. Upscaling a
+    # bitmap rendered at `hinted_size` preserves its pixel grid, but not the
+    # actual curve geometry; counters and joins in glyphs such as g and Q
+    # become visibly lumpy as a result.
+    raster_size = hinted_size * scale
+    font = ImageFont.truetype(path, raster_size)
+    mask, offset = font.getmask2(character, mode="L", anchor="ls")
+    width, height = mask.size
+    if width == 0 or height == 0:
+        return {
+            "field": np.empty((0, 0), dtype=np.float32),
+            "origin": (0.0, 0.0),
+            "units_per_pixel": _font_metrics(path)["units_per_em"] / raster_size,
+            "hinted_size": hinted_size,
+        }
+
+    import cv2
+
+    coverage = np.asarray(mask, dtype=np.uint8).reshape(height, width)
+    pad = 2
+    alpha = np.pad(coverage, pad, mode="constant").astype(np.float32) / 255.0
+    inside = (alpha >= 0.5).astype(np.uint8)
+    outside = 1 - inside
+    outside_distance = cv2.distanceTransform(
+        outside, cv2.DIST_L2, cv2.DIST_MASK_PRECISE
+    )
+    inside_distance = cv2.distanceTransform(
+        inside, cv2.DIST_L2, cv2.DIST_MASK_PRECISE
+    )
+    # Offset distances to the half-pixel contour. Keep a one-pixel-per-pixel
+    # gradient: the fill shader derives its antialias width from this gradient,
+    # so adding grayscale coverage here would distort that width.
+    field = (
+        outside_distance
+        - inside_distance
+        + inside.astype(np.float32)
+        - 0.5
+    )
+    field = np.flipud(field).astype(np.float32, copy=True)
+
+    font_metrics = _font_metrics(path)
+    units_per_pixel = font_metrics["units_per_em"] / raster_size
+    pixel_center_offset = 0.5
+    pixel_to_font_units = units_per_pixel
+    origin = (
+        (float(offset[0]) - pad - pixel_center_offset) * pixel_to_font_units,
+        (-float(offset[1]) - height - pad - pixel_center_offset)
+        * pixel_to_font_units,
+    )
+    return {
+        "field": field,
+        "origin": origin,
+        "units_per_pixel": units_per_pixel,
+        "hinted_size": hinted_size,
+    }
 
 
 @lru_cache(maxsize=1024)
@@ -407,8 +516,30 @@ def _cached_glyph_sdf(path, glyph_id, samples, glyph_cache_size, variation_items
         distance_sq = np.minimum(distance_sq, _contour_distance_sq(points, contour))
         winding += _contour_winding(points, contour)
 
-    field = np.sqrt(distance_sq).astype(np.float32)
-    field[winding != 0] *= -1.0
+    # Build distance from the filled silhouette rather than from every path
+    # contour. Glyphs can contain overlapping contours; their internal edges
+    # are not part of the filled shape boundary and must not create zero
+    # distance seams through the rendered glyph.
+    inside = winding != 0
+    on_contour = distance_sq <= 1e-6
+    internal_contour = np.zeros_like(inside)
+    internal_contour[1:-1, 1:-1] = (
+        (inside[:-2, 1:-1] & inside[2:, 1:-1])
+        | (inside[1:-1, :-2] & inside[1:-1, 2:])
+    )
+    inside |= on_contour & internal_contour
+
+    import cv2
+
+    inside_mask = inside.astype(np.uint8)
+    outside_mask = 1 - inside_mask
+    distance_inside = cv2.distanceTransform(
+        inside_mask, cv2.DIST_L2, cv2.DIST_MASK_PRECISE
+    )
+    distance_outside = cv2.distanceTransform(
+        outside_mask, cv2.DIST_L2, cv2.DIST_MASK_PRECISE
+    )
+    field = distance_outside - distance_inside + inside_mask.astype(np.float32) - 0.5
     return {"field": field, "origin": origin, "units_per_pixel": units_per_pixel}
 
 

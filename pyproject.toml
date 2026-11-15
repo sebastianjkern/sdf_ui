@@ -26,6 +26,9 @@ dependencies = [
     "uniseg>=0.10,<0.11",
 ]
 
+[project.optional-dependencies]
+math = ["matplotlib>=3.8"]
+
 [dependency-groups]
 dev = [
     "pytest>=8.0",

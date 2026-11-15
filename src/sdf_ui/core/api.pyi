@@ -49,6 +49,17 @@ class SDFNamespace:
         decoration_thickness: float = 0.0, word_spacing: float = 0.0,
         letter_spacing: float = 0.0, vertical_metrics: str = "hhea",
     ) -> SDFTexture: ...
+    def svg(
+        self, source: str | Path, center: tuple[float, float] = (0.0, 0.0),
+        height: float = 64.0, samples: int = 16, inflate: float = 0.0,
+        oversample: int = 2,
+    ) -> SDFTexture: ...
+    def math(
+        self, expression: str, center: tuple[float, float] = (0.0, 0.0),
+        height: float = 64.0, font_size: float = 48.0,
+        fontset: str = "stix", samples: int = 16,
+        inflate: float = 0.75, oversample: int = 2,
+    ) -> SDFTexture: ...
     def triangle(self, point_1: Any, point_2: Any, point_3: Any) -> SDFTexture: ...
     def wedge(self, center: Any, radius: Any, start_angle: Any, end_angle: Any) -> SDFTexture: ...
 

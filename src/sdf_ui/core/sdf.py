@@ -9,6 +9,28 @@ from .texture import TextureNode
 class SDFTexture(TextureNode):
     kind = "sdf"
 
+    def fill(
+        self,
+        fg_color,
+        bg_color=(0.0, 0.0, 0.0, 1.0),
+        inflate=None,
+        inner=None,
+        outer=0.0,
+    ):
+        """Fill this signed distance field with foreground and background colors."""
+        is_text = self.op == "text"
+        if inflate is None:
+            inflate = 0.2 if is_text else 0.0
+        return build(
+            "fill",
+            self,
+            fg_color=fg_color,
+            bg_color=bg_color,
+            inflate=inflate,
+            inner=(-0.5 if is_text else -1.5) if inner is None else inner,
+            outer=outer,
+        )
+
     def __or__(self, other):
         return self.union(other)
 

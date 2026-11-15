@@ -47,6 +47,47 @@ from sdf_ui import sdf
 sdf.text("office AVATAR", features={"liga": False, "kern": True})
 ```
 
+Filled SVG geometry can also be rendered directly as an SDF. This accepts
+MathJax-style SVG with a `viewBox`, path definitions, local `<use>` references,
+affine transforms, nonzero or even-odd fill rules, and one-line `<text>` nodes:
+It evaluates SVG geometry at 2× subpixel resolution by default; use
+`oversample=1` for faster rendering or increase it up to `4` for finer details.
+
+```python
+from pathlib import Path
+from sdf_ui import sdf
+
+math_svg = Path("formula.svg").read_text(encoding="utf-8")
+formula = sdf.svg(math_svg, center=(320, 180), height=72)
+scene = formula.fill("#f8fafc", "#00000000")
+```
+
+For TeX-like equations, `sdf.math(...)` uses Matplotlib's built-in MathText
+parser and emits vector geometry for the same SVG renderer. It needs no Node.js,
+npm, or system TeX installation. MathText supports a useful subset of TeX math;
+install the optional dependency with `pip install 'sdf_ui[math]'`. It defaults
+to the STIX font set, 0.75 canvas unit SDF inflation, and 2× subpixel
+oversampling; set `inflate=0` or `oversample=1` to change those defaults:
+
+```python
+from sdf_ui import sdf
+
+equation = sdf.math(
+    r"\nabla \cdot \mathbf{u} = 0, \qquad"
+    r"\frac{\partial \mathbf{u}}{\partial t}"
+    r"+ (\mathbf{u} \cdot \nabla) \mathbf{u}"
+    r"= -\nabla p + \nu \nabla^2 \mathbf{u}",
+    center=(320, 180),
+    height=120,
+)
+scene = equation.fill("#f8fafc", "#00000000")
+```
+
+The SVG renderer handles filled paths and simple one-line text; text uses the
+matching system font when available, then the bundled Roboto fallback. Nested
+`<tspan>` layout, strokes, gradients, filters, clipping paths, and external
+references are not supported.
+
 For denser output without changing scene coordinates, set a device scale on the
 canvas. Geometry, text, and pixel-sized effects are scaled together; percentage
 helpers continue to refer to the logical canvas dimensions:
