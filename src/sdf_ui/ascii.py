@@ -72,6 +72,51 @@ def rgb_to_hex(rgb):
     return "%02x%02x%02x" % rgb[:3]
 
 
+def _prepare_ascii_images(image, invert, enhance):
+    """Prepare the color and luminance images shared by both render modes."""
+    luminance = image.convert("L")
+    if enhance:
+        image = PIL.ImageEnhance.Contrast(image).enhance(3)
+        image = PIL.ImageEnhance.Brightness(image).enhance(0.85)
+        luminance = PIL.ImageEnhance.Contrast(luminance).enhance(3)
+        luminance = PIL.ImageEnhance.Brightness(luminance).enhance(0.85)
+    if invert:
+        image = PIL.ImageOps.invert(image)
+        luminance = PIL.ImageOps.invert(luminance)
+    return image, luminance
+
+
+def _ascii_rows(width, height, cols, scale):
+    """Yield row index and pixel bounds for the shared ASCII sampling grid."""
+    if cols <= 0:
+        raise ValueError("cols must be greater than 0")
+    if scale <= 0:
+        raise ValueError("scale must be greater than 0")
+    cell_width = width / cols
+    cell_height = cell_width / scale
+    rows = int(height / cell_height)
+    _validate_ascii_dimensions(cols, scale, width, height, rows)
+    for row in range(rows):
+        y1 = int(row * cell_height)
+        y2 = height if row == rows - 1 else int((row + 1) * cell_height)
+        cells = []
+        for column in range(cols):
+            x1 = int(column * cell_width)
+            x2 = width if column == cols - 1 else int((column + 1) * cell_width)
+            cells.append((x1, x2, y1, y2))
+        yield row, cells
+
+
+def _ascii_character(luminance, more_levels):
+    table = (
+        "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1{}[]?-_+~<>i!lI;:,\"^`'. "
+        if more_levels
+        else "@%#*+=-:. "
+    )
+    levels = len(table) - 1
+    return table[min(int(luminance * levels / 255), levels)]
+
+
 def convert_image_to_ascii_colored(
     image, cols, scale, more_levels, invert, enhance, as_background
 ):
@@ -91,72 +136,17 @@ def convert_image_to_ascii_colored(
     >>> input_image = Image.open("example.jpg")
     >>> convert_image_to_ascii_colored(input_image, 80, 0.43, True, False, True, True)
     """
-    bw_image = image.convert("L")
-
-    if enhance:
-        image = PIL.ImageEnhance.Contrast(image).enhance(3)
-        image = PIL.ImageEnhance.Brightness(image).enhance(0.85)
-
-        bw_image = PIL.ImageEnhance.Contrast(bw_image).enhance(3)
-        bw_image = PIL.ImageEnhance.Brightness(bw_image).enhance(0.85)
-
-    if invert:
-        image = PIL.ImageOps.invert(image)
-        bw_image = PIL.ImageOps.invert(bw_image)
-
-    original_width, original_height = image.size[0], image.size[1]
-
-    new_width = original_width / cols
-    new_height = new_width / scale
-
-    rows = int(original_height / new_height)
-
-    _validate_ascii_dimensions(cols, scale, original_width, original_height, rows)
-
-    for j in range(rows):
-        y1 = int(j * new_height)
-        y2 = original_height if j == rows - 1 else int((j + 1) * new_height)
+    image, bw_image = _prepare_ascii_images(image, invert, enhance)
+    original_width, original_height = image.size
+    for _row, cells in _ascii_rows(original_width, original_height, cols, scale):
         print(
-            _colored_ascii_row(
-                image,
-                bw_image,
-                j,
-                y1,
-                y2,
-                cols,
-                new_width,
-                original_width,
-                more_levels,
-                as_background,
+            "".join(
+                _colored_ascii_cell(
+                    image, bw_image, x1, x2, y1, y2, more_levels, as_background
+                )
+                for x1, x2, y1, y2 in cells
             )
         )
-
-
-def _colored_ascii_row(
-    image,
-    bw_image,
-    row,
-    y1,
-    y2,
-    cols,
-    cell_width,
-    original_width,
-    more_levels,
-    as_background,
-):
-    return "".join(
-        _colored_ascii_cell(
-            image,
-            bw_image,
-            int(column * cell_width),
-            original_width if column == cols - 1 else int((column + 1) * cell_width),
-            y1,
-            y2,
-            more_levels,
-            as_background,
-        )
-        for column in range(cols)
-    )
 
 
 def _colored_ascii_cell(image, bw_image, x1, x2, y1, y2, more_levels, as_background):
@@ -164,12 +154,7 @@ def _colored_ascii_cell(image, bw_image, x1, x2, y1, y2, more_levels, as_backgro
     bg_img = bw_image.crop((x1, y1, x2, y2))
     avg = int(get_average_l(bg_img))
     color = rgb_to_hex(get_average_c(img))
-    table = (
-        "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1{}[]?-_+~<>i!lI;:,\"^`'. "
-        if more_levels
-        else "@%#*+=-:. "
-    )
-    symbol = table[int(avg * (69 if more_levels else 9) / 255)]
+    symbol = _ascii_character(avg, more_levels)
     if as_background:
         return getattr(bg, "t_" + color) + " " + fx.end
     return getattr(fg, "t_" + color) + symbol + fx.end
@@ -192,52 +177,16 @@ def convert_image_to_ascii(image, cols, scale, more_levels, invert, enhance):
     >>> convert_image_to_ascii(input_image, 80, 0.43, True, False, True)
     """
 
-    hr_ascii_table = (
-        "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1{}[]?-_+~<>i!lI;:,\"^`'. "
-    )
-    lr_ascii_table = "@%#*+=-:. "
-
-    image = image.convert("L")
-
-    if enhance:
-        image = PIL.ImageEnhance.Contrast(image).enhance(3)
-        image = PIL.ImageEnhance.Brightness(image).enhance(0.85)
-
-    if invert:
-        image = PIL.ImageOps.invert(image)
-
-    original_width, original_height = image.size[0], image.size[1]
-
-    new_width = original_width / cols
-    new_height = new_width / scale
-
-    rows = int(original_height / new_height)
-
-    _validate_ascii_dimensions(cols, scale, original_width, original_height, rows)
-
+    image, _ = _prepare_ascii_images(image.convert("L"), invert, enhance)
+    original_width, original_height = image.size
     ascii_image = []
-    for j in range(rows):
-        y1 = int(j * new_height)
-        y2 = int((j + 1) * new_height)
-        if j == rows - 1:
-            y2 = original_height
-        ascii_image.append("")
-
-        for i in range(cols):
-            x1 = int(i * new_width)
-            x2 = int((i + 1) * new_width)
-            if i == cols - 1:
-                x2 = original_width
-
+    for _row, cells in _ascii_rows(original_width, original_height, cols, scale):
+        row = []
+        for x1, x2, y1, y2 in cells:
             img = image.crop((x1, y1, x2, y2))
             avg = int(get_average_l(img))
-
-            if more_levels:
-                greyscale_value = hr_ascii_table[int((avg * 69) / 255)]
-            else:
-                greyscale_value = lr_ascii_table[int((avg * 9) / 255)]
-
-            ascii_image[j] += greyscale_value
+            row.append(_ascii_character(avg, more_levels))
+        ascii_image.append("".join(row))
 
     for row in ascii_image:
         print(row)

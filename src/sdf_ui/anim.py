@@ -19,19 +19,44 @@ def convert_to_video(name, image_paths, *, fps=60):
     >>> images = ["frame1.jpg", "frame2.jpg", "frame3.jpg"]
     >>> convert_to_video("output_video", images)
     """
-    frame = cv2.imread(image_paths[0])
-    height, width, _ = frame.shape
-
-    video = cv2.VideoWriter(
-        name + ".mp4", cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height)
-    )
-
-    for image in image_paths:
-        video.write(cv2.imread(image))
-
-    cv2.destroyAllWindows()
-    video.release()
+    _write_mp4(name + ".mp4", image_paths, fps)
     logger().info("Finished writing video")
+
+
+def _write_mp4(path, image_paths, fps):
+    """Write equally sized image frames to an MP4 file."""
+    from math import isfinite
+    from numbers import Real
+
+    if isinstance(fps, bool) or not isinstance(fps, Real) or not isfinite(fps) or fps <= 0:
+        raise ValueError("fps must be a finite positive number")
+    image_paths = list(image_paths)
+    if not image_paths:
+        raise ValueError("at least one image frame is required")
+
+    first = cv2.imread(str(image_paths[0]))
+    if first is None:
+        raise RuntimeError(f"Could not read video frame: {image_paths[0]}")
+    height, width = first.shape[:2]
+    writer = cv2.VideoWriter(
+        str(path), cv2.VideoWriter_fourcc(*"mp4v"), float(fps), (width, height)
+    )
+    if not writer.isOpened():
+        raise RuntimeError(f"Could not open video writer for {path}")
+    try:
+        writer.write(first)
+        for image_path in image_paths[1:]:
+            frame = cv2.imread(str(image_path))
+            if frame is None:
+                raise RuntimeError(f"Could not read video frame: {image_path}")
+            if frame.shape[:2] != (height, width):
+                raise ValueError(
+                    f"Video frame {image_path} has size {frame.shape[1]}x{frame.shape[0]}, "
+                    f"expected {width}x{height}"
+                )
+            writer.write(frame)
+    finally:
+        writer.release()
 
 
 def save_animation(canvas, scene, path, *, frames=60, params=None, fps=30):
@@ -81,28 +106,5 @@ def save_animation(canvas, scene, path, *, frames=60, params=None, fps=30):
                 for image in images:
                     image.close()
         else:
-            import cv2
-
-            first = cv2.imread(str(frame_paths[0]))
-            if first is None:
-                raise RuntimeError(
-                    f"Could not read rendered animation frame: {frame_paths[0]}"
-                )
-            height, width = first.shape[:2]
-            writer = cv2.VideoWriter(
-                str(path), cv2.VideoWriter_fourcc(*"mp4v"), float(fps), (width, height)
-            )
-            if not writer.isOpened():
-                raise RuntimeError(f"Could not open video writer for {path}")
-            try:
-                writer.write(first)
-                for frame_path in frame_paths[1:]:
-                    frame = cv2.imread(str(frame_path))
-                    if frame is None:
-                        raise RuntimeError(
-                            f"Could not read rendered animation frame: {frame_path}"
-                        )
-                    writer.write(frame)
-            finally:
-                writer.release()
+            _write_mp4(path, frame_paths, fps)
     return path
