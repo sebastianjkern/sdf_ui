@@ -62,6 +62,45 @@ formula = sdf.svg(math_svg, center=(320, 180), height=72)
 scene = formula.fill("#f8fafc", "#00000000")
 ```
 
+SDFs can be distorted by a superposition of vortices. Each vortex is an
+`(x, y, strength)` tuple; positive and negative strengths rotate in opposite
+directions. `color.vortex_streamlines(...)` draws the same field as an overlay:
+
+```python
+from sdf_ui import color, sdf
+
+vortices = ((300, 360, 1.15), (660, 360, -1.15))
+warped = sdf.circle((480, 360), 220).vortex_warp(
+    vortices, radius=175, strength=0.9
+)
+flow = color.vortex_streamlines(vortices, radius=175)
+scene = warped.fill("#d2ddd4").alpha_overlay(flow)
+```
+
+Run `uv run python -m examples vortices` to render the distorted contour and
+streamline example. The warp is a CPU-backed resampling operation and returns
+an ordinary SDF node that can be filled, contoured, cached, or composed.
+
+Smooth booleans and spatial warps can change an SDF's gradient magnitude.
+`normalize_distance()` applies the inexpensive local correction
+`field / |gradient(field)|` near the zero contour and fades it out across a
+finite band (32 canvas units by default). It improves nearby distance values
+but is not a global reconstruction. `redistance()` instead
+rebuilds approximate signed distances to the sampled zero contour, preserving
+the contour while restoring more uniform offsets at canvas resolution. It uses
+CPU readback and jump flooding, so it is a deliberate materialization step and
+does not preserve gradients for learning:
+
+```python
+from sdf_ui import sdf
+
+soft_shape = sdf.circle((280, 180), 90).smooth_union(
+    sdf.circle((390, 180), 90), k=24
+)
+locally_corrected = soft_shape.normalize_distance()
+reconstructed = soft_shape.redistance()
+```
+
 Voronoi cells are available as signed fields. Select a site to get its
 unbounded cell; compose cells or use `debug_distance()` to inspect their
 distance values and boundaries:
@@ -423,6 +462,7 @@ export. This checklist tracks completed and remaining work by area.
 
 - [x] Add first-class Voronoi SDF support for selected cells.
 - [ ] Add vector-field and flow-field primitives for distortion and motion.
+- [x] Add vortex fields with SDF warping and streamline visualization.
 - [ ] Add domain warping, turbulence, and contour-map operators.
 - [x] Add field-debug views for distance values, seams, and boolean transitions.
 

@@ -7,6 +7,8 @@ uv run python -m examples --help
 uv run python -m examples render_api
 uv run python -m examples text_layout
 uv run python -m examples text_opentype
+uv run python -m examples vortices
+uv run python -m examples distance_corrections
 uv run python -m examples.learning_ui --mode all --steps 250
 uv run python -m examples.learned_dashboard --steps 80
 uv run python -m examples.gpu_graph --steps 150
@@ -16,6 +18,12 @@ uv run python -m examples.center_div --steps 60
 The first command lists the original rendering examples. The learning and GPU
 examples have their own command-line options; append `--help` for details.
 Generated images and checkpoints go under `out/`.
+
+``vortices`` shows an SDF warped by a pair of counter-rotating fields, with
+streamlines drawn over the distorted contours.
+
+``distance_corrections`` compares contour spacing after smooth union, local
+gradient correction, and redistancing.
 
 ``text_layout`` demonstrates line wrapping, horizontal alignment, and vertical
 alignment in fixed lower-left-origin text boxes. It uses ``measure_text`` to

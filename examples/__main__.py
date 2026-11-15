@@ -8,6 +8,7 @@ from examples.capsule_example import capsule_example
 from examples.complex_shapes_example import complex_shapes_example
 from examples.convex_polygon_example import convex_polygon_example
 from examples.dawn_example import dawn_example
+from examples.distance_corrections_example import distance_corrections_example
 from examples.diamond_example import diamond_example
 from examples.ellipse_example import ellipse_example
 from examples.font_example import font_example
@@ -32,6 +33,7 @@ from examples.text_opentype_example import text_opentype_example
 from examples.text_rendering_example import text_rendering_example
 from examples.transparency_example import transparency_example
 from examples.voronoi_example import voronoi_example
+from examples.vortex_field_example import vortex_field_example
 from sdf_ui import logger
 from sdf_ui.core.texture import TextureNode
 
@@ -42,6 +44,8 @@ examples = {
     "masked_union": masked_union_example,
     "rotation": rotation_example,
     "voronoi": voronoi_example,
+    "vortices": vortex_field_example,
+    "distance_corrections": distance_corrections_example,
     "text": text_rendering_example,
     "text_layout": text_layout_example,
     "text_opentype": text_opentype_example,
