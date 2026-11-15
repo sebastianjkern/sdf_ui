@@ -163,6 +163,7 @@ class Renderer:
         self.progress = validate_progress(progress)
         self.stats = RenderStats()
         self._render_depth = 0
+        self._graph_ref_counts = {}
 
     def __enter__(self) -> Self:
         return self
@@ -197,6 +198,7 @@ class Renderer:
 
             if progress is not None:
                 self.progress = validate_progress(progress)
+            self._graph_ref_counts = self._count_graph_references(value)
             start = perf_counter()
             previous_stats = getattr(self.ctx, "_active_render_stats", None)
             previous_rect = self.ctx._active_evaluation_rect
@@ -241,6 +243,25 @@ class Renderer:
         if len(regions) > 1:
             raise ValueError("Cropped input images must have the same canvas region")
         return normalize_rect(next(iter(regions), None), self.ctx.size)
+
+    @staticmethod
+    def _count_graph_references(root):
+        counts = {}
+        visited = set()
+        pending = [root]
+        while pending:
+            value = pending.pop()
+            if not isinstance(value, (TextureNode, MultiOutputResult)):
+                continue
+            if isinstance(value, TextureNode) and value.tex is not None:
+                continue
+            for child in value.inputs:
+                if isinstance(child, (TextureNode, MultiOutputResult)):
+                    counts[id(child)] = counts.get(id(child), 0) + 1
+                    if id(child) not in visited:
+                        pending.append(child)
+            visited.add(id(value))
+        return counts
 
     def _materialized_regions(self, value, visited=None):
         visited = set() if visited is None else visited
@@ -335,6 +356,14 @@ class Renderer:
         from sdf_ui.gpu.nodes.registry import registry
 
         plugin = registry.get(node.op)
+        if node.op == "alpha_overlay":
+            result = self._render_overlay_chain(node)
+            if result is not None:
+                if node.should_cache:
+                    self.cache[cache_key] = result
+                    self.stats.cache_writes += 1
+                return result
+
         inputs = tuple(self.render(input_) for input_ in node.inputs)
         params = dict((key, self._resolve(value)) for key, value in node.params)
         scale = getattr(self.ctx, "device_scale", 1.0)
@@ -347,6 +376,91 @@ class Renderer:
             self.stats.cache_writes += 1
 
         return result
+
+    def _render_overlay_chain(self, root):
+        from sdf_ui.gpu.nodes.layer.alpha_overlay.plugin import (
+            MAX_BATCH_OVERLAYS,
+            render_alpha_overlay_batch,
+        )
+
+        outer_to_inner = [root]
+        base = root.inputs[0]
+        while (
+            isinstance(base, TextureNode)
+            and base.tex is None
+            and base.op == "alpha_overlay"
+        ):
+            base_key = self._node_key(base)
+            cached = self.cache.get(base_key) if base.should_cache else None
+            if cached is not None:
+                if not getattr(getattr(cached, "tex", None), "closed", False):
+                    break
+                self.cache.pop(base_key, None)
+            outer_to_inner.append(base)
+            base = base.inputs[0]
+
+        if len(outer_to_inner) < 2:
+            return None
+        chain = tuple(reversed(outer_to_inner))
+        chain_ids = {id(item) for item in chain}
+        if any(
+            self._references_overlay_chain(item.inputs[1], chain_ids)
+            for item in chain
+        ):
+            return None
+
+        current = self.render(base)
+        for start in range(0, len(chain), MAX_BATCH_OVERLAYS):
+            group = chain[start : start + MAX_BATCH_OVERLAYS]
+            tops = []
+            for item in group:
+                if item is not root:
+                    if item.should_cache:
+                        self.stats.cache_misses += 1
+                    else:
+                        self.stats.cache_skips += 1
+                tops.append(self.render(item.inputs[1]))
+
+            output_indices = tuple(
+                index
+                for index, item in enumerate(group)
+                if index == len(group) - 1
+                or (
+                    item is not root
+                    and item.should_cache
+                    and (
+                        item._cache_boundary
+                        or self._graph_ref_counts.get(id(item), 0) > 1
+                    )
+                )
+            )
+            outputs = render_alpha_overlay_batch(
+                self, current, tops, output_indices=output_indices
+            )
+            for index, item in enumerate(group):
+                output = outputs.get(index)
+                if output is not None and item is not root and item.should_cache:
+                    self.cache[self._node_key(item)] = output
+                    self.stats.cache_writes += 1
+            current = outputs[len(group) - 1]
+        return current
+
+    @staticmethod
+    def _references_overlay_chain(value, chain_ids):
+        pending = [value]
+        visited = set()
+        while pending:
+            item = pending.pop()
+            if id(item) in visited:
+                continue
+            visited.add(id(item))
+            if id(item) in chain_ids:
+                return True
+            if isinstance(item, MultiOutputResult):
+                pending.extend(item.inputs)
+            elif isinstance(item, TextureNode) and item.tex is None:
+                pending.extend(item.inputs)
+        return False
 
 
     def _resolve(self, value):
@@ -421,6 +535,7 @@ class TextureNode(ABC):
         params=None,
         label=None,
         should_cache=True,
+        cache_boundary=False,
     ):
         self.tex = tex
         self.context = context
@@ -433,6 +548,7 @@ class TextureNode(ABC):
         )
         self.label = label
         self.should_cache = should_cache
+        self._cache_boundary = cache_boundary or label is not None
 
         if tex is not None and context is None:
             raise ValueError("context can't be None for a materialized texture")
@@ -640,7 +756,9 @@ class TextureNode(ABC):
         return self._clone(label=label, should_cache=self.should_cache)
 
     def cache(self, label: Optional[str] = None):
-        return self._clone(label=label or self.label, should_cache=True)
+        return self._clone(
+            label=label or self.label, should_cache=True, cache_boundary=True
+        )
 
     def uncached(self):
         return self._clone(label=self.label, should_cache=False)
@@ -686,7 +804,7 @@ class TextureNode(ABC):
             )
         )
 
-    def _clone(self, *, label, should_cache):
+    def _clone(self, *, label, should_cache, cache_boundary=None):
         kwargs = {}
         if hasattr(self, "mode"):
             kwargs["mode"] = self.mode
@@ -696,6 +814,9 @@ class TextureNode(ABC):
             params=self.params,
             label=label,
             should_cache=should_cache,
+            cache_boundary=(
+                self._cache_boundary if cache_boundary is None else cache_boundary
+            ),
             **kwargs,
         )
 
