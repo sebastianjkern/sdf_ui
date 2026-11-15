@@ -172,11 +172,19 @@ def _method_return_overrides() -> dict[str, dict[str, str]]:
             "__exit__": "None",
         },
         "SDFTexture": {
+            "fill": "ColorTexture",
             "__or__": "SDFTexture",
             "__and__": "SDFTexture",
             "__sub__": "SDFTexture",
             "intersect": "SDFTexture",
             "mask": "ColorTexture",
+            "debug_seams": "ColorTexture",
+            "debug_distance": "ColorTexture",
+            "debug_boolean": "ColorTexture",
+        },
+        "SDFNamespace": {
+            "svg": "SDFTexture",
+            "math": "SDFTexture",
         },
         "ColorTexture": {
             "over": "ColorTexture",

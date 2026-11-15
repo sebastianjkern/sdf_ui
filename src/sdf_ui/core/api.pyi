@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from .color import ColorTexture
@@ -8,6 +7,9 @@ from .sdf import SDFTexture
 from .texture import MultiOutputResult
 
 class SDFNamespace:
+    def svg(self, source: Any, center: Any = (0.0, 0.0), height: Any = 64.0, samples: Any = 16, inflate: Any = 0.0, oversample: Any = 2) -> SDFTexture: ...
+    def math(self, expression: Any, center: Any = (0.0, 0.0), height: Any = 64.0, font_size: Any = 48.0, fontset: Any = 'stix', samples: Any = 16, inflate: Any = 0.75, oversample: Any = 2) -> SDFTexture: ...
+    def text(self, *args: Any, **kwargs: Any) -> Any: ...
     def annulus(self, center: Any, radius: Any, thickness: Any = 8.0) -> SDFTexture: ...
     def arc(self, center: Any, radius: Any, start_angle: Any, end_angle: Any) -> SDFTexture: ...
     def bezier(self, a: Any, b: Any, c: Any) -> SDFTexture: ...
@@ -30,37 +32,8 @@ class SDFNamespace:
     def rounded_rect(self, center: Any, size: Any, corner_radius: Any, angle: Any = 0.0) -> SDFTexture: ...
     def sector(self, center: Any, radius: Any, start_angle: Any, end_angle: Any) -> SDFTexture: ...
     def segment(self, a: Any, b: Any, radius: Any) -> SDFTexture: ...
-    def text(
-        self, value: Any, size: Any = 64, ox: Any = 0, oy: Any = 0,
-        path: Any = None, samples: Any = 16, cache_size: Any = 128,
-        line_height: Any = 1.2, oversample: Any = 2.5, min_render_size: Any = 64,
-        box: tuple[float, float, float, float] | None = None,
-        align: str = "left", valign: str = "middle",
-        fallback_fonts: str | Path | tuple[str | Path, ...] | list[str | Path] = (),
-        missing_glyph: str = "ignore", clip: bool = False,
-        overflow: str = "visible", trim_trailing_spaces: bool = True,
-        direction: str | None = None, script: str | None = None,
-        language: str | None = None,
-        features: dict[str, int | bool] | None = None,
-        variations: dict[str, float] | None = None,
-        white_space: str = "normal", first_line_indent: float = 0.0,
-        max_lines: int | None = None,
-        decoration: str | tuple[str, ...] = (),
-        decoration_thickness: float = 0.0, word_spacing: float = 0.0,
-        letter_spacing: float = 0.0, vertical_metrics: str = "hhea",
-    ) -> SDFTexture: ...
-    def svg(
-        self, source: str | Path, center: tuple[float, float] = (0.0, 0.0),
-        height: float = 64.0, samples: int = 16, inflate: float = 0.0,
-        oversample: int = 2,
-    ) -> SDFTexture: ...
-    def math(
-        self, expression: str, center: tuple[float, float] = (0.0, 0.0),
-        height: float = 64.0, font_size: float = 48.0,
-        fontset: str = "stix", samples: int = 16,
-        inflate: float = 0.75, oversample: int = 2,
-    ) -> SDFTexture: ...
     def triangle(self, point_1: Any, point_2: Any, point_3: Any) -> SDFTexture: ...
+    def voronoi(self, points: Any, cell: Any = 0) -> SDFTexture: ...
     def wedge(self, center: Any, radius: Any, start_angle: Any, end_angle: Any) -> SDFTexture: ...
 
 class ColorNamespace:

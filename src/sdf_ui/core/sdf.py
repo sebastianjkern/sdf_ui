@@ -49,3 +49,63 @@ class SDFTexture(TextureNode):
         return build(
             "generate_mask", self, inflate=inflate, color0=color0, color1=color1
         )
+
+    def debug_seams(
+        self,
+        fg_color=(1.0, 0.25, 0.12, 1.0),
+        bg_color=(0.035, 0.045, 0.065, 1.0),
+        spacing=8.0,
+        line_width=1.0,
+    ):
+        """Color distance contours to inspect seams and field transitions."""
+        return self.isolines(
+            fg_color, bg_color, spacing=spacing, line_width=line_width, feather=0.5
+        )
+
+    def debug_distance(self, range=32.0, show_contours=True, spacing=8.0):
+        """Show signed distance values as a blue-to-orange heatmap."""
+        heatmap = build("field_debug", self, range=range)
+        if not show_contours:
+            return heatmap
+        contours = self.isolines(
+            (0.08, 0.08, 0.09, 0.9),
+            (0.0, 0.0, 0.0, 0.0),
+            spacing=spacing,
+            line_width=0.65,
+            feather=0.25,
+        )
+        return heatmap.alpha_overlay(contours)
+
+    def debug_boolean(
+        self,
+        other,
+        operation="union",
+        fg_color=(1.0, 0.25, 0.12, 1.0),
+        spacing=8.0,
+        line_width=1.0,
+        range=32.0,
+    ):
+        """Render boolean result contours for inspecting shape transitions."""
+        operations = {
+            "union": self.union,
+            "intersection": self.intersection,
+            "subtract": self.subtract,
+        }
+        try:
+            result = operations[operation](other)
+        except KeyError as exc:
+            choices = ", ".join(operations)
+            raise ValueError(
+                f"Unknown boolean operation {operation!r}; choose {choices}"
+            ) from exc
+        # Show signed values and emphasize the zero boundary where the
+        # boolean result changes from inside to outside.
+        heatmap = result.debug_distance(range=range, show_contours=False)
+        boundary = result.isolines(
+            fg_color,
+            (0.0, 0.0, 0.0, 0.0),
+            spacing=spacing,
+            line_width=line_width,
+            feather=0.5,
+        )
+        return heatmap.alpha_overlay(boundary)

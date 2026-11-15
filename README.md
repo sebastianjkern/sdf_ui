@@ -62,6 +62,27 @@ formula = sdf.svg(math_svg, center=(320, 180), height=72)
 scene = formula.fill("#f8fafc", "#00000000")
 ```
 
+Voronoi cells are available as signed fields. Select a site to get its
+unbounded cell; compose cells or use `debug_distance()` to inspect their
+distance values and boundaries:
+
+```python
+from sdf_ui import sdf
+
+sites = [(160, 140), (420, 180), (280, 420)]
+cell = sdf.voronoi(sites, cell=1)
+debug = cell.debug_distance(range=80)
+```
+
+`debug_seams()` emphasizes regularly spaced contours, while
+`debug_boolean(other, operation="union")` shows signed values and the result
+boundary for union, intersection, or subtraction. The Voronoi operation returns
+one selected cell at a time; cells are unbounded.
+Its field is the maximum of the signed bisector distances, which is exact
+inside the cell and a useful signed distance approximation outside it. The
+distance heatmap reads the field back to the CPU for color mapping, so it is
+intended for inspection rather than a performance-sensitive render path.
+
 For TeX-like equations, `sdf.math(...)` uses Matplotlib's built-in MathText
 parser and emits vector geometry for the same SVG renderer. It needs no Node.js,
 npm, or system TeX installation. MathText supports a useful subset of TeX math;
@@ -385,10 +406,10 @@ ___
     </tr>
 </table>
 
-### Ideas for Further Development
+### Development Checklist
 
 The renderer already supports progress-driven animated parameters and GIF/MP4
-export. The ideas below are the remaining work; they are grouped by area.
+export. This checklist tracks completed and remaining work by area.
 
 #### Graph Architecture and Performance
 
@@ -400,10 +421,10 @@ export. The ideas below are the remaining work; they are grouped by area.
 
 #### Procedural Fields
 
-- [ ] Add first-class Voronoi SDF support.
+- [x] Add first-class Voronoi SDF support for selected cells.
 - [ ] Add vector-field and flow-field primitives for distortion and motion.
 - [ ] Add domain warping, turbulence, and contour-map operators.
-- [ ] Add field-debug views for distance values, seams, and boolean transitions.
+- [x] Add field-debug views for distance values, seams, and boolean transitions.
 
 #### Shape Composition
 
