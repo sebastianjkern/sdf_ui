@@ -4,6 +4,7 @@ import pytest
 from sdf_ui import sdf
 from sdf_ui.core.sdf import SDFTexture
 from sdf_ui.gpu.nodes._distance import normalize_distance, redistance
+from tests.helpers import render
 
 
 def test_local_normalization_corrects_gradient_at_zero_contour():
@@ -59,3 +60,34 @@ def test_distance_corrections_are_exposed_as_sdf_methods():
 
     assert isinstance(shape.normalize_distance(), SDFTexture)
     assert isinstance(shape.redistance(), SDFTexture)
+
+
+def test_gpu_distance_corrections_keep_fields_on_the_shader_path():
+    shape = sdf.circle((25, 32), 20).smooth_union(sdf.circle((39, 32), 20), k=12)
+    source = render(shape, size=(64, 64))
+    try:
+        expected_local = normalize_distance(source.tex.read(), 1e-3, 32.0)
+    finally:
+        source.close()
+
+    normalized = render(shape.normalize_distance(), size=(64, 64))
+    try:
+        np.testing.assert_allclose(normalized.tex.read(), expected_local, atol=1e-5)
+    finally:
+        normalized.close()
+
+    result = render(shape.normalize_distance().redistance(), size=(64, 64))
+    try:
+        field = result.tex.read()
+        dispatches = result.context.last_render_stats.shader_dispatches_by_name
+
+        expected_redistance = redistance(expected_local)
+        assert np.isfinite(field).all()
+        assert field[32, 32] < 0 < field[2, 2]
+        np.testing.assert_allclose(field, expected_redistance, atol=5e-3)
+        assert dispatches["normalize_distance"] == 1
+        assert dispatches["redistance_seed"] == 1
+        assert dispatches["redistance_jump"] >= 2
+        assert dispatches["redistance_finalize"] == 1
+    finally:
+        result.close()

@@ -1,15 +1,28 @@
-"""Apply a first-order unit-gradient correction to a sampled SDF."""
+"""Apply a first-order unit-gradient correction to a sampled SDF on GPU."""
 
-from sdf_ui.gpu.nodes._distance import normalize_distance, read_sdf, write_sdf
-from sdf_ui.gpu.nodes.base import Plugin, PluginFamily, TextureKind
+from sdf_ui.core.sdf import SDFTexture
+from sdf_ui.gpu.nodes.base import Plugin, PluginFamily, ShaderFile, TextureKind
+
+from .implementation import INTERFACE
+
+# The shader interface binds the WGSL node kernel. This operation remains
+# outside graph differentiation, as it did when it used a host render function.
+DESCRIPTOR = ShaderFile("normalize_distance", "", interface=INTERFACE)
 
 
 def render_normalize_distance(renderer, inputs, params):
-    field = read_sdf(renderer, inputs)
-    return write_sdf(
-        renderer,
-        normalize_distance(field, params["epsilon"], params["band"]),
-    )
+    output = renderer.ctx.r32f()
+    try:
+        renderer.ctx.run_node_shader(
+            DESCRIPTOR,
+            output,
+            {"sdf": inputs[0].tex},
+            {"epsilon": params["epsilon"], "band": params["band"]},
+        )
+    except BaseException:
+        output.close()
+        raise
+    return SDFTexture(tex=output, context=renderer.ctx)
 
 
 def register_plugins(registry):

@@ -85,11 +85,11 @@ Smooth booleans and spatial warps can change an SDF's gradient magnitude.
 `normalize_distance()` applies the inexpensive local correction
 `field / |gradient(field)|` near the zero contour and fades it out across a
 finite band (32 canvas units by default). It improves nearby distance values
-but is not a global reconstruction. `redistance()` instead
-rebuilds approximate signed distances to the sampled zero contour, preserving
-the contour while restoring more uniform offsets at canvas resolution. It uses
-CPU readback and jump flooding, so it is a deliberate materialization step and
-does not preserve gradients for learning:
+but is not a global reconstruction. `redistance()` instead rebuilds
+approximate signed distances to the sampled zero contour, preserving the
+contour while restoring more uniform offsets at canvas resolution. Both run on
+the GPU; redistancing uses multiple jump-flooding passes and does not preserve
+gradients for learning:
 
 ```python
 from sdf_ui import sdf

@@ -71,6 +71,7 @@ class GPUImage(Image):
         if array.shape != self.shape:
             raise ValueError(f"Expected image shape {self.shape}, got {array.shape}")
         array = np.ascontiguousarray(array)
+        self.context.flush_commands()
         self.context.queue.write_texture(
             {"texture": self.texture, "mip_level": 0, "origin": (0, 0, 0)},
             array,
@@ -87,6 +88,7 @@ class GPUImage(Image):
     def read(self):
         """Copy pixels to CPU memory, respecting WebGPU's 256-byte row pitch."""
         self._check_open()
+        self.context.flush_commands()
         stats = getattr(self.context, "_gpu_stats", None)
         if stats is not None:
             stats["image_readbacks"] += 1
@@ -130,7 +132,8 @@ class GPUImage(Image):
 
     def close(self):
         if not self.closed:
-            self.texture.destroy()
+            if not self.context._defer_resource_destroy(self.texture):
+                self.texture.destroy()
             self.closed = True
 
     def __enter__(self):

@@ -110,6 +110,34 @@ def test_alpha_overlay_and_mask_layers_change_pixels():
     assert mask_pixels[0, 0, 3] > 200
 
 
+@pytest.mark.parametrize("base_rgb", [False, True])
+@pytest.mark.parametrize("top_rgb", [False, True])
+def test_alpha_overlay_fuses_lab_conversion_without_pixel_changes(base_rgb, top_rgb):
+    base = sdf.circle((9, 11), 8).fill(
+        (0.72, 0.18, 0.33, 0.47), (0.12, 0.45, 0.82, 0.61)
+    )
+    top = sdf.circle((15, 10), 7).fill(
+        (0.91, 0.64, 0.09, 0.38), (0.34, 0.08, 0.54, 0.29)
+    )
+    if base_rgb:
+        base = base.to_rgb()
+    if top_rgb:
+        top = top.to_rgb()
+
+    fused = render(base.alpha_overlay(top).to_rgb(), size=(24, 20))
+    reference = render(
+        base.to_rgb().alpha_overlay(top.to_rgb()).to_rgb(), size=(24, 20)
+    )
+    try:
+        np.testing.assert_array_equal(fused.tex.read(), reference.tex.read())
+        dispatches = fused.context.last_render_stats.shader_dispatches_by_name
+        assert dispatches.get("overlay", 0) == 1
+        assert dispatches.get("to_rgb", 0) == int(base_rgb) + int(top_rgb)
+    finally:
+        fused.close()
+        reference.close()
+
+
 def test_color_compositing_and_transparency_render_predictably():
     multiply_pixels = rgba_array(
         render(
@@ -585,3 +613,16 @@ def test_canvas_session_exposes_render_stats_and_cache_info():
         "clear_color": 1,
         "to_rgb": 1,
     }
+
+
+def test_canvas_session_can_collect_per_shader_gpu_timings():
+    with Canvas((8, 8), enable_gpu_timing=True) as ctx:
+        with ctx.session() as renderer:
+            renderer.render(color.clear("#ffffff").to_rgb())
+            stats = renderer.stats
+
+    if stats.gpu_timing_supported:
+        assert set(stats.shader_gpu_seconds_by_name) == {"clear_color", "to_rgb"}
+        assert all(value >= 0 for value in stats.shader_gpu_seconds_by_name.values())
+    else:
+        assert stats.shader_gpu_seconds_by_name == {}

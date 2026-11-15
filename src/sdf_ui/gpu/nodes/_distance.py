@@ -3,23 +3,6 @@
 import numpy as np
 
 
-def read_sdf(renderer, inputs):
-    field = np.asarray(inputs[0].tex.read(), dtype=np.float32).reshape(
-        renderer.ctx.size[1], renderer.ctx.size[0]
-    )
-    if not np.isfinite(field).all():
-        raise ValueError("distance correction requires finite SDF values")
-    return field
-
-
-def write_sdf(renderer, field):
-    from sdf_ui.core.sdf import SDFTexture
-
-    texture = renderer.ctx.r32f()
-    texture.write(np.asarray(field, dtype=np.float32).tobytes())
-    return SDFTexture(tex=texture, context=renderer.ctx)
-
-
 def normalize_distance(field, epsilon, band):
     epsilon = float(epsilon)
     if not np.isfinite(epsilon) or epsilon <= 0:

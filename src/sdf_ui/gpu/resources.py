@@ -36,7 +36,7 @@ class GPUBuffer:
         if offset + len(payload) > self.size:
             raise ValueError("WebGPU buffer write exceeds its allocation")
         if payload:
-            self.context.queue.write_buffer(self.buffer, offset, payload)
+            self.context.write_buffer(self.buffer, offset, payload)
 
     def read(self, size=None, offset=0):
         self._check_open()
@@ -48,17 +48,20 @@ class GPUBuffer:
         size = self.size - offset if size is None else size
         if size < 0 or offset % 4 or size % 4 or offset + size > self.size:
             raise ValueError("WebGPU buffer read has invalid bounds or alignment")
+        self.context.flush_commands()
         return bytes(self.context.queue.read_buffer(self.buffer, offset, size))
 
     def clear(self):
         self._check_open()
+        self.context.flush_commands()
         encoder = self.context.device.create_command_encoder(label="clear buffer")
         encoder.clear_buffer(self.buffer, 0, self.size)
         self.context.queue.submit([encoder.finish()])
 
     def close(self):
         if not self.closed:
-            self.buffer.destroy()
+            if not self.context._defer_resource_destroy(self.buffer):
+                self.buffer.destroy()
             self.closed = True
 
     release = close

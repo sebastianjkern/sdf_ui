@@ -143,16 +143,9 @@ def _bind_node_uniforms(context, descriptor, resources, uniforms, values):
     payload = _pack_uniforms(uniforms, values)
     binding = max(resources) + 1
     key = (descriptor.name, binding, len(payload))
-    buffer = context._uniform_buffers.get(key)
-    if buffer is None:
-        buffer = context.create_buffer(
-            payload,
-            usage=wgpu.BufferUsage.UNIFORM,
-            label=f"{descriptor.name} uniforms",
-        )
-        context._uniform_buffers[key] = buffer
-    else:
-        context.queue.write_buffer(buffer, 0, payload)
+    buffer = context._uniform_buffer_for_payload(
+        key, payload, label=f"{descriptor.name} uniforms"
+    )
     resources[binding] = buffer
 
 
@@ -204,6 +197,7 @@ class Context:
         *,
         power_preference: str = "high-performance",
         device_scale: float = 1.0,
+        enable_gpu_timing: bool = False,
     ) -> None:
         try:
             values = tuple(size)
@@ -244,14 +238,31 @@ class Context:
         self.adapter = wgpu.gpu.request_adapter_sync(power_preference=power_preference)
         if self.adapter is None:
             raise RuntimeError("No WebGPU adapter is available")
-        self.device = self.adapter.request_device_sync(label="sdf-ui device")
+        timestamp_features = {"timestamp-query", "timestamp-query-inside-passes"}
+        if not isinstance(enable_gpu_timing, bool):
+            raise TypeError("enable_gpu_timing must be a bool")
+        self.gpu_timing_supported = (
+            enable_gpu_timing and timestamp_features <= self.adapter.features
+        )
+        self.device = self.adapter.request_device_sync(
+            label="sdf-ui device",
+            required_features=sorted(timestamp_features)
+            if self.gpu_timing_supported
+            else (),
+        )
         self.queue = self.device.queue
         self._pipelines: dict[Any, Any] = {}
         self._pipeline_bindings: dict[int, Any] = {}
         self._uniform_buffers: dict[Any, Any] = {}
+        self._uniform_payloads: dict[Any, bytes] = {}
         self._active_evaluation_rect = None
         self._active_render_stats = None
         self.last_render_stats = None
+        self._command_batch_active = False
+        self._command_encoder = None
+        self._deferred_destroys = []
+        self._batch_uniform_buffers = {}
+        self._batch_transient_uniforms = []
 
     @property
     def device_info(self) -> dict[str, Any]:
@@ -302,13 +313,94 @@ class Context:
         buffer_usage = usage
         if initial_data is not None:
             buffer_usage |= wgpu.BufferUsage.COPY_DST
+        mapped = initial_data is not None and self._command_batch_active
         buffer = self.device.create_buffer(
             label=label,
             size=size,
             usage=buffer_usage,
+            mapped_at_creation=mapped,
         )
         if initial_data:
-            self.queue.write_buffer(buffer, 0, initial_data)
+            if mapped:
+                buffer.write_mapped(initial_data)
+                buffer.unmap()
+            else:
+                self.write_buffer(buffer, 0, initial_data)
+        return buffer
+
+    def _begin_command_batch(self):
+        if self._command_batch_active:
+            raise RuntimeError("A command batch is already active")
+        self._command_batch_active = True
+        self._command_encoder = None
+
+    def flush_commands(self):
+        """Submit pending commands while keeping the current batch open."""
+        if self._command_encoder is None:
+            for resource in self._deferred_destroys:
+                resource.destroy()
+            self._deferred_destroys.clear()
+            for buffer in self._batch_transient_uniforms:
+                buffer.destroy()
+            self._batch_transient_uniforms.clear()
+            self._batch_uniform_buffers.clear()
+            return
+        command_buffer = self._command_encoder.finish()
+        self._command_encoder = None
+        self.queue.submit([command_buffer])
+        for resource in self._deferred_destroys:
+            resource.destroy()
+        self._deferred_destroys.clear()
+        for buffer in self._batch_transient_uniforms:
+            buffer.destroy()
+        self._batch_transient_uniforms.clear()
+        self._batch_uniform_buffers.clear()
+
+    def _defer_resource_destroy(self, resource):
+        if self._command_batch_active and self._command_encoder is not None:
+            self._deferred_destroys.append(resource)
+            return True
+        return False
+
+    def _end_command_batch(self):
+        try:
+            self.flush_commands()
+        finally:
+            self._command_batch_active = False
+            self._command_encoder = None
+
+    def write_buffer(self, buffer, offset, data):
+        """Write a buffer after submitting earlier batched commands."""
+        if self._command_batch_active:
+            self.flush_commands()
+        self.queue.write_buffer(buffer, offset, data)
+
+    def _uniform_buffer_for_payload(self, key, payload, *, label):
+        if self._command_batch_active:
+            if (
+                key in self._uniform_buffers
+                and self._uniform_payloads.get(key) == payload
+            ):
+                return self._uniform_buffers[key]
+            batch_key = (key, payload)
+            buffer = self._batch_uniform_buffers.get(batch_key)
+            if buffer is None:
+                buffer = self.create_buffer(
+                    payload, usage=wgpu.BufferUsage.UNIFORM, label=label
+                )
+                self._batch_uniform_buffers[batch_key] = buffer
+                self._batch_transient_uniforms.append(buffer)
+            return buffer
+
+        buffer = self._uniform_buffers.get(key)
+        if buffer is None:
+            buffer = self.create_buffer(
+                payload, usage=wgpu.BufferUsage.UNIFORM, label=label
+            )
+            self._uniform_buffers[key] = buffer
+        elif self._uniform_payloads.get(key) != payload:
+            self.write_buffer(buffer, 0, payload)
+        self._uniform_payloads[key] = payload
         return buffer
 
     def bind_group(self, pipeline, resources, *, group=0, label=""):
@@ -335,7 +427,9 @@ class Context:
             entries=entries,
         )
 
-    def dispatch(self, pipeline, bind_groups, group_count=None, *, label=""):
+    def dispatch(
+        self, pipeline, bind_groups, group_count=None, *, label="", timestamp_name=None
+    ):
         """Encode and submit one compute pass with its ordered bind groups."""
         self._check_open()
         groups = (
@@ -343,15 +437,82 @@ class Context:
             if group_count is None
             else _triple(group_count, "group_count")
         )
-        encoder = self.device.create_command_encoder(label=label)
-        compute = encoder.begin_compute_pass(label=label)
+        stats = self._active_render_stats
+        measure = (
+            timestamp_name is not None
+            and stats is not None
+            and self.gpu_timing_supported
+        )
+        query_set = resolve_buffer = read_buffer = None
+        if measure:
+            query_set = self.device.create_query_set(
+                label=f"{timestamp_name} timestamps", type="timestamp", count=2
+            )
+            resolve_buffer = self.create_buffer(
+                16,
+                usage=wgpu.BufferUsage.QUERY_RESOLVE | wgpu.BufferUsage.COPY_SRC,
+                label=f"{timestamp_name} timestamp resolve",
+            )
+            read_buffer = self.create_buffer(
+                16,
+                usage=wgpu.BufferUsage.MAP_READ | wgpu.BufferUsage.COPY_DST,
+                label=f"{timestamp_name} timestamp readback",
+            )
+        encoder = self._command_encoder
+        if encoder is None:
+            encoder = self.device.create_command_encoder(label=label)
+            if self._command_batch_active:
+                self._command_encoder = encoder
+        timestamp_writes = (
+            {
+                "query_set": query_set,
+                "beginning_of_pass_write_index": 0,
+                "end_of_pass_write_index": 1,
+            }
+            if measure
+            else None
+        )
+        compute = encoder.begin_compute_pass(
+            label=label, timestamp_writes=timestamp_writes
+        )
         compute.set_pipeline(pipeline)
         for index, bind_group in enumerate(bind_groups):
             compute.set_bind_group(index, bind_group)
         compute.dispatch_workgroups(*groups)
         compute.end()
-        self.queue.submit([encoder.finish()])
+        if measure:
+            encoder.resolve_query_set(query_set, 0, 2, resolve_buffer, 0)
+            encoder.copy_buffer_to_buffer(resolve_buffer, 0, read_buffer, 0, 16)
+        if not self._command_batch_active:
+            self.queue.submit([encoder.finish()])
+        if measure:
+            stats._pending_gpu_timestamps.append(
+                (timestamp_name, query_set, resolve_buffer, read_buffer)
+            )
         return groups
+
+    def _resolve_shader_timings(self, stats):
+        pending = stats._pending_gpu_timestamps
+        if not pending:
+            return
+        try:
+            self.queue.on_submitted_work_done_sync()
+            for name, _query_set, _resolve_buffer, read_buffer in pending:
+                read_buffer.map_sync(wgpu.MapMode.READ)
+                try:
+                    start, end = struct.unpack("<QQ", read_buffer.read_mapped())
+                    stats.shader_gpu_seconds_by_name[name] = (
+                        stats.shader_gpu_seconds_by_name.get(name, 0.0)
+                        + max(0, end - start) * 1e-9
+                    )
+                finally:
+                    read_buffer.unmap()
+        finally:
+            for _name, query_set, resolve_buffer, read_buffer in pending:
+                query_set.destroy()
+                resolve_buffer.destroy()
+                read_buffer.destroy()
+            pending.clear()
 
     def run_compute(
         self,
@@ -361,6 +522,7 @@ class Context:
         group_count=None,
         entry_point="main",
         label="",
+        timestamp_name=None,
     ):
         """Compile or reuse a WGSL pipeline and dispatch its resource bindings."""
         pipeline = self.compute_pipeline(code, entry_point=entry_point, label=label)
@@ -370,6 +532,7 @@ class Context:
             (bind_group,),
             group_count=group_count,
             label=label,
+            timestamp_name=timestamp_name,
         )
 
     def _shader_path(self, name, color_format="rgba8"):
@@ -403,6 +566,7 @@ class Context:
             group_count=group_count,
             entry_point=entry_point,
             label=name,
+            timestamp_name=name if self.gpu_timing_supported else None,
         )
         stats = self._active_render_stats
         if stats is not None:
@@ -465,16 +629,9 @@ class Context:
         source_code = specialize_wgsl_for_rect(source_code, interface, region_binding)
         payload = pack_rect(self.size, rect, images)
         key = (descriptor.name, "evaluation region", region_binding, len(payload))
-        buffer = self._uniform_buffers.get(key)
-        if buffer is None:
-            buffer = self.create_buffer(
-                payload,
-                usage=wgpu.BufferUsage.UNIFORM,
-                label=f"{descriptor.name} evaluation region",
-            )
-            self._uniform_buffers[key] = buffer
-        else:
-            self.queue.write_buffer(buffer, 0, payload)
+        buffer = self._uniform_buffer_for_payload(
+            key, payload, label=f"{descriptor.name} evaluation region"
+        )
         resources[region_binding] = buffer
         return source_code, rect_groups(source_code, rect)
 
@@ -789,6 +946,7 @@ class Context:
         if not isinstance(image, GPUImage) or image.context is not self:
             raise ValueError("Image must belong to this WebGPU context")
         image._check_open()
+        self.flush_commands()
         result = self.create_image(
             image.size,
             format=image.format,
@@ -814,6 +972,7 @@ class Context:
             buffer.destroy()
         self._pipelines.clear()
         self._uniform_buffers.clear()
+        self._uniform_payloads.clear()
         self._closed = True
         self.device.destroy()
 

@@ -40,6 +40,7 @@ class Context:
         *,
         power_preference: str = ...,
         device_scale: float = ...,
+        enable_gpu_timing: bool = ...,
     ) -> None: ...
     def create_shader_module(self, code: str, *, label: str = ...) -> Any: ...
     def compute_pipeline(
@@ -52,6 +53,8 @@ class Context:
         usage: Any,
         label: str = ...,
     ) -> Any: ...
+    def write_buffer(self, buffer: Any, offset: int, data: bytes) -> None: ...
+    def flush_commands(self) -> None: ...
     def bind_group(
         self,
         pipeline: Any,
@@ -67,6 +70,7 @@ class Context:
         group_count: tuple[int, ...] | None = ...,
         *,
         label: str = ...,
+        timestamp_name: str | None = ...,
     ) -> tuple[int, int, int]: ...
     def run_compute(
         self,
@@ -76,6 +80,7 @@ class Context:
         group_count: tuple[int, ...] | None = ...,
         entry_point: str = ...,
         label: str = ...,
+        timestamp_name: str | None = ...,
     ) -> tuple[int, int, int]: ...
     def run_shader(
         self,

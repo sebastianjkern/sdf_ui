@@ -38,10 +38,17 @@ def texture_params(**kwargs):
 
 @dataclass
 class RenderStats:
-    """Counters accumulated across calls made through one renderer."""
+    """Counters and optional GPU timings accumulated by one renderer.
+
+    GPU timings are collected only when the context was created with
+    ``enable_gpu_timing=True`` and the adapter supports timestamp queries.
+    """
 
     shader_dispatches: int = 0
     shader_dispatches_by_name: Dict[str, int] = field(default_factory=dict)
+    shader_gpu_seconds_by_name: Dict[str, float] = field(default_factory=dict)
+    gpu_timing_supported: bool = False
+    _pending_gpu_timestamps: list = field(default_factory=list, repr=False)
     cache_hits: int = 0
     cache_misses: int = 0
     cache_writes: int = 0
@@ -67,6 +74,8 @@ class RenderStats:
         return {
             "shader_dispatches": self.shader_dispatches,
             "shader_dispatches_by_name": dict(self.shader_dispatches_by_name),
+            "shader_gpu_seconds_by_name": dict(self.shader_gpu_seconds_by_name),
+            "gpu_timing_supported": self.gpu_timing_supported,
             "cache_hits": self.cache_hits,
             "cache_misses": self.cache_misses,
             "cache_writes": self.cache_writes,
@@ -204,7 +213,9 @@ class Renderer:
                 self._validate_region_graph(value)
             self.ctx._active_evaluation_rect = rect
             self.ctx._active_render_stats = self.stats
+            self.stats.gpu_timing_supported = self.ctx.gpu_timing_supported
             self.stats.render_calls += 1
+            self.ctx._begin_command_batch()
 
         self._render_depth += 1
         try:
@@ -214,6 +225,8 @@ class Renderer:
         finally:
             self._render_depth -= 1
             if is_root_render:
+                self.ctx._end_command_batch()
+                self.ctx._resolve_shader_timings(self.stats)
                 self.stats.elapsed_seconds += perf_counter() - start
                 self.ctx._active_render_stats = previous_stats
                 self.ctx._active_evaluation_rect = previous_rect
