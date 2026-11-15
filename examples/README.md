@@ -8,6 +8,9 @@ uv run python -m examples render_api
 uv run python -m examples text_layout
 uv run python -m examples text_opentype
 uv run python -m examples vortices
+uv run python -m examples tidal_bloom
+uv run python -m examples blue_hour
+uv run python -m examples learned_score
 uv run python -m examples distance_corrections
 uv run python -m examples.learning_ui --mode all --steps 250
 uv run python -m examples.learned_dashboard --steps 80
@@ -18,6 +21,24 @@ uv run python -m examples.center_div --steps 60
 The first command lists the original rendering examples. The learning and GPU
 examples have their own command-line options; append `--help` for details.
 Generated images and checkpoints go under `out/`.
+
+``tidal_bloom`` renders a looping 640×640 generative animation from animated
+SDF petals, contour threads, orbiting constellations, and layered orbital
+tracks. It writes ``out/generative_art/tidal_bloom.mp4`` and a still preview
+to ``out/generative_art/tidal_bloom.png``. The scene is intentionally built
+from a modest number of GPU passes to keep frame renders comfortably below
+ten seconds on typical adapters.
+
+``blue_hour`` is a landscape-format neon city animation: layered SDF skylines,
+lit windows, diagonal rain, a gliding tram, and moving water reflections. It
+writes ``out/generative_art/blue_hour_relay.mp4`` and a PNG preview alongside
+it.
+
+``learned_score`` uses the learning API to arrange a kinetic graphic score.
+Its marks begin with small deterministic offsets; a layout trainer discovers
+their shared spacing, baseline, page coverage, and visual balance. The final
+learned layout breathes into a 72-frame animation and is saved with its learned
+layout report under ``out/generative_art/``.
 
 ``vortices`` shows an SDF warped by a pair of counter-rotating fields, with
 streamlines drawn over the distorted contours.

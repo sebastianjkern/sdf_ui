@@ -8,14 +8,17 @@ from examples.capsule_example import capsule_example
 from examples.complex_shapes_example import complex_shapes_example
 from examples.convex_polygon_example import convex_polygon_example
 from examples.dawn_example import dawn_example
-from examples.distance_corrections_example import distance_corrections_example
 from examples.diamond_example import diamond_example
+from examples.distance_corrections_example import distance_corrections_example
 from examples.ellipse_example import ellipse_example
 from examples.font_example import font_example
+from examples.generative_art_animation import generative_art_animation
 from examples.github_banner_example import github_banner_example
 from examples.half_plane_example import half_plane_example
 from examples.impossible_city import impossible_city_example
 from examples.isolines_example import isolines_example
+from examples.kinetic_city_animation import kinetic_city_animation
+from examples.learned_rule_art import learned_rule_art
 from examples.light_example import light_example
 from examples.masked_union_example import masked_union_example
 from examples.neuromorphism_light_example import neuromorphism_light_example
@@ -51,11 +54,14 @@ examples = {
     "text_opentype": text_opentype_example,
     "transparency": transparency_example,
     "font": font_example,
+    "tidal_bloom": generative_art_animation,
     "complex": complex_shapes_example,
     "anim": animation_example,
     "arc": arc_example,
     "pd": partial_derivative_example,
     "ic": impossible_city_example,
+    "blue_hour": kinetic_city_animation,
+    "learned_score": learned_rule_art,
     "render_api": render_api_example,
     "striped_circles": striped_circles_example,
     "github": github_banner_example,
