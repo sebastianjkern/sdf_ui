@@ -58,6 +58,11 @@ class GPUImage(Image):
             raise RuntimeError("GPU image is closed")
         self.context._check_open()
 
+    def mark_modified(self):
+        """Advance the content version after a GPU-side write."""
+        self.context._image_generation += 1
+        self.generation = self.context._image_generation
+
     def write(self, data):
         """Upload a contiguous image array in the texture's native format."""
         self._check_open()
@@ -84,6 +89,7 @@ class GPUImage(Image):
             },
             (self.size[0], self.size[1], 1),
         )
+        self.mark_modified()
 
     def read(self):
         """Copy pixels to CPU memory, respecting WebGPU's 256-byte row pitch."""

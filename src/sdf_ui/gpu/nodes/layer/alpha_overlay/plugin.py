@@ -25,6 +25,27 @@ def render_alpha_overlay_pair(renderer, inputs, params):
     from sdf_ui.core.color import ColorSpaceMode, ColorTexture
 
     ctx = renderer.ctx
+    if renderer._dirty_regions_enabled and ctx._active_evaluation_rect is not None:
+        # The fused overlay kernel uses full-canvas coordinates. Use the
+        # regular pointwise node shader so it can dispatch into a crop.
+        top = renderer.render(inputs[1].to_rgb())
+        base = renderer.render(inputs[0].to_rgb())
+        output = ctx.rgba8()
+        from sdf_ui.gpu.nodes.registry import registry
+
+        descriptor = registry.get("alpha_overlay").shader
+        try:
+            ctx.run_node_shader(
+                descriptor,
+                output,
+                (top.tex, base.tex),
+                {},
+            )
+        except BaseException:
+            output.close()
+            raise
+        return ColorTexture(tex=output, context=ctx, mode=ColorSpaceMode.RGB)
+
     output = ctx.rgba8()
     source = _FUSED_OVERLAY.replace(
         "const TOP_IS_LAB: bool = false;",

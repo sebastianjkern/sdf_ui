@@ -2,6 +2,7 @@
 
 __docformat__ = "google"
 
+import weakref
 from abc import ABC
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -57,6 +58,10 @@ class RenderStats:
     texture_allocations_by_kind: Dict[str, int] = field(default_factory=dict)
     render_calls: int = 0
     elapsed_seconds: float = 0.0
+    dirty_layer_hits: int = 0
+    dirty_layer_updates: int = 0
+    dirty_region_pixels: int = 0
+    dirty_region_fallbacks: int = 0
 
     def record_shader_dispatch(self, shader_name, dispatch_groups):
         self.shader_dispatches += 1
@@ -84,6 +89,10 @@ class RenderStats:
             "texture_allocations_by_kind": dict(self.texture_allocations_by_kind),
             "render_calls": self.render_calls,
             "elapsed_seconds": self.elapsed_seconds,
+            "dirty_layer_hits": self.dirty_layer_hits,
+            "dirty_layer_updates": self.dirty_layer_updates,
+            "dirty_region_pixels": self.dirty_region_pixels,
+            "dirty_region_fallbacks": self.dirty_region_fallbacks,
         }
 
 
@@ -96,6 +105,103 @@ class RenderCacheInfo:
     misses: int
     writes: int
     skips: int
+
+
+class _FullDirtyFrame(Exception):
+    """Signal that an automatic crop cannot be proven safe."""
+
+
+def _union_bounds(bounds, canvas_size):
+    bounds = [item for item in bounds if item is not None]
+    if not bounds:
+        return None
+    x0 = min(item[0] for item in bounds)
+    y0 = min(item[1] for item in bounds)
+    x1 = max(item[0] + item[2] for item in bounds)
+    y1 = max(item[1] + item[3] for item in bounds)
+    width, height = canvas_size
+    x0, y0 = max(0, int(x0) - 2), max(0, int(y0) - 2)
+    x1, y1 = min(width, int(x1 + 0.999) + 2), min(height, int(y1 + 0.999) + 2)
+    return None if x1 <= x0 or y1 <= y0 else (x0, y0, x1 - x0, y1 - y0)
+
+
+def _node_bounds(op, params, inputs, canvas_size, child_bounds=()):
+    """Return conservative pixel bounds for common finite SDF primitives."""
+    center = params.get("center", params.get("offset"))
+    if op in {"circle", "ring", "ellipse", "rect", "rounded_rect", "ngon"}:
+        if center is None:
+            return None
+        x, y = center
+        if op in {"circle", "ring", "ngon"}:
+            radius = abs(float(params.get("radius", 0)))
+            extent = radius + abs(float(params.get("thickness", 0))) / 2
+            rx = ry = extent
+        elif op == "ellipse":
+            rx, ry = (abs(float(value)) for value in params.get("radii", params.get("size", (0, 0))))
+        else:
+            rx, ry = (abs(float(value)) for value in params.get("size", (0, 0)))
+            radius = params.get("corner_radius", 0)
+            if isinstance(radius, (int, float)):
+                rx += abs(radius)
+                ry += abs(radius)
+        angle = abs(float(params.get("angle", 0)))
+        if angle:
+            import math
+
+            diagonal = math.hypot(rx, ry)
+            rx = ry = diagonal
+        return _union_bounds(((x - rx, y - ry, 2 * rx, 2 * ry),), canvas_size)
+    if op in {"capsule", "segment"}:
+        a, b = params.get("a"), params.get("b")
+        if a is None or b is None:
+            return None
+        radius = abs(float(params.get("radius", params.get("thickness", 0))))
+        return _union_bounds(((min(a[0], b[0]) - radius, min(a[1], b[1]) - radius,
+                               abs(a[0] - b[0]) + 2 * radius,
+                               abs(a[1] - b[1]) + 2 * radius),), canvas_size)
+    if op in {"fill", "outline"} and child_bounds and child_bounds[0] is not None:
+        x, y, width, height = child_bounds[0]
+        margin = max(
+            abs(float(params.get("inflate", 0) or 0)),
+            abs(float(params.get("inner", 0) or 0)),
+            abs(float(params.get("outer", 0) or 0)),
+        ) + 2
+        return _union_bounds(
+            ((x - margin, y - margin, width + 2 * margin, height + 2 * margin),),
+            canvas_size,
+        )
+    if op in {
+        "union", "smooth_union", "intersection", "subtract", "smooth_subtract",
+        "smooth_intersection", "alpha_overlay", "over",
+        "isolines", "transparency", "layer_mask", "to_rgb", "to_lab",
+    }:
+        selected = child_bounds[:1] if op in {"isolines", "transparency", "to_rgb", "to_lab"} else child_bounds
+        return _union_bounds(selected, canvas_size)
+    if op in {"translate", "rotate", "scale"} and child_bounds:
+        child = child_bounds[0]
+        if child is None:
+            return None
+        x, y, width, height = child
+        cx, cy = params.get("center", (0.0, 0.0))
+        points = ((x, y), (x + width, y), (x, y + height), (x + width, y + height))
+        import math
+
+        transformed = []
+        for px, py in points:
+            if op == "translate":
+                ox, oy = params.get("offset", (0.0, 0.0))
+                px, py = px + ox, py + oy
+            elif op == "scale":
+                factor = params.get("factor", 1.0)
+                px, py = cx + (px - cx) * factor, cy + (py - cy) * factor
+            else:
+                angle = params.get("angle", 0.0)
+                dx, dy = px - cx, py - cy
+                px, py = cx + dx * math.cos(angle) - dy * math.sin(angle), cy + dx * math.sin(angle) + dy * math.cos(angle)
+            transformed.append((px, py))
+        xs, ys = zip(*transformed)
+        return _union_bounds(((min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys)),), canvas_size)
+    return None
 
 
 _SPATIAL_PARAMS = {
@@ -150,10 +256,20 @@ class Renderer:
     """
 
     def __init__(
-        self, ctx, params=None, cache=None, evaluation_rect=None, progress=0.0
+        self,
+        ctx,
+        params=None,
+        cache=None,
+        evaluation_rect=None,
+        progress=0.0,
+        dirty_regions=False,
     ):
         if ctx is None:
             raise ValueError("A Context is required to render a texture")
+        if dirty_regions and evaluation_rect is not None:
+            raise ValueError(
+                "dirty_regions cannot be combined with evaluation_rect"
+            )
         self.ctx = ctx
         self.params = params or {}
         self.cache = {} if cache is None else cache
@@ -164,6 +280,9 @@ class Renderer:
         self.stats = RenderStats()
         self._render_depth = 0
         self._graph_ref_counts = {}
+        self._dirty_regions_enabled = bool(dirty_regions)
+        self._dirty_layer_cache = {}
+        self._dirty_region_temporaries = []
 
     def __enter__(self) -> Self:
         return self
@@ -191,13 +310,30 @@ class Renderer:
     def percent_of_min(self, value):
         return self.ctx.percent_of_min(value)
 
-    def render(self, value, *, progress=None):
+    def render(self, value, *, progress=None, dirty_rect=None):
         is_root_render = self._render_depth == 0
         if is_root_render:
+            from ..gpu.regions import normalize_rect
             from .expressions import validate_progress
 
             if progress is not None:
                 self.progress = validate_progress(progress)
+            if dirty_rect is not None and self.evaluation_rect is not None:
+                raise ValueError(
+                    "dirty_rect cannot be combined with evaluation_rect"
+                )
+            auto_dirty = dirty_rect == "auto" or (
+                dirty_rect is None and self._dirty_regions_enabled
+            )
+            self._dirty_regions_enabled |= dirty_rect is not None
+            if auto_dirty:
+                rect = self._resolve_dirty_rect(value)
+            else:
+                rect = (
+                    normalize_rect(dirty_rect, self.ctx.size)
+                    if dirty_rect is not None
+                    else self._resolve_evaluation_rect(value)
+                )
             self._graph_ref_counts = self._count_graph_references(value)
             start = perf_counter()
             previous_stats = getattr(self.ctx, "_active_render_stats", None)
@@ -210,8 +346,7 @@ class Renderer:
                 raise ValueError(
                     "A materialized image cannot be re-rendered into a crop"
                 )
-            rect = self._resolve_evaluation_rect(value)
-            if rect is not None:
+            if self.evaluation_rect is not None:
                 self._validate_region_graph(value)
             self.ctx._active_evaluation_rect = rect
             self.ctx._active_render_stats = self.stats
@@ -222,12 +357,17 @@ class Renderer:
         self._render_depth += 1
         try:
             if isinstance(value, TextureNode) or isinstance(value, MultiOutputResult):
+                if is_root_render and self._dirty_regions_enabled:
+                    return self._eval_dirty_layer(value)
                 return self._eval(value)
             return self._resolve(value)
         finally:
             self._render_depth -= 1
             if is_root_render:
                 self.ctx._end_command_batch()
+                for temporary in self._dirty_region_temporaries:
+                    temporary.close()
+                self._dirty_region_temporaries.clear()
                 self.ctx._resolve_shader_timings(self.stats)
                 self.stats.elapsed_seconds += perf_counter() - start
                 self.ctx._active_render_stats = previous_stats
@@ -299,12 +439,16 @@ class Renderer:
 
     @staticmethod
     def _region_children(value, registry):
-        if isinstance(value, MultiOutputResult):
-            return value.inputs
-        if not isinstance(value, TextureNode) or value.tex is not None:
+        if isinstance(value, TextureNode) and value.tex is not None:
             return ()
+        if not isinstance(value, (TextureNode, MultiOutputResult)):
+            return ()
+        if isinstance(value, TextureNode) and value.op == "output":
+            return value.inputs
         plugin = registry.get(value.op)
         shader = plugin.shader
+        if value.op == "output":
+            return value.inputs
         if shader is None or shader.differentiation is None:
             if plugin.render_func is not None:
                 reason = "host-rendered node"
@@ -322,9 +466,13 @@ class Renderer:
 
     def close(self) -> None:
         self.cache.clear()
+        self._dirty_layer_cache.clear()
+        self._dirty_region_temporaries.clear()
 
     def clear_cache(self):
         self.cache.clear()
+        self._dirty_layer_cache.clear()
+        self._dirty_region_temporaries.clear()
 
     def cache_info(self):
         return RenderCacheInfo(
@@ -336,6 +484,8 @@ class Renderer:
         )
 
     def _eval(self, node):
+        if self._dirty_regions_enabled:
+            return self._eval_dirty_layer(node)
         if getattr(node, "tex", None) is not None:
             if getattr(node.tex, "closed", False):
                 raise RuntimeError("Cannot use a closed texture node as an input")
@@ -356,7 +506,7 @@ class Renderer:
         from sdf_ui.gpu.nodes.registry import registry
 
         plugin = registry.get(node.op)
-        if node.op == "alpha_overlay":
+        if node.op == "alpha_overlay" and not self._dirty_regions_enabled:
             result = self._render_overlay_chain(node)
             if result is not None:
                 if node.should_cache:
@@ -376,6 +526,224 @@ class Renderer:
             self.stats.cache_writes += 1
 
         return result
+
+    def _eval_dirty_layer(self, node):
+        """Reuse per-node outputs and patch pointwise changes into their images."""
+        if isinstance(node, TextureNode) and getattr(node, "tex", None) is not None:
+            if getattr(node.tex, "closed", False):
+                raise RuntimeError("Cannot use a closed texture node as an input")
+            return node
+
+        from sdf_ui.gpu.nodes.registry import registry
+
+        signature = self._stable_node_key(node)
+        state = self._dirty_layer_state(node)
+        if state is not None and state[0] == signature:
+            if not self._layer_output_closed(state[1]):
+                self.stats.cache_hits += 1
+                self.stats.dirty_layer_hits += 1
+                return state[1]
+            self._forget_dirty_layer(node)
+            state = None
+
+        cache_key = self._node_key(node)
+        if state is None and node.should_cache and cache_key in self.cache:
+            cached = self.cache[cache_key]
+            if not self._layer_output_closed(cached):
+                self.stats.cache_hits += 1
+                self._remember_dirty_layer(node, signature, cached)
+                return cached
+            self.cache.pop(cache_key, None)
+
+        plugin = registry.get(node.op)
+        if state is not None or node.should_cache:
+            self.stats.cache_misses += 1
+        else:
+            self.stats.cache_skips += 1
+
+        inputs = tuple(self.render(input_) for input_ in node.inputs)
+        params = dict((key, self._resolve(value)) for key, value in node.params)
+        scale = getattr(self.ctx, "device_scale", 1.0)
+        if scale != 1.0:
+            params = _scale_spatial_params(node.op, params, scale)
+
+        region = self.ctx._active_evaluation_rect
+        if state is not None and region is not None:
+            try:
+                self._region_children(node, registry)
+            except NotImplementedError:
+                result = self._render_full_plugin(plugin, inputs, params)
+                self.stats.dirty_region_fallbacks += 1
+            else:
+                result = plugin.render(self, inputs, params)
+                if self._patch_layer_output(state[1], result, region):
+                    result = state[1]
+                    self.stats.dirty_layer_updates += 1
+                    self.stats.dirty_region_pixels += region[2] * region[3]
+                else:
+                    result = self._render_full_plugin(plugin, inputs, params)
+                    self.stats.dirty_region_fallbacks += 1
+        elif state is None and region is not None:
+            result = self._render_full_plugin(plugin, inputs, params)
+            self.stats.dirty_region_fallbacks += 1
+        else:
+            result = plugin.render(self, inputs, params)
+
+        self._remember_dirty_layer(node, signature, result)
+        if node.should_cache:
+            self.cache[signature] = result
+            self.stats.cache_writes += 1
+        return result
+
+    def _render_full_plugin(self, plugin, inputs, params):
+        previous_rect = self.ctx._active_evaluation_rect
+        self.ctx._active_evaluation_rect = None
+        try:
+            return plugin.render(self, inputs, params)
+        finally:
+            self.ctx._active_evaluation_rect = previous_rect
+
+    def _patch_layer_output(self, destination, source, rect):
+        if destination is source:
+            return True
+        if isinstance(destination, tuple) and isinstance(source, tuple):
+            if len(destination) != len(source):
+                return False
+            return all(
+                self._patch_layer_output(target, update, rect)
+                for target, update in zip(destination, source)
+            )
+        if not isinstance(destination, TextureNode) or not isinstance(
+            source, TextureNode
+        ):
+            return False
+        dest_tex, source_tex = destination.tex, source.tex
+        if dest_tex is source_tex:
+            return True
+        if dest_tex is None or source_tex is None:
+            return False
+        x, y, width, height = rect
+        if (
+            tuple(dest_tex.origin) != (0, 0)
+            or tuple(dest_tex.size) != tuple(self.ctx.size)
+            or tuple(source_tex.origin) != (x, y)
+            or tuple(source_tex.size) != (width, height)
+            or source_tex.format != dest_tex.format
+        ):
+            return False
+        self.ctx.copy_image_region(source_tex, dest_tex, rect)
+        self._dirty_region_temporaries.append(source_tex)
+        return True
+
+    @staticmethod
+    def _layer_output_closed(output):
+        outputs = output if isinstance(output, tuple) else (output,)
+        return any(
+            getattr(getattr(item, "tex", None), "closed", False)
+            for item in outputs
+        )
+
+    def _resolve_dirty_rect(self, root):
+        """Find a conservative crop covering changed animation parameters."""
+        from ..gpu.regions import normalize_rect
+
+        canvas = (0, 0, *self.ctx.size)
+        seed_frame = not self._dirty_layer_cache
+        visited = set()
+
+        def bounds(node):
+            if id(node) in visited:
+                return None
+            visited.add(id(node))
+            if isinstance(node, MultiOutputResult):
+                children = [bounds(child) for child in node.inputs]
+                return _union_bounds(children, self.ctx.size)
+            if not isinstance(node, TextureNode) or node.tex is not None:
+                return None
+            params = {key: self._resolve(value) for key, value in node.params}
+            scale = getattr(self.ctx, "device_scale", 1.0)
+            if scale != 1.0:
+                params = _scale_spatial_params(node.op, params, scale)
+            param_key = self._freeze_runtime(params)
+            state = self._dirty_layer_state(node)
+            current_key = self._stable_node_key(node)
+            children = [bounds(child) for child in node.inputs]
+            child_bounds = [
+                self._dirty_bounds.get(id(child), (None, None, None))[2]
+                for child in node.inputs
+            ]
+            current_bounds = _node_bounds(
+                node.op, params, node.inputs, self.ctx.size, child_bounds
+            )
+            if state is None:
+                self._dirty_bounds[id(node)] = (current_key, param_key, current_bounds)
+                self._needs_full_dirty_seed |= seed_frame
+                return current_bounds
+            previous_param_key = state[3] if len(state) > 3 else None
+            previous_bounds = state[2]
+            if state[0] != current_key and previous_param_key != param_key:
+                if current_bounds is None or previous_bounds is None:
+                    raise _FullDirtyFrame
+                changed = _union_bounds((current_bounds, previous_bounds), self.ctx.size)
+                self._dirty_bounds[id(node)] = (current_key, param_key, current_bounds)
+                return changed
+            self._dirty_bounds[id(node)] = (current_key, param_key, current_bounds)
+            if any(child is not None for child in children):
+                from ..gpu.nodes.registry import registry
+
+                plugin = registry.get(node.op)
+                contract = None if plugin.shader is None else plugin.shader.differentiation
+                if contract is None or contract.sampling != "pointwise":
+                    raise _FullDirtyFrame
+            return _union_bounds(children, self.ctx.size)
+
+        self._dirty_bounds = {}
+        self._needs_full_dirty_seed = False
+        try:
+            rect = bounds(root)
+        except _FullDirtyFrame:
+            rect = canvas
+        if self._needs_full_dirty_seed:
+            rect = None
+        if rect is None:
+            return None
+        return normalize_rect(rect, self.ctx.size)
+
+    def _dirty_layer_state(self, node):
+        entry = self._dirty_layer_cache.get(id(node))
+        if entry is None or entry[0]() is not node:
+            return None
+        return entry[1]
+
+    def _remember_dirty_layer(self, node, signature, output):
+        identity = id(node)
+        renderer_ref = weakref.ref(self)
+
+        def remove(node_ref):
+            renderer = renderer_ref()
+            if renderer is not None:
+                current = renderer._dirty_layer_cache.get(identity)
+                if current is not None and current[0] is node_ref:
+                    renderer._dirty_layer_cache.pop(identity, None)
+
+        info = getattr(self, "_dirty_bounds", {}).get(identity)
+        param_key = None if info is None else info[1]
+        bounds = None if info is None else info[2]
+        self._dirty_layer_cache[identity] = (
+            weakref.ref(node, remove),
+            (signature, output, bounds, param_key),
+        )
+
+    def _forget_dirty_layer(self, node):
+        self._dirty_layer_cache.pop(id(node), None)
+
+    def _stable_node_key(self, node):
+        previous_rect = self.ctx._active_evaluation_rect
+        self.ctx._active_evaluation_rect = None
+        try:
+            return self._node_key(node)
+        finally:
+            self.ctx._active_evaluation_rect = previous_rect
 
     def _render_overlay_chain(self, root):
         from sdf_ui.gpu.nodes.layer.alpha_overlay.plugin import (
@@ -490,6 +858,7 @@ class Renderer:
                 id(node.context),
                 node.kind,
                 id(node.tex),
+                getattr(node.tex, "generation", None),
                 getattr(node, "mode", None),
             )
 

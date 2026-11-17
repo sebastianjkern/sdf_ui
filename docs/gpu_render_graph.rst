@@ -32,6 +32,27 @@ also accept ``evaluation_rect=(x, y, width, height)`` in canvas pixels and
 return cropped images. Neighborhood-sampling passes and compiled training do
 not yet use evaluation rectangles.
 
+Interactive sessions can enable per-layer dirty rendering with
+``canvas.session(dirty_regions=True)``. Render once without a dirty rectangle
+to seed full outputs, then pass ``dirty_rect=(x, y, width, height)`` to later
+``Renderer.render`` calls. A changed pointwise layer is evaluated into a crop
+and copied into its retained full output; unchanged layers are reused. The
+caller must include all changed pixels in the rectangle, including old and new
+object bounds. Unsupported host-rendered or neighborhood-sampling paths render
+the affected layer in full. ``renderer.stats`` exposes layer hit, update,
+region-pixel, and fallback counters.
+
+With ``dirty_regions=True`` and no explicit rectangle, sessions derive a
+conservative rectangle from changed primitive parameters and their previous
+and current bounds. Common finite primitives and spatial transforms are
+covered; unknown geometry falls back to a full render. Animation exports use
+this mode by default and accept ``dirty_regions=False`` for baseline renders.
+The exporter uses dirty rendering for scenes with at most 96 graph nodes; larger
+graphs stay on the compiled path because current per-layer bookkeeping costs
+more than the crop saves. It also uses compiled rendering for frames whose
+estimated crop exceeds 35% of the canvas or whose session has recorded more
+than ten layer fallbacks.
+
 Small scalar/vector parameter expressions and geometric losses use the existing
 CPU autodiff engine. Reduced uniform gradients connect the GPU graph back to
 those expressions. Only small loss/parameter/gradient vectors cross the CPU/GPU

@@ -667,6 +667,7 @@ class Context:
         evaluation_rect: tuple[int, int, int, int] | None = None,
         *,
         progress: float = 0.0,
+        dirty_regions: bool = False,
     ) -> Renderer:
         from ..core.texture import Renderer
 
@@ -676,6 +677,7 @@ class Context:
             cache=cache,
             evaluation_rect=evaluation_rect,
             progress=progress,
+            dirty_regions=dirty_regions,
         )
 
     def compile(
@@ -699,11 +701,20 @@ class Context:
         frames: int = 60,
         params: dict[str, Any] | None = None,
         fps: float = 30,
+        dirty_regions: bool = True,
     ) -> Path:
         """Render a scene's animated parameters to a GIF or MP4."""
         from ..anim import save_animation
 
-        return save_animation(self, scene, path, frames=frames, params=params, fps=fps)
+        return save_animation(
+            self,
+            scene,
+            path,
+            frames=frames,
+            params=params,
+            fps=fps,
+            dirty_regions=dirty_regions,
+        )
 
     def render_plan(
         self,
@@ -962,6 +973,44 @@ class Context:
         )
         self.queue.submit([encoder.finish()])
         return result
+
+    def copy_image_region(self, source: Any, destination: Any, rect) -> None:
+        """Copy a cropped image into the matching rectangle of a full image."""
+        from .image import GPUImage
+        from .regions import normalize_rect
+
+        if (
+            not isinstance(source, GPUImage)
+            or not isinstance(destination, GPUImage)
+            or source.context is not self
+            or destination.context is not self
+        ):
+            raise ValueError("Images must belong to this WebGPU context")
+        source._check_open()
+        destination._check_open()
+        rect = normalize_rect(rect, destination.canvas_size)
+        x, y, width, height = rect
+        if (
+            source.format != destination.format
+            or tuple(source.origin) != (x, y)
+            or tuple(source.size) != (width, height)
+            or tuple(destination.origin) != (0, 0)
+            or tuple(destination.size) != tuple(destination.canvas_size)
+        ):
+            raise ValueError("Source and destination extents do not match rect")
+        encoder = self._command_encoder
+        if encoder is None:
+            encoder = self.device.create_command_encoder(label="image region copy")
+            if self._command_batch_active:
+                self._command_encoder = encoder
+        encoder.copy_texture_to_texture(
+            {"texture": source.texture, "mip_level": 0, "origin": (0, 0, 0)},
+            {"texture": destination.texture, "mip_level": 0, "origin": (x, y, 0)},
+            (width, height, 1),
+        )
+        destination.mark_modified()
+        if not self._command_batch_active:
+            self.queue.submit([encoder.finish()])
 
     def close(self) -> None:
         if self._closed:

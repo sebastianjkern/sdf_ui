@@ -249,6 +249,31 @@ supported; filters and shaders that sample neighboring pixels need a halo and
 currently reject cropped evaluation. This explicit region is the first step
 toward automatic bounds propagation.
 
+For repeated updates, a renderer session can retain each shader layer's full
+output and patch only a dirty rectangle into layers whose inputs changed:
+
+```python
+with Canvas((640, 360)) as canvas:
+    with canvas.session(dirty_regions=True) as renderer:
+        frame = renderer.render(scene)  # full render seeds per-layer outputs
+        frame = renderer.render(scene, progress=0.1, dirty_rect=(180, 80, 240, 200))
+```
+
+The rectangle must cover every changed pixel, including both old and new
+positions of moving shapes. Pointwise shader layers can be patched; filters,
+host-rendered nodes, and other unsupported paths fall back to full-layer
+rendering. `renderer.stats` reports layer hits, updates, patched pixels, and
+fallbacks. Set `dirty_regions=True` on a session to derive a conservative region
+from changed primitive parameters automatically. Common finite SDF primitives
+and translations, rotations, and scales are bounded; unknown geometry and
+neighborhood effects use full rendering. Animation exports enable this mode by
+default; pass `dirty_regions=False` to `Canvas.save_animation(...)` for a full
+render baseline. The exporter uses dirty rendering for scenes with at most 96
+graph nodes; larger scenes stay on the compiled renderer because current
+per-layer bookkeeping costs more than the crop saves. During an animation, it
+also returns to compiled rendering when the estimated crop exceeds 35% of the
+canvas or more than ten layers have fallen back to full rendering.
+
 ### Architecture Note
 
 Internally, `sdf_ui` is organized around immutable render nodes instead of immediate drawing calls.
@@ -454,7 +479,7 @@ export. This checklist tracks completed and remaining work by area.
 
 - [ ] Establish clear shader and loss adapter boundaries around the rendering core.
 - [ ] Finish organizing NumPy learning around graph nodes, including intermediate-value losses.
-- [ ] Add incremental dirty-region rendering so unchanged canvas areas can be reused.
+- [x] Add incremental dirty-region rendering with automatic animation bounds for common finite SDF primitives and transforms.
 - [ ] Add bounds-aware shaders and clipping to skip work outside visible regions.
 - [ ] Explore bounds-driven subframe rendering for procedural scenes such as Voronoi fields.
 

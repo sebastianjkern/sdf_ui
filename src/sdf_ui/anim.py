@@ -2,9 +2,29 @@
 
 __docformat__ = "google"
 
+from contextlib import ExitStack
+
 import cv2
 
 from .log import logger
+
+_MAX_DIRTY_ANIMATION_NODES = 96
+
+
+def _dirty_animation_node_count(scene):
+    from .core.texture import MultiOutputResult, TextureNode
+
+    pending = [scene]
+    visited = set()
+    while pending:
+        node = pending.pop()
+        if id(node) in visited or not isinstance(node, (TextureNode, MultiOutputResult)):
+            continue
+        visited.add(id(node))
+        if isinstance(node, TextureNode) and node.tex is not None:
+            continue
+        pending.extend(node.inputs)
+    return len(visited)
 
 
 def convert_to_video(name, image_paths, *, fps=60):
@@ -59,7 +79,9 @@ def _write_mp4(path, image_paths, fps):
         writer.release()
 
 
-def save_animation(canvas, scene, path, *, frames=60, params=None, fps=30):
+def save_animation(
+    canvas, scene, path, *, frames=60, params=None, fps=30, dirty_regions=True
+):
     """Render an animated scene to a GIF or MP4 by sweeping progress from 0 to 1."""
     import tempfile
     from numbers import Integral, Real
@@ -80,13 +102,46 @@ def save_animation(canvas, scene, path, *, frames=60, params=None, fps=30):
 
     with tempfile.TemporaryDirectory(prefix="sdf-ui-frames-") as temp_dir:
         frame_paths = []
-        with canvas.compile({"frame": scene}, params=params) as graph:
-            for index in range(int(frames)):
-                progress = index / max(int(frames) - 1, 1)
-                frame_path = Path(temp_dir) / f"{index:06d}.png"
-                with graph.run(progress=progress) as execution:
-                    execution.save("frame", frame_path)
-                frame_paths.append(frame_path)
+        with ExitStack() as stack:
+            graph = stack.enter_context(canvas.compile({"frame": scene}, params=params))
+            renderer_scope = (
+                stack.enter_context(canvas.session(params=params, dirty_regions=True))
+                if dirty_regions
+                and _dirty_animation_node_count(scene) <= _MAX_DIRTY_ANIMATION_NODES
+                else None
+            )
+            try:
+                for index in range(int(frames)):
+                    progress = index / max(int(frames) - 1, 1)
+                    frame_path = Path(temp_dir) / f"{index:06d}.png"
+                    use_dirty = renderer_scope is not None
+                    if use_dirty and index:
+                        renderer_scope.progress = progress
+                        rect = renderer_scope._resolve_dirty_rect(scene)
+                        area = 0 if rect is None else rect[2] * rect[3]
+                        use_dirty = (
+                            area <= 0.35 * canvas.size[0] * canvas.size[1]
+                            and renderer_scope.stats.dirty_region_fallbacks <= 10
+                        )
+                    if use_dirty:
+                        frame = renderer_scope.render(scene, progress=progress)
+                        frame.save(frame_path)
+                    else:
+                        with graph.run(progress=progress) as execution:
+                            execution.save("frame", frame_path)
+                    frame_paths.append(frame_path)
+            finally:
+                if renderer_scope is not None:
+                    # The dirty cache owns intermediate render targets for the session.
+                    owned = {}
+                    for _, state in renderer_scope._dirty_layer_cache.values():
+                        outputs = state[1] if isinstance(state[1], tuple) else (state[1],)
+                        for output in outputs:
+                            texture = getattr(output, "tex", None)
+                            if texture is not None:
+                                owned[id(texture)] = texture
+                    for texture in owned.values():
+                        texture.close()
 
         if suffix == ".gif":
             images = [

@@ -77,17 +77,16 @@ def create_animation(steps=60, output=Path("out/center_div")):
                 losses.append(loss_value)
 
     with Canvas((width, height)) as canvas:
-        with canvas.compile(
-            {"div": div, "image": scene},
-            {"center_x": center_x, "offset": offset},
-        ) as graph:
+        with canvas.session(
+            params={"center_x": center_x, "offset": offset}, dirty_regions=True
+        ) as renderer:
             motion_dir = output / "motion"
             motion_dir.mkdir(parents=True, exist_ok=True)
             for frame_index in range(steps):
                 progress = frame_index / max(steps - 1, 1)
                 frame_path = motion_dir / f"frame_{frame_index:04d}.png"
-                with graph.run(progress=progress) as execution:
-                    execution.save("image", frame_path)
+                frame = renderer.render(scene, progress=progress)
+                frame.save(frame_path)
                 _annotate_frame(
                     frame_path,
                     label=f"animation frame {frame_index + 1:03d}/{steps:03d}",
