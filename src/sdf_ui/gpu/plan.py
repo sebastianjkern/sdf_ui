@@ -100,7 +100,11 @@ def _display_port(port, results, sources):
 
 def _allocate_display_outputs(arguments, canvas):
     return tuple(
-        canvas.r32f() if argument.kind == "r32f" else canvas.rgba8()
+        canvas.r32f()
+        if argument.kind == "r32f"
+        else canvas.rgba32f()
+        if argument.kind == "rgba32float"
+        else canvas.rgba8()
         for argument in arguments
     )
 
@@ -114,10 +118,14 @@ def _output_modes(plan, pass_index):
 
 
 def _wrap_display_outputs(arguments, outputs, modes, canvas):
+    from ..core.field import FieldTexture
+
     wrapped = []
     for index, (argument, texture) in enumerate(zip(arguments, outputs)):
         if argument.kind == "r32f":
             wrapped.append(cast(Any, SDFTexture)(tex=texture, context=canvas))
+        elif argument.kind == "rgba32float":
+            wrapped.append(cast(Any, FieldTexture)(tex=texture, context=canvas))
         else:
             wrapped.append(
                 cast(Any, ColorTexture)(

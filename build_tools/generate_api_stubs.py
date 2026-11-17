@@ -30,6 +30,7 @@ def _load_runtime_objects():
 
     from sdf_ui.core.api import ColorNamespace, SDFNamespace
     from sdf_ui.core.color import ColorTexture
+    from sdf_ui.core.field import FieldNamespace, FieldTexture
     from sdf_ui.core.sdf import SDFTexture
     from sdf_ui.core.texture import (
         PostNamespace,
@@ -50,6 +51,8 @@ def _load_runtime_objects():
 
     return {
         "ColorNamespace": ColorNamespace,
+        "FieldNamespace": FieldNamespace,
+        "FieldTexture": FieldTexture,
         "SDFNamespace": SDFNamespace,
         "ColorTexture": ColorTexture,
         "SDFTexture": SDFTexture,
@@ -181,12 +184,29 @@ def _method_return_overrides() -> dict[str, dict[str, str]]:
             "debug_seams": "ColorTexture",
             "debug_distance": "ColorTexture",
             "debug_boolean": "ColorTexture",
+            "repeat_grid": "SDFTexture",
+            "warp": "SDFTexture",
+            "domain_warp": "SDFTexture",
+            "turbulence": "SDFTexture",
         },
         "SDFNamespace": {
             "svg": "SDFTexture",
             "math": "SDFTexture",
         },
+        "FieldNamespace": {
+            "constant": "FieldTexture",
+            "radial": "FieldTexture",
+            "vortex": "FieldTexture",
+            "turbulence": "FieldTexture",
+        },
+        "FieldTexture": {
+            "scale": "FieldTexture",
+            "add": "FieldTexture",
+            "visualize": "ColorTexture",
+            "contours": "ColorTexture",
+        },
         "ColorTexture": {
+            "warp": "ColorTexture",
             "over": "ColorTexture",
             "to_lab": "ColorTexture",
             "to_rgb": "ColorTexture",
@@ -400,6 +420,23 @@ def _render_color_stub(runtime: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _render_field_stub(runtime: dict[str, Any]) -> str:
+    methods = ["    kind: str"]
+    methods.extend(_merge_methods("FieldTexture", runtime["FieldTexture"], runtime))
+    lines = [
+        "from __future__ import annotations",
+        "",
+        "from typing import Any",
+        "",
+        "from .color import ColorTexture",
+        "from .texture import TextureNode",
+        "",
+        _render_class("FieldTexture(TextureNode)", methods).rstrip(),
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def _render_sdf_stub(runtime: dict[str, Any]) -> str:
     methods = ["    kind: str"]
     methods.extend(_merge_methods("SDFTexture", runtime["SDFTexture"], runtime))
@@ -420,18 +457,22 @@ def _render_sdf_stub(runtime: dict[str, Any]) -> str:
 def _render_api_stub(runtime: dict[str, Any]) -> str:
     sdf_methods = _merge_methods("SDFNamespace", runtime["SDFNamespace"], runtime)
     color_methods = _merge_methods("ColorNamespace", runtime["ColorNamespace"], runtime)
+    field_methods = _merge_methods("FieldNamespace", runtime["FieldNamespace"], runtime)
     lines = [
         "from __future__ import annotations",
         "",
         "from typing import Any",
         "",
         "from .color import ColorTexture",
+        "from .field import FieldTexture",
         "from .sdf import SDFTexture",
         "from .texture import MultiOutputResult",
         "",
         _render_class("SDFNamespace", sdf_methods).rstrip(),
         "",
         _render_class("ColorNamespace", color_methods).rstrip(),
+        "",
+        _render_class("FieldNamespace", field_methods).rstrip(),
         "",
     ]
     return "\n".join(lines)
@@ -442,6 +483,7 @@ def _render_core_init_stub() -> str:
         [
             "from .color import ColorSpaceMode as ColorSpaceMode, ColorTexture as ColorTexture",
             "from .expressions import Expr as Expr, cos as cos, input_value as input_value, param as param, percent as percent, percent_of_min as percent_of_min, percent_x as percent_x, percent_y as percent_y, sin as sin",
+            "from .field import FieldNamespace as FieldNamespace, FieldTexture as FieldTexture",
             "from .sdf import SDFTexture as SDFTexture",
             "",
         ]
@@ -455,13 +497,15 @@ def _render_root_init_stub() -> str:
             "",
             "from . import core as core, learning as learning",
             "from .gpu.context import Context as Context, DispatchConfig as DispatchConfig",
-            "from .core import ColorTexture as ColorTexture, SDFTexture as SDFTexture",
+            "from .core import ColorTexture as ColorTexture, FieldTexture as FieldTexture, SDFTexture as SDFTexture",
             "from .core.api import ColorNamespace, SDFNamespace",
+            "from .core.field import FieldNamespace",
             "from .core.expressions import Expr as Expr, cos as cos, input_value as input_value, param as param, percent as percent, percent_of_min as percent_of_min, percent_x as percent_x, percent_y as percent_y, sin as sin",
             "",
             "Canvas = Context",
             "sdf: SDFNamespace",
             "color: ColorNamespace",
+            "field: FieldNamespace",
             "logger: Any",
             "",
         ]
@@ -476,6 +520,7 @@ def generate_api_stubs(*, check: bool = False) -> bool:
         CORE / "texture.pyi": _render_texture_stub(runtime),
         CORE / "color.pyi": _render_color_stub(runtime),
         CORE / "sdf.pyi": _render_sdf_stub(runtime),
+        CORE / "field.pyi": _render_field_stub(runtime),
         CORE / "api.pyi": _render_api_stub(runtime),
         CORE / "__init__.pyi": _render_core_init_stub(),
         PACKAGE / "__init__.pyi": _render_root_init_stub(),

@@ -42,6 +42,47 @@ class SDFTexture(TextureNode):
             inflate=inflate,
         )
 
+    def repeat_grid(self, columns, rows, spacing, center):
+        """Repeat this SDF in a finite array, centered on its source location."""
+        return build(
+            "repeat_grid",
+            self,
+            columns=columns,
+            rows=rows,
+            spacing=spacing,
+            center=center,
+        )
+
+    def warp(self, field, strength=1.0, steps=1):
+        """Resample this SDF along a floating-point vector field."""
+        return build("warp_sdf", self, field, strength=strength, steps=steps)
+
+    def domain_warp(self, field, strength=1.0):
+        """Displace this shape's domain with a vector field."""
+        return self.warp(field, strength=strength)
+
+    def turbulence(
+        self,
+        amplitude=18.0,
+        frequency=0.012,
+        octaves=4,
+        lacunarity=2.0,
+        gain=0.5,
+        seed=0,
+    ):
+        """Apply deterministic fractal-noise displacement to this SDF."""
+        from .field import FieldNamespace
+
+        vector_field = FieldNamespace().turbulence(
+            frequency=frequency,
+            amplitude=amplitude,
+            octaves=octaves,
+            lacunarity=lacunarity,
+            gain=gain,
+            seed=seed,
+        )
+        return self.warp(vector_field)
+
     def __or__(self, other):
         return self.union(other)
 

@@ -1,0 +1,13 @@
+from __future__ import annotations
+
+from typing import Any
+
+from .color import ColorTexture
+from .texture import TextureNode
+
+class FieldTexture(TextureNode):
+    kind: str
+    def scale(self, amount: Any) -> FieldTexture: ...
+    def add(self, other: Any) -> FieldTexture: ...
+    def visualize(self, scale: Any = 1.0, magnitude: Any = 1.0) -> ColorTexture: ...
+    def contours(self, spacing: Any = 8.0, line_width: Any = 1.0, scale: Any = 1.0) -> ColorTexture: ...

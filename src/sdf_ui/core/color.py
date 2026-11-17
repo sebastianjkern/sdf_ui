@@ -37,6 +37,10 @@ class ColorTexture(TextureNode):
         """Alias for :meth:`mask` with an explicit layer-composition name."""
         return build("layer_mask", self, top, mask, mode=mode)
 
+    def warp(self, field, strength=1.0, steps=1):
+        """Resample this color layer along a floating-point vector field."""
+        return build("warp_color", self, field, strength=strength, steps=steps)
+
     def to_lab(self):
         if self.mode == ColorSpaceMode.LAB:
             return self

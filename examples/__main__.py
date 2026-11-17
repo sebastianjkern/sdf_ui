@@ -26,6 +26,7 @@ from examples.ngon_example import ngon_example
 from examples.parallelogram_example import parallelogram_example
 from examples.partial_derivative import partial_derivative_example
 from examples.polygon_example import polygon_example
+from examples.procedural_fields_example import procedural_fields_example
 from examples.render_api_example import render_api_example
 from examples.ring_example import ring_example
 from examples.rotation_example import rotation_example
@@ -78,6 +79,7 @@ examples = {
     "parallelogram": parallelogram_example,
     "polygon": polygon_example,
     "ring": ring_example,
+    "procedural_fields": procedural_fields_example,
     "sector": sector_example,
 }
 

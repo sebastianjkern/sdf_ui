@@ -81,6 +81,7 @@ class PluginRegistry:
 
     def _node(self, plugin, inputs, params):
         from sdf_ui.core.color import ColorTexture
+        from sdf_ui.core.field import FieldTexture
         from sdf_ui.core.sdf import SDFTexture
 
         if plugin.result == TextureKind.SDF:
@@ -89,6 +90,8 @@ class PluginRegistry:
             return ColorTexture(
                 op=plugin.name, inputs=inputs, params=params, mode=plugin.mode
             )
+        if plugin.result == TextureKind.FIELD:
+            return FieldTexture(op=plugin.name, inputs=inputs, params=params)
         if plugin.result == TextureKind.MULTI_OUTPUT:
             from sdf_ui.core.texture import MultiOutputResult, texture_params
 

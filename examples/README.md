@@ -8,6 +8,7 @@ uv run python -m examples render_api
 uv run python -m examples text_layout
 uv run python -m examples text_opentype
 uv run python -m examples vortices
+uv run python -m examples procedural_fields
 uv run python -m examples tidal_bloom
 uv run python -m examples blue_hour
 uv run python -m examples learned_score
@@ -76,3 +77,8 @@ for consistent output between systems.
 across its animation curve. It exports ``center_div.gif`` for the learning
 curve and ``center_div_motion.gif`` for the timeline sweep. PNG frames are kept
 in ``out/center_div/frames`` and ``out/center_div/motion``.
+
+``procedural_fields`` renders a finite repeated SDF array and a composed
+vector-field scene. The field scene adds radial, vortex, and fractal turbulence
+fields, warps an SDF on the GPU, and overlays direction and magnitude
+visualizations. Both images are written to ``out/examples/``.

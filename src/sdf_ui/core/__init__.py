@@ -14,12 +14,15 @@ from .expressions import (
     percent_y,
     sin,
 )
+from .field import FieldNamespace, FieldTexture
 from .sdf import SDFTexture
 
 __all__ = [
     "ColorSpaceMode",
     "ColorTexture",
     "Expr",
+    "FieldNamespace",
+    "FieldTexture",
     "SDFTexture",
     "cos",
     "input_value",

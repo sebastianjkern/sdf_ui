@@ -10,6 +10,7 @@ from ...core._suggestions import unknown_name_message
 class TextureKind:
     SDF = "sdf"
     COLOR = "color"
+    FIELD = "field"
     MULTI_OUTPUT = "multi_output"
 
 
@@ -167,6 +168,7 @@ class Plugin:
         kind_labels = {
             TextureKind.SDF: "SDF",
             TextureKind.COLOR: "color",
+            TextureKind.FIELD: "vector-field",
             TextureKind.MULTI_OUTPUT: "multi-output",
         }
         if bound:
@@ -251,6 +253,8 @@ class Plugin:
     def _render_gpu(
         self, ctx, inputs, params, ColorSpaceMode, ColorTexture, SDFTexture
     ):
+        from sdf_ui.core.field import FieldTexture
+
         if not ctx.supports_shader(self.shader.name):
             raise NotImplementedError(
                 f"WebGPU shader '{self.shader.name}' has not been ported to WGSL"
@@ -267,6 +271,8 @@ class Plugin:
             texture = ctx.r32f()
         elif self.result == TextureKind.COLOR:
             texture = ctx.rgba8()
+        elif self.result == TextureKind.FIELD:
+            texture = ctx.rgba32f()
         else:
             raise ValueError(
                 f"Plugin '{self.name}' cannot render result '{self.result}' on WebGPU"
@@ -281,6 +287,8 @@ class Plugin:
 
         if self.result == TextureKind.SDF:
             return SDFTexture(tex=texture, context=ctx)
+        if self.result == TextureKind.FIELD:
+            return FieldTexture(tex=texture, context=ctx)
         mode = self.mode
         if mode is None and inputs and hasattr(inputs[0], "mode"):
             mode = inputs[0].mode

@@ -222,7 +222,10 @@ class _Lowerer:
             )
         ordered = tuple(inputs[name] for name in expected)
         for argument, port in zip(contract.inputs, ordered):
-            kind = "sdf" if argument.kind == "r32f" else "color"
+            kind = {
+                "r32f": "sdf",
+                "rgba32float": "field",
+            }.get(argument.kind, "color")
             if not isinstance(port, Port) or port.kind != kind:
                 raise ValueError(
                     f"Shader '{descriptor.name}' input '{argument.name}' requires {kind}"
@@ -235,8 +238,14 @@ class _Lowerer:
             Port(
                 index,
                 output_index,
-                "sdf" if argument.kind == "r32f" else "color",
-                None if argument.kind == "r32f" else mode or "LAB",
+                {"r32f": "sdf", "rgba32float": "field"}.get(
+                    argument.kind, "color"
+                ),
+                (
+                    None
+                    if argument.kind in {"r32f", "rgba32float"}
+                    else mode or "LAB"
+                ),
             )
             for output_index, argument in enumerate(outputs)
         )
@@ -312,10 +321,10 @@ class _Lowerer:
             raise ValueError(
                 "Materialized source textures require a live Canvas context"
             )
-        if node.kind not in {"sdf", "color"}:
-            raise ValueError("Materialized graph sources must be SDF or color textures")
+        if node.kind not in {"sdf", "color", "field"}:
+            raise ValueError("Materialized graph sources must be SDF, color, or field textures")
         index = len(self.sources)
-        mode = None if node.kind == "sdf" else node.mode
+        mode = node.mode if node.kind == "color" else None
         self.sources.append(node)
         port = Port(-index - 1, 0, node.kind, mode)
         self.memo[id(node)] = port

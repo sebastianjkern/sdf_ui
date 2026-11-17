@@ -78,8 +78,31 @@ scene = warped.fill("#d2ddd4").alpha_overlay(flow)
 ```
 
 Run `uv run python -m examples vortices` to render the distorted contour and
-streamline example. The warp is a CPU-backed resampling operation and returns
-an ordinary SDF node that can be filled, contoured, cached, or composed.
+streamline example. The existing ``vortex_warp`` helper remains available for
+its streamlines-oriented API. The general vector-field warp runs on the GPU.
+
+Vector fields are floating-point textures with XY displacement in their red
+and green channels. Build them from constant, radial, vortex, or turbulence
+fields, then add or scale them and use the result to warp SDF or color textures.
+Finite repetition samples a bounded grid of copies from a source SDF. Set
+``center`` to the source shape center and ``spacing`` to the distance between
+copies:
+
+```python
+from sdf_ui import field, sdf
+
+flow = field.vortex((320, 180), radius=180, strength=0.8).add(
+    field.turbulence(frequency=0.015, amplitude=12, octaves=3)
+)
+warped = sdf.circle((320, 180), 96).warp(flow, strength=1.0, steps=2)
+repeated = sdf.circle((320, 180), 18).repeat_grid(
+    columns=9, rows=5, spacing=(58, 58), center=(320, 180)
+)
+flow_preview = flow.visualize().alpha_overlay(flow.contours(spacing=8))
+```
+
+Run ``uv run python -m examples procedural_fields`` for rendered examples of
+finite repetition, field composition, GPU warping, and field inspection.
 
 Smooth booleans and spatial warps can change an SDF's gradient magnitude.
 `normalize_distance()` applies the inexpensive local correction
@@ -480,6 +503,19 @@ ___
     </tr>
 </table>
 
+#### Procedural Fields
+
+<table>
+    <tr>
+        <th>Finite SDF Repetition</th>
+        <th>Composed Vector Fields</th>
+    </tr>
+    <tr>
+        <td><img src="./docs/assets/examples/finite_field_grid.png" width="420"></td>
+        <td><img src="./docs/assets/examples/composed_vector_fields.png" width="420"></td>
+    </tr>
+</table>
+
 #### Larger Scenes
 
 <table>
@@ -513,13 +549,14 @@ reports allocations reused from the context's bounded GPU image pool.
 #### Procedural Fields
 
 - [x] Add first-class Voronoi SDF support for selected cells.
-- [ ] Add vector-field and flow-field primitives for distortion and motion.
+- [x] Add composable vector-field primitives for distortion and motion.
 - [x] Add vortex fields with SDF warping and streamline visualization.
-- [ ] Add domain warping, turbulence, and contour-map operators.
+- [x] Add domain warping, turbulence, and contour-map operators.
 - [x] Add field-debug views for distance values, seams, and boolean transitions.
 
 #### Shape Composition
 
+- [x] Add bounded grid repetition for finite shape collections.
 - [ ] Add variable-radius capsules.
 - [x] Add configurable strokes and masked blend modes with antialiased masked unions.
 - [x] Add per-join smoothing controls for joins and transitions.
