@@ -107,6 +107,20 @@ parameters also accept progress expressions, so animated centers, strengths,
 and turbulence settings work with ``Canvas.save_animation``. Run
 ``uv run python -m examples field_flow`` for a looping example.
 
+Use ``color.palette(name)`` to get a built-in palette (``starry_night``,
+``ember``, ``sea_glass``, or ``moss``), or pass a custom list of hex colors.
+``Palette.sample(t)`` interpolates a normalized position and returns an RGBA
+color tuple that can be used by fills and gradients:
+
+```python
+from sdf_ui import color
+
+night = color.palette("starry_night")
+sky_color = night.sample(0.58)
+custom = color.palette(("#142b58", "#397cb5", "#f1d17a"))
+swatches = custom.steps(5)
+```
+
 Use ``ease_in_cubic``, ``ease_out_cubic``, or ``ease_in_out_sine`` to shape a
 normalized progress expression. ``Canvas.save_frame_sequence`` writes numbered
 PNG frames for tools that need individual images:
@@ -570,13 +584,14 @@ below by rough implementation effort and expected project value. “Easy” mean
 a focused API or shader change; “hard” means broader engine or pipeline work.
 These are planning estimates, not promises.
 
-Recent easy, important work adds numbered PNG frame export, reusable progress
-easing, and darken/lighten masked blends. Existing `mix`, `multiply`, and
-`screen` mask modes remain available.
+The easy, important quadrant has been implemented: named/custom palette
+sampling, parameterized preset comparisons, numbered PNG frame export,
+reusable progress easing, and darken/lighten masked blends. Existing `mix`,
+`multiply`, and `screen` mask modes remain available.
 
 | Effort | Important | Less important |
 | --- | --- | --- |
-| **Easy** | Palette-driven coloring helpers; parameterized example presets and side-by-side comparisons. | First-class XOR composition; icon, badge, and glyph convenience helpers; naming cleanup across shaders and public methods; more showcase art examples. |
+| **Easy** | — | First-class XOR composition; icon, badge, and glyph convenience helpers; naming cleanup across shaders and public methods; more showcase art examples. |
 | **Hard** | Shader/loss adapter boundaries and learning-graph organization; bounds-aware shaders and subframe rendering; variable-radius capsules and mask-to-SDF conversion; glyph SDF atlas; native timelines and keyframes; soft-light blending; explicit sRGB management; reusable effects; improved image-to-SDF conversion and image controls; common image formats and color profiles; safer texture cleanup. | Custom SDF font pipeline; orthographic 2.5D rendering, depth composition, camera and world transforms; script hot reload; additional noise families; boid/swarm showcase. |
 
 Use `.uncached()` for one-shot intermediate layers when preserving a cross-render

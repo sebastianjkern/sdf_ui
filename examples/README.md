@@ -11,6 +11,8 @@ uv run python -m examples vortices
 uv run python -m examples procedural_fields
 uv run python -m examples field_flow
 uv run python -m examples starry_current
+uv run python -m examples preset_gallery
+uv run python -m examples.preset_gallery --preset ember
 uv run python -m examples tidal_bloom
 uv run python -m examples blue_hour
 uv run python -m examples learned_score
@@ -96,3 +98,9 @@ swirling skies and saturated blues of Van Gogh's *The Starry Night*. A moving
 vortex field bends repeated SDF brush marks into a broad rotating sky whirl
 above a village and cypress silhouette. It writes
 ``out/generative_art/starry_current.gif`` and a PNG preview.
+
+``preset_gallery`` demonstrates named and custom palettes with four
+parameterized vector-field scenes. Running it without options writes each
+render and a labeled side-by-side comparison to
+``out/examples/preset_gallery/``. Select one or more variants with repeated
+``--preset`` options, such as ``--preset ember --preset moss``.

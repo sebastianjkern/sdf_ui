@@ -36,6 +36,7 @@
 - [x] Export numbered PNG frame sequences from progress-driven animation parameters.
 - [x] Add reusable cubic and sine easing expressions for animated parameters.
 - [x] Add darken and lighten masked blend modes alongside mix, multiply, screen, and over.
+- [x] Add built-in/custom palette sampling and a parameterized side-by-side preset gallery.
 
 ## Prioritized feature matrix
 
@@ -43,10 +44,11 @@ Effort and importance are initial estimates. Easy items should fit a focused
 API or shader change; hard items touch multiple engine layers or introduce a
 new pipeline. The matrix is mirrored in the README Development Checklist.
 
-The easy/important quadrant has started: numbered PNG frame export, progress
-easing expressions, and darken/lighten masked blends are implemented above.
+The easy/important quadrant is implemented: palette sampling, preset
+comparisons, numbered PNG frame export, progress easing, and darken/lighten
+masked blends.
 
 | Effort | Important | Less important |
 | --- | --- | --- |
-| **Easy** | Palette-driven coloring helpers; parameterized example presets and side-by-side comparisons. | First-class XOR composition; icon, badge, and glyph convenience helpers; naming cleanup across shaders and public methods; more showcase art examples. |
+| **Easy** | — | First-class XOR composition; icon, badge, and glyph convenience helpers; naming cleanup across shaders and public methods; more showcase art examples. |
 | **Hard** | Shader/loss adapter boundaries and learning-graph organization; bounds-aware shaders and subframe rendering; variable-radius capsules and mask-to-SDF conversion; glyph SDF atlas; native timelines and keyframes; soft-light blending; explicit sRGB management; reusable effects; improved image-to-SDF conversion and image controls; common image formats and color profiles; safer texture cleanup. | Custom SDF font pipeline; orthographic 2.5D rendering, depth composition, camera and world transforms; script hot reload; additional noise families; boid/swarm showcase. |

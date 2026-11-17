@@ -5,7 +5,6 @@ __docformat__ = "google"
 from ..gpu.nodes.base import TextureKind
 from ..gpu.nodes.common import build
 from ._suggestions import unknown_name_message
-from .field import FieldNamespace
 
 
 class _OperationNamespace:
@@ -120,3 +119,9 @@ class SDFNamespace(_OperationNamespace):
 
 class ColorNamespace(_OperationNamespace):
     kind = TextureKind.COLOR
+
+    def palette(self, value):
+        """Resolve a named or custom palette for reuse in color arguments."""
+        from .palette import get_palette
+
+        return get_palette(value)

@@ -27,6 +27,7 @@ from examples.ngon_example import ngon_example
 from examples.parallelogram_example import parallelogram_example
 from examples.partial_derivative import partial_derivative_example
 from examples.polygon_example import polygon_example
+from examples.preset_gallery import preset_gallery_example
 from examples.procedural_fields_example import procedural_fields_example
 from examples.render_api_example import render_api_example
 from examples.ring_example import ring_example
@@ -60,6 +61,7 @@ examples = {
     "tidal_bloom": generative_art_animation,
     "field_flow": field_flow_animation_example,
     "starry_current": starry_current_animation,
+    "preset_gallery": preset_gallery_example,
     "complex": complex_shapes_example,
     "anim": animation_example,
     "arc": arc_example,

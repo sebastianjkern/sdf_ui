@@ -16,6 +16,7 @@ from .core.expressions import (
     sin,
 )
 from .core.field import FieldNamespace
+from .core.palette import Palette, get_palette, palettes
 from .gpu.context import Context, DispatchConfig
 from .log import logger
 
@@ -30,9 +31,11 @@ __all__ = [
     "DispatchConfig",
     "ColorTexture",
     "FieldTexture",
+    "Palette",
     "SDFTexture",
     "color",
     "field",
+    "get_palette",
     "core",
     "cos",
     "ease_in_cubic",
@@ -43,6 +46,7 @@ __all__ = [
     "learning",
     "input_value",
     "param",
+    "palettes",
     "percent",
     "percent_of_min",
     "percent_x",
