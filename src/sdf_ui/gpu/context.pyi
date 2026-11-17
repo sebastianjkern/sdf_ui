@@ -138,6 +138,17 @@ class Context:
         fps: float = ...,
         dirty_regions: bool = ...,
     ) -> Path: ...
+    def save_frame_sequence(
+        self,
+        scene: TextureNode,
+        directory: str | Path,
+        *,
+        frames: int = ...,
+        params: dict[str, Any] | None = ...,
+        prefix: str = ...,
+        start_index: int = ...,
+        dirty_regions: bool = ...,
+    ) -> tuple[Path, ...]: ...
     def render_plan(
         self,
         plan: Any,

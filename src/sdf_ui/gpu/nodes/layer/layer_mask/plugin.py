@@ -9,7 +9,14 @@ from sdf_ui.gpu.nodes.common import (
 
 from .implementation import CONTRACT, INTERFACE, PROGRAM
 
-_BLEND_MODES = {"mix": 0.0, "multiply": 1.0, "screen": 2.0, "over": 3.0}
+_BLEND_MODES = {
+    "mix": 0.0,
+    "multiply": 1.0,
+    "screen": 2.0,
+    "over": 3.0,
+    "darken": 4.0,
+    "lighten": 5.0,
+}
 
 
 def _mode_uniform(params):

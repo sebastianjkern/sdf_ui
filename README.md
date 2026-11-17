@@ -107,6 +107,29 @@ parameters also accept progress expressions, so animated centers, strengths,
 and turbulence settings work with ``Canvas.save_animation``. Run
 ``uv run python -m examples field_flow`` for a looping example.
 
+Use ``ease_in_cubic``, ``ease_out_cubic``, or ``ease_in_out_sine`` to shape a
+normalized progress expression. ``Canvas.save_frame_sequence`` writes numbered
+PNG frames for tools that need individual images:
+
+```python
+from sdf_ui import Canvas, ease_in_out_sine, param, sdf
+from sdf_ui.learning import Parameter
+
+phase = param("phase")
+x = 40 + 560 * ease_in_out_sine(phase)
+scene = sdf.circle((x, 180), 24).fill("#62bb47")
+phase_value = Parameter("phase", 0.0, animate=lambda progress: progress)
+
+with Canvas((640, 360)) as canvas:
+    paths = canvas.save_frame_sequence(
+        scene, "out/frames", frames=48, params={"phase": phase_value}
+    )
+```
+
+Frames are named ``frame_000000.png`` onward, and the method returns their
+paths. ``prefix``, ``start_index``, and ``dirty_regions`` can be set when a
+different sequence layout or full-frame rendering is needed.
+
 Smooth booleans and spatial warps can change an SDF's gradient magnitude.
 `normalize_distance()` applies the inexpensive local correction
 `field / |gradient(field)|` near the zero contour and fades it out across a
@@ -130,7 +153,8 @@ reconstructed = soft_shape.redistance()
 SDF contours can be outlined with `.stroke(width, fg_color, bg_color=...)`;
 the width is measured in canvas units. Join paths by chaining `smooth_union`
 calls, choosing a `k` for each join. Color layers can use
-`.mask(top, mask, mode=...)` with `mix`, `multiply`, `screen`, or `over`;
+`.mask(top, mask, mode=...)` with `mix`, `multiply`, `screen`, `darken`,
+`lighten`, or `over`;
 the mask's red channel controls how much of the receiver (`self`) is used.
 Masked unions return both the union SDF and a smoothly antialiased ownership
 mask, with `edge_width` controlling the transition:
@@ -540,80 +564,22 @@ ___
 
 ### Development Checklist
 
-The renderer already supports progress-driven animated parameters and GIF/MP4
-export. This checklist tracks completed and remaining work by area.
+The renderer already supports progress-driven parameters and GIF/MP4 export.
+The completed feature history is in [Tasks.md](Tasks.md). Open work is sorted
+below by rough implementation effort and expected project value. “Easy” means
+a focused API or shader change; “hard” means broader engine or pipeline work.
+These are planning estimates, not promises.
 
-#### Graph Architecture and Performance
+Recent easy, important work adds numbered PNG frame export, reusable progress
+easing, and darken/lighten masked blends. Existing `mix`, `multiply`, and
+`screen` mask modes remain available.
 
-- [ ] Establish clear shader and loss adapter boundaries around the rendering core.
-- [ ] Finish organizing NumPy learning around graph nodes, including intermediate-value losses.
-- [x] Add incremental dirty-region rendering with automatic animation bounds for common finite SDF primitives and transforms.
-- [x] Reuse bounded GPU texture-pool allocations for uncached intermediates after their final graph use.
-- [ ] Add bounds-aware shaders and clipping to skip work outside visible regions.
-- [ ] Explore bounds-driven subframe rendering for procedural scenes such as Voronoi fields.
+| Effort | Important | Less important |
+| --- | --- | --- |
+| **Easy** | Palette-driven coloring helpers; parameterized example presets and side-by-side comparisons. | First-class XOR composition; icon, badge, and glyph convenience helpers; naming cleanup across shaders and public methods; more showcase art examples. |
+| **Hard** | Shader/loss adapter boundaries and learning-graph organization; bounds-aware shaders and subframe rendering; variable-radius capsules and mask-to-SDF conversion; glyph SDF atlas; native timelines and keyframes; soft-light blending; explicit sRGB management; reusable effects; improved image-to-SDF conversion and image controls; common image formats and color profiles; safer texture cleanup. | Custom SDF font pipeline; orthographic 2.5D rendering, depth composition, camera and world transforms; script hot reload; additional noise families; boid/swarm showcase. |
 
 Use `.uncached()` for one-shot intermediate layers when preserving a cross-render
 cache has no value. Their output images can be recycled once every graph branch
 has consumed them; the final output remains live. `RenderStats.texture_reuses`
 reports allocations reused from the context's bounded GPU image pool.
-
-#### Procedural Fields
-
-- [x] Add first-class Voronoi SDF support for selected cells.
-- [x] Add composable vector-field primitives for distortion and motion.
-- [x] Add vortex fields with SDF warping and streamline visualization.
-- [x] Add domain warping, turbulence, and contour-map operators.
-- [x] Add field-debug views for distance values, seams, and boolean transitions.
-
-#### Shape Composition
-
-- [x] Add bounded grid repetition for finite shape collections.
-- [ ] Add variable-radius capsules.
-- [x] Add configurable strokes and masked blend modes with antialiased masked unions.
-- [x] Add per-join smoothing controls for joins and transitions.
-- [ ] Convert layered masks into distance fields.
-
-#### Text and Typography
-
-`text([...])` accepts `span(...)` runs with per-run font paths, sizes, OpenType
-settings, and decorations. Runs wrap, align, and clip in the same text box as
-plain text. `measure_text(...)` reports line metrics and ink bounds, while
-`measure_glyph(...)` measures a grapheme. `system_font(...)` resolves an
-installed family when platform fonts are preferred; Roboto remains the stable
-default.
-
-- [x] Add OpenType shaping for script runs, ligatures, combining marks, and bidirectional text.
-- [x] Add configurable text decorations, glyph and paragraph measurement, and first-line paragraph indentation.
-- [x] Add optional system font resolution through `system_font()` and `path="system:Family Name"`.
-- [x] Add inline rich-text spans with per-range font, size, and decoration styles.
-- [ ] Add a shared glyph SDF cache or atlas to reduce repeated text-rendering work.
-- [ ] Build a custom SDF font pipeline.
-
-#### Animation and Motion
-
-- [ ] Add native timelines and keyframe interpolation for positions, colors, transforms, and opacity.
-- [ ] Add time-based shader uniforms and reusable easing functions.
-- [ ] Add a public frame-sequence export API.
-
-#### Shading, Effects, and Images
-
-- [ ] Add screen, darken, lighten, soft-light, and richer multiply blend modes.
-- [ ] Add explicit sRGB color management and color-space previews.
-- [ ] Add noise variants beyond Perlin noise and film grain.
-- [ ] Add standalone bevel, glow, inner-shadow, sharpen, and edge-detect effects, plus a reusable effect stack.
-- [ ] Add XOR as a first-class layer or boolean operation.
-- [ ] Improve image-to-SDF conversion beyond threshold-based tracing.
-- [ ] Add image sampling, scaling, aspect-ratio, alpha, tint, and inflation controls.
-- [ ] Improve texture loading for common formats and embedded color profiles.
-
-#### 2.5D, Tooling, and Examples
-
-- [ ] Add orthographic projection of 3D SDFs, height-to-normal shading, and depth-aware composition.
-- [ ] Add a camera model and world-space transform stack.
-- [ ] Add script hot reload for faster visual iteration.
-- [ ] Add parameterized example presets and side-by-side comparisons.
-- [ ] Add convenience helpers for icons, badges, and glyphs.
-- [ ] Add palette-driven coloring helpers.
-- [ ] Make texture resource cleanup easier to reason about and safer by default.
-- [ ] Normalize naming across shader files, constants, and public methods.
-- [ ] Add more generative-art showcase examples and a boid/swarm demo.

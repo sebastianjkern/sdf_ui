@@ -79,6 +79,45 @@ def _write_mp4(path, image_paths, fps):
         writer.release()
 
 
+def save_frame_sequence(
+    canvas,
+    scene,
+    directory,
+    *,
+    frames=60,
+    params=None,
+    prefix="frame",
+    start_index=0,
+    dirty_regions=True,
+):
+    """Render a progress sweep to numbered PNG files and return their paths."""
+    from numbers import Integral
+    from pathlib import Path
+
+    if isinstance(frames, bool) or not isinstance(frames, Integral) or frames < 1:
+        raise ValueError("frames must be a positive integer")
+    if (
+        isinstance(start_index, bool)
+        or not isinstance(start_index, Integral)
+        or start_index < 0
+    ):
+        raise ValueError("start_index must be a non-negative integer")
+    if not isinstance(prefix, str) or not prefix or Path(prefix).name != prefix:
+        raise ValueError("prefix must be a nonempty filename prefix")
+
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    paths = tuple(
+        directory / f"{prefix}_{int(start_index) + index:06d}.png"
+        for index in range(int(frames))
+    )
+    with canvas.session(params=params, dirty_regions=dirty_regions) as renderer:
+        for index, path in enumerate(paths):
+            progress = index / max(int(frames) - 1, 1)
+            renderer.render(scene, progress=progress).save(path)
+    return paths
+
+
 def save_animation(
     canvas, scene, path, *, frames=60, params=None, fps=30, dirty_regions=True
 ):

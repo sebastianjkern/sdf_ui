@@ -719,6 +719,31 @@ class Context:
             dirty_regions=dirty_regions,
         )
 
+    def save_frame_sequence(
+        self,
+        scene: Any,
+        directory: str | Path,
+        *,
+        frames: int = 60,
+        params: dict[str, Any] | None = None,
+        prefix: str = "frame",
+        start_index: int = 0,
+        dirty_regions: bool = True,
+    ) -> tuple[Path, ...]:
+        """Render progress-driven animation frames as numbered PNG files."""
+        from ..anim import save_frame_sequence
+
+        return save_frame_sequence(
+            self,
+            scene,
+            directory,
+            frames=frames,
+            params=params,
+            prefix=prefix,
+            start_index=start_index,
+            dirty_regions=dirty_regions,
+        )
+
     def render_plan(
         self,
         plan: Any,

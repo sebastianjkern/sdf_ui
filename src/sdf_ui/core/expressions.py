@@ -122,6 +122,22 @@ def cos(value: Any) -> Expr:
     return Expr("cos", (value,))
 
 
+def ease_in_cubic(value: Any) -> Expr:
+    """Build a cubic ease-in expression for normalized progress."""
+    return Expr("pow", (value, 3.0))
+
+
+def ease_out_cubic(value: Any) -> Expr:
+    """Build a cubic ease-out expression for normalized progress."""
+    inverse = Expr("sub", (1.0, value))
+    return Expr("sub", (1.0, Expr("pow", (inverse, 3.0))))
+
+
+def ease_in_out_sine(value: Any) -> Expr:
+    """Build a sine ease-in-out expression for normalized progress."""
+    return (1.0 - cos(math.pi * value)) / 2.0
+
+
 def evaluate_expr(expr, ctx, params, *, track_grad=False):
     """Resolve a reusable expression against this execution's parameters.
 

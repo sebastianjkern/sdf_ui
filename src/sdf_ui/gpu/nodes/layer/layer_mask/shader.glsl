@@ -27,10 +27,20 @@ void main() {
     } else if (mode > 1.5 && mode < 2.5) {
         col = mix(col1, vec4(1.0) - (vec4(1.0) - col0) * (vec4(1.0) - col1), alpha);
     } else if (mode > 2.5) {
-        float topAlpha = col0.a * alpha;
-        float outAlpha = topAlpha + col1.a * (1.0 - topAlpha);
-        vec3 premultiplied = col0.rgb * topAlpha + col1.rgb * col1.a * (1.0 - topAlpha);
-        col = vec4(outAlpha > 0.0 ? premultiplied / outAlpha : vec3(0.0), outAlpha);
+        if (mode < 3.5) {
+            float topAlpha = col0.a * alpha;
+            float outAlpha = topAlpha + col1.a * (1.0 - topAlpha);
+            vec3 premultiplied =
+                col0.rgb * topAlpha + col1.rgb * col1.a * (1.0 - topAlpha);
+            col = vec4(
+                outAlpha > 0.0 ? premultiplied / outAlpha : vec3(0.0),
+                outAlpha
+            );
+        } else if (mode < 4.5) {
+            col = mix(col1, min(col0, col1), alpha);
+        } else {
+            col = mix(col1, max(col0, col1), alpha);
+        }
     }
 
     imageStore(destTex, texelPos, col);

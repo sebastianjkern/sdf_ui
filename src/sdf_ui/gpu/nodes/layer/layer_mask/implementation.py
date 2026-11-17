@@ -25,7 +25,7 @@ def reference(context, inputs, params):
         blended = first * second
     elif mode < 2.5:
         blended = 1.0 - (1.0 - first) * (1.0 - second)
-    else:
+    elif mode < 3.5:
         from sdf_ui.learning.autodiff import maximum, stack, where
 
         top_alpha = first[..., 3:4] * alpha
@@ -39,6 +39,14 @@ def reference(context, inputs, params):
         return stack(
             (rgb[..., 0], rgb[..., 1], rgb[..., 2], out_alpha[..., 0]), axis=-1
         )
+    elif mode < 4.5:
+        from sdf_ui.learning.autodiff import minimum
+
+        blended = minimum(first, second)
+    else:
+        from sdf_ui.learning.autodiff import maximum
+
+        blended = maximum(first, second)
     return second * (1.0 - alpha) + blended * alpha
 
 
@@ -73,10 +81,14 @@ BODY = color_program(r"""
                  sub(c(1.0),mul(sub(c(1.0),first.y),sub(c(1.0),second.y))),
                  sub(c(1.0),mul(sub(c(1.0),first.z),sub(c(1.0),second.z))),
                  first.w);
+    D4 darken=D4(minD(first.x,second.x),minD(first.y,second.y),
+                 minD(first.z,second.z),minD(first.w,second.w));
+    D4 lighten=D4(maxD(first.x,second.x),maxD(first.y,second.y),
+                  maxD(first.z,second.z),maxD(first.w,second.w));
     D4 col=mixed;
     if(U_mode.v>0.5 && U_mode.v<1.5) col=mix4(second,product,alpha);
     else if(U_mode.v>1.5 && U_mode.v<2.5) col=mix4(second,screen,alpha);
-    else if(U_mode.v>2.5) {
+    else if(U_mode.v>2.5 && U_mode.v<3.5) {
         D topAlpha=mul(first.w,alpha);
         D remaining=sub(c(1.0),topAlpha);
         D outAlpha=add(topAlpha,mul(second.w,remaining));
@@ -89,5 +101,7 @@ BODY = color_program(r"""
         }
         col=D4(rgb.x,rgb.y,rgb.z,outAlpha);
     }
+    else if(U_mode.v>3.5 && U_mode.v<4.5) col=mix4(second,darken,alpha);
+    else if(U_mode.v>4.5) col=mix4(second,lighten,alpha);
 """)
 PROGRAM = ShaderProgram("layer_mask", BODY)
