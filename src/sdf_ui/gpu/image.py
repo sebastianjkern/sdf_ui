@@ -138,8 +138,7 @@ class GPUImage(Image):
 
     def close(self):
         if not self.closed:
-            if not self.context._defer_resource_destroy(self.texture):
-                self.texture.destroy()
+            self.context._recycle_image(self.texture, self.size, self.format)
             self.closed = True
 
     def __enter__(self):

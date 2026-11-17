@@ -501,8 +501,14 @@ export. This checklist tracks completed and remaining work by area.
 - [ ] Establish clear shader and loss adapter boundaries around the rendering core.
 - [ ] Finish organizing NumPy learning around graph nodes, including intermediate-value losses.
 - [x] Add incremental dirty-region rendering with automatic animation bounds for common finite SDF primitives and transforms.
+- [x] Reuse bounded GPU texture-pool allocations for uncached intermediates after their final graph use.
 - [ ] Add bounds-aware shaders and clipping to skip work outside visible regions.
 - [ ] Explore bounds-driven subframe rendering for procedural scenes such as Voronoi fields.
+
+Use `.uncached()` for one-shot intermediate layers when preserving a cross-render
+cache has no value. Their output images can be recycled once every graph branch
+has consumed them; the final output remains live. `RenderStats.texture_reuses`
+reports allocations reused from the context's bounded GPU image pool.
 
 #### Procedural Fields
 

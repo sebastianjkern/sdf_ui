@@ -255,6 +255,9 @@ class Context:
         self._pipeline_bindings: dict[int, Any] = {}
         self._uniform_buffers: dict[Any, Any] = {}
         self._uniform_payloads: dict[Any, bytes] = {}
+        self._image_pool: dict[tuple[str, int, int], list[Any]] = {}
+        self._image_pool_bytes = 0
+        self._image_pool_limit_bytes = 128 * 1024 * 1024
         self._active_evaluation_rect = None
         self._active_render_stats = None
         self.last_render_stats = None
@@ -880,23 +883,37 @@ class Context:
             or origin_value[1] + height > canvas_size_value[1]
         ):
             raise ValueError("image extent and origin must fit inside canvas_size")
-        texture = self.device.create_texture(
-            label=label,
-            size=(int(width), int(height), 1),
-            dimension="2d",
-            format=format,
-            usage=(
-                wgpu.TextureUsage.STORAGE_BINDING
-                | wgpu.TextureUsage.TEXTURE_BINDING
-                | wgpu.TextureUsage.COPY_SRC
-                | wgpu.TextureUsage.COPY_DST
-            ),
-        )
+        pool_key = (format, int(width), int(height))
+        pooled = self._image_pool.get(pool_key)
+        texture = pooled.pop() if pooled else None
+        reused = texture is not None
+        if pooled == []:
+            self._image_pool.pop(pool_key, None)
+        if texture is not None:
+            self._image_pool_bytes -= self._image_byte_size(format, width, height)
+        else:
+            texture = self.device.create_texture(
+                label=label,
+                size=(int(width), int(height), 1),
+                dimension="2d",
+                format=format,
+                usage=(
+                    wgpu.TextureUsage.STORAGE_BINDING
+                    | wgpu.TextureUsage.TEXTURE_BINDING
+                    | wgpu.TextureUsage.COPY_SRC
+                    | wgpu.TextureUsage.COPY_DST
+                ),
+            )
         from .image import GPUImage
 
         stats = self._active_render_stats
         if stats is not None:
-            stats.record_texture_allocation("sdf" if format == "r32float" else "color")
+            if reused:
+                stats.texture_reuses += 1
+            else:
+                stats.record_texture_allocation(
+                    "sdf" if format == "r32float" else "color"
+                )
         return GPUImage(
             self,
             texture,
@@ -905,6 +922,36 @@ class Context:
             origin=origin_value,
             canvas_size=canvas_size_value,
         )
+
+    @staticmethod
+    def _image_byte_size(format, width, height):
+        bytes_per_pixel = {"r32float": 4, "rgba32float": 16, "rgba8unorm": 4}[format]
+        return int(width) * int(height) * bytes_per_pixel
+
+    def _recycle_image(self, texture, size, format):
+        byte_size = self._image_byte_size(format, *size)
+        if self._closed or byte_size > self._image_pool_limit_bytes:
+            self._destroy_image_texture(texture)
+            return
+        while self._image_pool_bytes + byte_size > self._image_pool_limit_bytes:
+            pool_key = next(
+                (key for key, textures in self._image_pool.items() if textures), None
+            )
+            if pool_key is None:
+                break
+            evicted = self._image_pool[pool_key].pop()
+            self._image_pool_bytes -= self._image_byte_size(
+                pool_key[0], pool_key[1], pool_key[2]
+            )
+            self._destroy_image_texture(evicted)
+            if not self._image_pool[pool_key]:
+                del self._image_pool[pool_key]
+        self._image_pool.setdefault((format, *size), []).append(texture)
+        self._image_pool_bytes += byte_size
+
+    def _destroy_image_texture(self, texture):
+        if not self._defer_resource_destroy(texture):
+            texture.destroy()
 
     def r32f(self, size: tuple[int, int] | None = None) -> Any:
         """Allocate a single-channel FP32 signed-distance image."""
@@ -1019,6 +1066,11 @@ class Context:
             graph.close()
         for buffer in self._uniform_buffers.values():
             buffer.destroy()
+        for textures in self._image_pool.values():
+            for texture in textures:
+                texture.destroy()
+        self._image_pool.clear()
+        self._image_pool_bytes = 0
         self._pipelines.clear()
         self._uniform_buffers.clear()
         self._uniform_payloads.clear()

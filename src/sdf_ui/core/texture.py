@@ -56,6 +56,7 @@ class RenderStats:
     cache_skips: int = 0
     texture_allocations: int = 0
     texture_allocations_by_kind: Dict[str, int] = field(default_factory=dict)
+    texture_reuses: int = 0
     render_calls: int = 0
     elapsed_seconds: float = 0.0
     dirty_layer_hits: int = 0
@@ -87,6 +88,7 @@ class RenderStats:
             "cache_skips": self.cache_skips,
             "texture_allocations": self.texture_allocations,
             "texture_allocations_by_kind": dict(self.texture_allocations_by_kind),
+            "texture_reuses": self.texture_reuses,
             "render_calls": self.render_calls,
             "elapsed_seconds": self.elapsed_seconds,
             "dirty_layer_hits": self.dirty_layer_hits,
@@ -252,7 +254,8 @@ class Renderer:
 
     Use ``Context.session`` to create a renderer tied to a canvas. The
     ``evaluation_rect`` option limits compatible pointwise graphs to a canvas
-    region, and ``stats`` and ``cache_info()`` expose work performed.
+    region. Uncached intermediate outputs are returned to the context image pool
+    after their final graph use. ``stats`` and ``cache_info()`` expose work.
     """
 
     def __init__(
@@ -280,6 +283,9 @@ class Renderer:
         self.stats = RenderStats()
         self._render_depth = 0
         self._graph_ref_counts = {}
+        self._graph_remaining_refs = {}
+        self._graph_outputs = {}
+        self._root_graph_id = None
         self._dirty_regions_enabled = bool(dirty_regions)
         self._dirty_layer_cache = {}
         self._dirty_region_temporaries = []
@@ -335,6 +341,9 @@ class Renderer:
                     else self._resolve_evaluation_rect(value)
                 )
             self._graph_ref_counts = self._count_graph_references(value)
+            self._graph_remaining_refs = dict(self._graph_ref_counts)
+            self._graph_outputs.clear()
+            self._root_graph_id = id(value)
             start = perf_counter()
             previous_stats = getattr(self.ctx, "_active_render_stats", None)
             previous_rect = self.ctx._active_evaluation_rect
@@ -359,12 +368,16 @@ class Renderer:
             if isinstance(value, TextureNode) or isinstance(value, MultiOutputResult):
                 if is_root_render and self._dirty_regions_enabled:
                     return self._eval_dirty_layer(value)
-                return self._eval(value)
+                result = self._eval(value)
+                if is_root_render:
+                    self._release_unused_graph_outputs(result)
+                return result
             return self._resolve(value)
         finally:
             self._render_depth -= 1
             if is_root_render:
                 self.ctx._end_command_batch()
+                self._release_unused_graph_outputs(None)
                 for temporary in self._dirty_region_temporaries:
                     temporary.close()
                 self._dirty_region_temporaries.clear()
@@ -524,8 +537,50 @@ class Renderer:
         if node.should_cache:
             self.cache[cache_key] = result
             self.stats.cache_writes += 1
+        elif (
+            not self._dirty_regions_enabled
+            and node.op != "output"
+            and id(node) != self._root_graph_id
+            and isinstance(result, TextureNode)
+        ):
+            self._graph_outputs[id(node)] = result
+
+        self._consume_graph_inputs(node)
 
         return result
+
+    def _consume_graph_inputs(self, node):
+        """Recycle uncached outputs once their final graph edge has run."""
+        if self._dirty_regions_enabled or getattr(node, "op", None) == "output":
+            return
+        for child in node.inputs:
+            identity = id(child)
+            remaining = self._graph_remaining_refs.get(identity)
+            if remaining is None:
+                continue
+            remaining -= 1
+            self._graph_remaining_refs[identity] = remaining
+            if remaining != 0 or identity == self._root_graph_id:
+                continue
+            if getattr(child, "should_cache", True):
+                continue
+            output = self._graph_outputs.pop(identity, None)
+            if output is not None:
+                self._close_graph_output(output)
+
+    def _release_unused_graph_outputs(self, root_output):
+        """Return uncached outputs from skipped branches to the context image pool."""
+        for output in self._graph_outputs.values():
+            if output is not root_output:
+                self._close_graph_output(output)
+        self._graph_outputs.clear()
+
+    @staticmethod
+    def _close_graph_output(output):
+        outputs = output if isinstance(output, tuple) else (output,)
+        for item in outputs:
+            if isinstance(item, TextureNode) and item.tex is not None:
+                item.close()
 
     def _eval_dirty_layer(self, node):
         """Reuse per-node outputs and patch pointwise changes into their images."""
@@ -1130,6 +1185,7 @@ class TextureNode(ABC):
         )
 
     def uncached(self):
+        """Skip cross-render caching and permit reuse after the final graph use."""
         return self._clone(label=self.label, should_cache=False)
 
     def _render_for_io(self, ctx, params, cache, size, evaluation_rect, progress):

@@ -329,6 +329,7 @@ def _render_texture_stub(runtime: dict[str, Any]) -> str:
                 "    cache_skips: int",
                 "    texture_allocations: int",
                 "    texture_allocations_by_kind: dict[str, int]",
+                "    texture_reuses: int",
                 "    render_calls: int",
                 "    elapsed_seconds: float",
                 "    def as_dict(self) -> dict[str, Any]: ...",
