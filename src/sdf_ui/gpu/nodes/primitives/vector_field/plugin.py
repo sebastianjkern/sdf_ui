@@ -13,6 +13,38 @@ from sdf_ui.gpu.nodes.base import (
 from sdf_ui.gpu.nodes.common import shader
 
 
+def _scalar_value(value):
+    return value.item() if hasattr(value, "item") else value
+
+
+def _finite_uniform(value, name, *, positive=False):
+    import math
+
+    result = float(_scalar_value(value))
+    if not math.isfinite(result) or (positive and result <= 0):
+        qualifier = "positive and finite" if positive else "finite"
+        raise ValueError(f"{name} must be {qualifier}")
+    return value if hasattr(value, "requires_grad") else result
+
+
+def _vector_uniform(value, name):
+    import numpy as np
+
+    if hasattr(value, "numpy"):
+        values = np.asarray(value.numpy(), dtype=np.float32)
+        output = value
+    else:
+        try:
+            items = tuple(value)
+        except TypeError as exc:
+            raise ValueError(f"{name} must contain two finite values") from exc
+        values = np.asarray([_scalar_value(item) for item in items], dtype=np.float32)
+        output = items if any(hasattr(item, "requires_grad") for item in items) else values
+    if values.shape != (2,) or not np.isfinite(values).all():
+        raise ValueError(f"{name} must contain two finite values")
+    return output
+
+
 def _field_shader(name, uniforms=(), input_names=()):
     from .implementation import contract_for
 
@@ -29,58 +61,44 @@ def _field_shader(name, uniforms=(), input_names=()):
 
 
 def _center_uniforms(params):
-    import numpy as np
-
-    center = np.asarray(params["center"], dtype=np.float32)
-    radius, strength = float(params["radius"]), float(params["strength"])
-    if center.shape != (2,) or not np.isfinite(center).all():
-        raise ValueError("center must contain two finite values")
-    if not np.isfinite(radius) or radius <= 0:
-        raise ValueError("radius must be finite and positive")
-    if not np.isfinite(strength):
-        raise ValueError("strength must be finite")
+    center = _vector_uniform(params["center"], "center")
+    radius = _finite_uniform(params["radius"], "radius", positive=True)
+    strength = _finite_uniform(params["strength"], "strength")
     return {"center": center, "radius": radius, "strength": strength}
 
 
 def _constant_uniforms(params):
-    import numpy as np
-
-    vector = np.asarray(params["vector"], dtype=np.float32)
-    if vector.shape != (2,) or not np.isfinite(vector).all():
-        raise ValueError("vector must contain two finite values")
+    vector = _vector_uniform(params["vector"], "vector")
     return {"vector": vector}
 
 
 def _scale_uniforms(params):
-    import math
-
-    amount = float(params["amount"])
-    if not math.isfinite(amount):
-        raise ValueError("amount must be finite")
+    amount = _finite_uniform(params["amount"], "amount")
     return {"amount": amount}
 
 
 def _turbulence_uniforms(params):
-    import math
-
     for name in ("octaves", "seed"):
         value = params[name]
-        if isinstance(value, bool) or int(value) != value:
+        scalar = _scalar_value(value)
+        if isinstance(scalar, bool) or int(scalar) != scalar:
             raise ValueError(f"{name} must be an integer")
 
-    values = {
-        "frequency": float(params["frequency"]),
-        "amplitude": float(params["amplitude"]),
-        "octaves": int(params["octaves"]),
-        "lacunarity": float(params["lacunarity"]),
-        "gain": float(params["gain"]),
-        "seed": int(params["seed"]),
-    }
-    if not all(math.isfinite(values[key]) for key in ("frequency", "amplitude", "lacunarity", "gain")):
-        raise ValueError("turbulence parameters must be finite")
-    if values["frequency"] <= 0 or values["lacunarity"] <= 0 or values["octaves"] not in range(1, 9):
+    frequency = _finite_uniform(params["frequency"], "frequency", positive=True)
+    amplitude = _finite_uniform(params["amplitude"], "amplitude")
+    lacunarity = _finite_uniform(params["lacunarity"], "lacunarity", positive=True)
+    gain = _finite_uniform(params["gain"], "gain")
+    octaves, seed = int(_scalar_value(params["octaves"])), int(_scalar_value(params["seed"]))
+    if octaves not in range(1, 9):
         raise ValueError("frequency and lacunarity must be positive; octaves must be 1..8")
-    return values
+    return {
+        "frequency": frequency,
+        "amplitude": amplitude,
+        "octaves": octaves,
+        "lacunarity": lacunarity,
+        "gain": gain,
+        "seed": seed,
+    }
 
 
 def register_plugins(registry):

@@ -102,7 +102,10 @@ flow_preview = flow.visualize().alpha_overlay(flow.contours(spacing=8))
 ```
 
 Run ``uv run python -m examples procedural_fields`` for rendered examples of
-finite repetition, field composition, GPU warping, and field inspection.
+finite repetition, field composition, GPU warping, and field inspection. Field
+parameters also accept progress expressions, so animated centers, strengths,
+and turbulence settings work with ``Canvas.save_animation``. Run
+``uv run python -m examples field_flow`` for a looping example.
 
 Smooth booleans and spatial warps can change an SDF's gradient magnitude.
 `normalize_distance()` applies the inexpensive local correction
@@ -515,6 +518,10 @@ ___
         <td><img src="./docs/assets/examples/composed_vector_fields.png" width="420"></td>
     </tr>
 </table>
+
+#### Animated Fields
+
+<img src="./docs/assets/examples/field_flow_animation.gif" width="480" alt="Two moving vortices animate a turbulence field that bends a repeated SDF pattern">
 
 #### Larger Scenes
 

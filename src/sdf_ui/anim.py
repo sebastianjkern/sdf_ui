@@ -103,11 +103,24 @@ def save_animation(
     with tempfile.TemporaryDirectory(prefix="sdf-ui-frames-") as temp_dir:
         frame_paths = []
         with ExitStack() as stack:
-            graph = stack.enter_context(canvas.compile({"frame": scene}, params=params))
+            try:
+                graph = stack.enter_context(
+                    canvas.compile({"frame": scene}, params=params)
+                )
+            except NotImplementedError:
+                # Display-only plugins can have a working GPU renderer and CPU
+                # reference without a native GPU VJP shader. Animation does not
+                # need a backward pass, so keep those scenes renderable.
+                graph = None
             renderer_scope = (
                 stack.enter_context(canvas.session(params=params, dirty_regions=True))
                 if dirty_regions
                 and _dirty_animation_node_count(scene) <= _MAX_DIRTY_ANIMATION_NODES
+                else None
+            )
+            full_renderer_scope = (
+                stack.enter_context(canvas.session(params=params, dirty_regions=False))
+                if graph is None
                 else None
             )
             try:
@@ -125,6 +138,9 @@ def save_animation(
                         )
                     if use_dirty:
                         frame = renderer_scope.render(scene, progress=progress)
+                        frame.save(frame_path)
+                    elif graph is None:
+                        frame = full_renderer_scope.render(scene, progress=progress)
                         frame.save(frame_path)
                     else:
                         with graph.run(progress=progress) as execution:

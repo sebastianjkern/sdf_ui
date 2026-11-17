@@ -11,6 +11,7 @@ from examples.dawn_example import dawn_example
 from examples.diamond_example import diamond_example
 from examples.distance_corrections_example import distance_corrections_example
 from examples.ellipse_example import ellipse_example
+from examples.field_flow_animation import field_flow_animation_example
 from examples.font_example import font_example
 from examples.generative_art_animation import generative_art_animation
 from examples.github_banner_example import github_banner_example
@@ -56,6 +57,7 @@ examples = {
     "transparency": transparency_example,
     "font": font_example,
     "tidal_bloom": generative_art_animation,
+    "field_flow": field_flow_animation_example,
     "complex": complex_shapes_example,
     "anim": animation_example,
     "arc": arc_example,
@@ -83,7 +85,7 @@ examples = {
     "sector": sector_example,
 }
 
-_manual_stats_examples = {"text", "github", "art"}
+_manual_stats_examples = {"text", "github", "art", "field_flow"}
 
 
 def _format_stats(stats):
@@ -128,6 +130,7 @@ def _stats_hooks(enabled):
         cache=None,
         conversion=True,
         size=None,
+        progress=0.0,
     ):
         result = original_save(
             self,
@@ -137,6 +140,7 @@ def _stats_hooks(enabled):
             cache=cache,
             conversion=conversion,
             size=size,
+            progress=progress,
         )
         _print_stats(ctx or self.context)
         return result
