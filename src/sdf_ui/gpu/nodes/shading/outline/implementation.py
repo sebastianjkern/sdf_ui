@@ -11,10 +11,12 @@ from ..glsl import RGBA
 
 
 def reference(context, inputs, params):
+    from sdf_ui.learning.autodiff import maximum
     from sdf_ui.learning.render import _mix, _rgb_to_lab, _smoothstep, _tensor
 
     distance = abs(inputs["sdf"] - _tensor(params["inflate"]))
-    weight = _smoothstep(0.0, 1.5001, distance)
+    half_width = maximum(abs(_tensor(params.get("width", 1.5))) * 0.5, 0.0001)
+    weight = _smoothstep(maximum(half_width - 0.75, 0.0), half_width + 0.7501, distance)
     return _mix(
         _rgb_to_lab(_tensor(params["outline"])),
         _rgb_to_lab(_tensor(params["background"])),
@@ -25,21 +27,35 @@ def reference(context, inputs, params):
 INTERFACE = ShaderInterface(
     output=ImageBinding("destTex", 0, write=True),
     inputs=(ImageBinding("sdf", 1, read=True),),
-    uniforms=(Uniform("background", "vec4"), Uniform("outline", "vec4"), Uniform("inflate", "float")),
+    uniforms=(
+        Uniform("background", "vec4"),
+        Uniform("outline", "vec4"),
+        Uniform("inflate", "float"),
+        Uniform("width", "float"),
+    ),
 )
 CONTRACT = ShaderDifferentiation(
-    "outline", "gpu/nodes/shading/outline/shader.glsl",
+    "outline",
+    "gpu/nodes/shading/outline/shader.glsl",
     (ShaderArgument("sdf", (), "r32f"),),
-    (ShaderArgument("background", (4,), "vec4"), ShaderArgument("outline", (4,), "vec4"), ShaderArgument("inflate", (), "float")),
+    (
+        ShaderArgument("background", (4,), "vec4"),
+        ShaderArgument("outline", (4,), "vec4"),
+        ShaderArgument("inflate", (), "float"),
+        ShaderArgument("width", (), "float"),
+    ),
     (ShaderArgument("destTex", (4,), "rgba8"),),
     notes="Piecewise derivatives; min/max ties split adjoints equally.",
     reference=reference,
+    defaults={"width": 1.5},
 )
 BODY = """
 void evaluate(ivec2 pos, out D o[8]) {
     D distance = absD(sub(ld(0, pos, 0), U_inflate));
-    // Native OUTLINE_DISTANCE / 2 is integer division, giving zero.
-    D weight = smoothD(c(0.0), c(1.5001), distance);
+    D halfWidth = maxD(mul(absD(U_width), c(0.5)), c(0.0001));
+    D lower = maxD(sub(halfWidth, c(0.75)), c(0.0));
+    D upper = add(halfWidth, c(0.7501));
+    D weight = smoothD(lower, upper, distance);
     shadingOutput(shadingMix(rgbToLab(U_outline), rgbToLab(U_background), weight), o);
 }
 """

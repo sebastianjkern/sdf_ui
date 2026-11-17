@@ -210,7 +210,7 @@ _SPATIAL_PARAMS = {
     "vertices", "size", "width", "height", "offset", "ox", "oy",
     "box", "scale", "inflate", "inner", "outer", "line_width",
     "thickness", "corner_radius", "k", "s",
-    "feather", "spacing", "distance", "blur", "base", "first_line_indent",
+    "feather", "edge_width", "spacing", "distance", "blur", "base", "first_line_indent",
     "decoration_thickness", "word_spacing", "letter_spacing", "min_render_size",
 }
 

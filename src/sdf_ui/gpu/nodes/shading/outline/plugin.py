@@ -7,24 +7,34 @@ from .implementation import CONTRACT, INTERFACE, PROGRAM
 
 
 def register_plugins(registry):
-    registry.register(
-        Plugin(
-            "outline",
-            PluginFamily.SHADING,
-            TextureKind.COLOR,
-            (TextureKind.SDF,),
-            params=("fg_color", "bg_color", "inflate"),
-            defaults={"bg_color": (0.0, 0.0, 0.0, 0.0), "inflate": 0.0},
-            shader=shader(
-                "outline", "shading/outline/shader.glsl",
-                derivative_contract=CONTRACT, program=PROGRAM, interface=INTERFACE,
-            ),
-            input_uniforms=("sdf",),
-            make_uniforms=lambda p: {
-                "background": color(p["bg_color"]),
-                "outline": color(p["fg_color"]),
-                "inflate": p["inflate"],
-            },
-            method_of=(TextureKind.SDF,),
-        )
+    descriptor = shader(
+        "outline",
+        "shading/outline/shader.glsl",
+        derivative_contract=CONTRACT,
+        program=PROGRAM,
+        interface=INTERFACE,
     )
+    for name in ("outline", "stroke"):
+        registry.register(
+            Plugin(
+                name,
+                PluginFamily.SHADING,
+                TextureKind.COLOR,
+                (TextureKind.SDF,),
+                params=("fg_color", "bg_color", "inflate", "width"),
+                defaults={
+                    "bg_color": (0.0, 0.0, 0.0, 0.0),
+                    "inflate": 0.0,
+                    "width": 1.5,
+                },
+                shader=descriptor,
+                input_uniforms=("sdf",),
+                make_uniforms=lambda p: {
+                    "background": color(p["bg_color"]),
+                    "outline": color(p["fg_color"]),
+                    "inflate": p["inflate"],
+                    "width": p["width"],
+                },
+                method_of=(TextureKind.SDF,),
+            )
+        )

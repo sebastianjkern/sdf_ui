@@ -23,6 +23,10 @@ struct D4 {
     w: D,
 };
 
+struct Uniforms { edgeWidth: f32, };
+@group(0) @binding(4)
+var<uniform> _Uniforms: Uniforms;
+
 @group(0) @binding(0)
 var destTex: texture_storage_2d<r32float, write>;
 @group(0) @binding(1)
@@ -338,7 +342,8 @@ fn evaluate(pos: vec2<i32>, o: ptr<function, array<D, 8>>) {
     var a: D = ld(0, pos, 0);
     var b: D = ld(1, pos, 0);
     (*o)[0] = minD(a, b);
-    var mask: D = smoothD(dualC(0.0), dualC(1.0), sub(b, (*o)[0]));
+    let width = max(abs(_Uniforms.edgeWidth), 0.0001);
+    var mask: D = smoothD(dualC(-width), dualC(width), sub(b, a));
     (*o)[1] = mask;
     (*o)[2] = mask;
     (*o)[3] = mask;

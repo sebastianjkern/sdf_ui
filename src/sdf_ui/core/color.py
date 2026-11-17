@@ -25,6 +25,18 @@ class ColorTexture(TextureNode):
     def over(self, other):
         return build("alpha_overlay", self, other)
 
+    def mask(self, top, mask, mode="mix"):
+        """Blend this layer and ``top`` through a mask using a named mode.
+
+        ``mode`` may be ``mix``, ``multiply``, ``screen``, or ``over``.
+        The mask's red channel selects this layer at 1 and ``top`` at 0.
+        """
+        return build("mask", self, top, mask, mode=mode)
+
+    def layer_mask(self, top, mask, mode="mix"):
+        """Alias for :meth:`mask` with an explicit layer-composition name."""
+        return build("layer_mask", self, top, mask, mode=mode)
+
     def to_lab(self):
         if self.mode == ColorSpaceMode.LAB:
             return self

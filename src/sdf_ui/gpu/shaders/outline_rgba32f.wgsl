@@ -27,6 +27,7 @@ struct Uniforms {
     background: vec4<f32>,
     outline: vec4<f32>,
     inflate: f32,
+    width: f32,
 };
 @group(0) @binding(2)
 var<uniform> _Uniforms: Uniforms;
@@ -347,7 +348,8 @@ fn shadingMix(a: D4, b: D4, t: D) -> D4 {
 
 fn evaluate(pos: vec2<i32>, o: ptr<function, array<D, 8>>) {
     var distance: D = absD(sub(ld(0, pos, 0), dualC(_Uniforms.inflate)));
-    var weight: D = smoothD(dualC(0.0), dualC(1.5001), distance);
+    let halfWidth = max(abs(_Uniforms.width) * 0.5, 0.0001);
+    var weight: D = smoothD(dualC(max(0.0, halfWidth - 0.75)), dualC(halfWidth + 0.7501), distance);
     shadingOutput(shadingMix(rgbToLab(v4(_Uniforms.outline)), rgbToLab(v4(_Uniforms.background)), weight), o);
 }
 

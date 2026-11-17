@@ -101,6 +101,27 @@ locally_corrected = soft_shape.normalize_distance()
 reconstructed = soft_shape.redistance()
 ```
 
+SDF contours can be outlined with `.stroke(width, fg_color, bg_color=...)`;
+the width is measured in canvas units. Join paths by chaining `smooth_union`
+calls, choosing a `k` for each join. Color layers can use
+`.mask(top, mask, mode=...)` with `mix`, `multiply`, `screen`, or `over`;
+the mask's red channel controls how much of the receiver (`self`) is used.
+Masked unions return both the union SDF and a smoothly antialiased ownership
+mask, with `edge_width` controlling the transition:
+
+```python
+from sdf_ui import color, sdf
+
+joined = sdf.circle((180, 180), 70).smooth_union(
+    sdf.circle((270, 180), 70), k=18
+).smooth_union(sdf.circle((360, 180), 70), k=5)
+outlined = joined.stroke(8, "#315b72")
+mask_sdf, ownership = sdf.circle((240, 180), 130).masked_union(
+    joined, edge_width=1.0
+)
+layered = outlined.mask(color.clear("#f4b942"), ownership, mode="over")
+```
+
 Voronoi cells are available as signed fields. Select a site to get its
 unbounded cell; compose cells or use `debug_distance()` to inspect their
 distance values and boundaries:
@@ -494,9 +515,8 @@ export. This checklist tracks completed and remaining work by area.
 #### Shape Composition
 
 - [ ] Add variable-radius capsules.
-- [ ] Add a stroke/combine pipeline for layered shape construction.
-- [ ] Improve masked blending modes and masked-union antialiasing.
-- [ ] Add per-path smoothing controls for joins and transitions.
+- [x] Add configurable strokes and masked blend modes with antialiased masked unions.
+- [x] Add per-join smoothing controls for joins and transitions.
 - [ ] Convert layered masks into distance fields.
 
 #### Text and Typography

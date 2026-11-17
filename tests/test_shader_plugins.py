@@ -88,6 +88,41 @@ def test_fill_and_mask_adapters_convert_lab_inputs_to_rgb():
     assert output.shape == (10, 12, 4)
 
 
+def test_mask_layer_blend_modes_execute_on_gpu():
+    base = color.clear((1.0, 0.0, 0.0, 0.6)).to_rgb()
+    top = color.clear((0.0, 0.0, 1.0, 0.3)).to_rgb()
+    mask = color.clear((0.5, 0.5, 0.5, 1.0)).to_rgb()
+    with Canvas((8, 8)) as canvas:
+        rendered = {
+            mode: base.mask(top, mask, mode=mode).to_rgb().render(canvas)
+            for mode in ("mix", "multiply", "screen", "over")
+        }
+        results = {mode: image.tex.read() for mode, image in rendered.items()}
+    center = (4, 4)
+    pixels = {mode: image[center] / 255.0 for mode, image in results.items()}
+    assert pixels["mix"][3] == pytest.approx(0.45, abs=1 / 255)
+    assert pixels["over"][3] == pytest.approx(0.51, abs=1 / 255)
+    assert pixels["multiply"][0] == pytest.approx(0.0, abs=1 / 255)
+    assert pixels["screen"][3] > pixels["mix"][3]
+
+
+def test_stroke_width_creates_a_composable_color_layer():
+    field = sdf.circle((16, 16), 8)
+    thin = field.stroke(2, (1.0, 0.0, 0.0, 1.0)).to_rgb()
+    thick = field.stroke(6, (1.0, 0.0, 0.0, 1.0)).to_rgb()
+    combined = thin.alpha_overlay(thick).to_rgb()
+    with Canvas((32, 32)) as canvas:
+        rendered_thin = thin.render(canvas)
+        rendered_thick = thick.render(canvas)
+        rendered_combined = combined.render(canvas)
+        thin_pixels = rendered_thin.tex.read()
+        thick_pixels = rendered_thick.tex.read()
+        combined_pixels = rendered_combined.tex.read()
+    # Sample 2.5 units inside the zero contour: the wider stroke reaches here.
+    assert thick_pixels[16, 21, 3] > thin_pixels[16, 21, 3]
+    assert combined_pixels[16, 21, 3] >= thick_pixels[16, 21, 3]
+
+
 def test_masked_union_outputs_both_reach_shared_parameter_leaves():
     radius = Parameter("radius", 2.7)
     field, mask = sdf.circle((3.2, 4.1), radius).masked_union(

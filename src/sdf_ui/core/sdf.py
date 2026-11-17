@@ -31,6 +31,17 @@ class SDFTexture(TextureNode):
             outer=outer,
         )
 
+    def stroke(self, width, fg_color, bg_color=(0.0, 0.0, 0.0, 0.0), inflate=0.0):
+        """Render a centered stroke as a color layer around this SDF contour."""
+        return build(
+            "stroke",
+            self,
+            width=width,
+            fg_color=fg_color,
+            bg_color=bg_color,
+            inflate=inflate,
+        )
+
     def __or__(self, other):
         return self.union(other)
 

@@ -23,6 +23,10 @@ struct D4 {
     w: D,
 };
 
+struct Uniforms { mode: f32, };
+@group(0) @binding(4)
+var<uniform> _Uniforms: Uniforms;
+
 @group(0) @binding(0)
 var destTex: texture_storage_2d<rgba8unorm, write>;
 @group(0) @binding(1)
@@ -280,6 +284,11 @@ fn mix4(a: D4, b: D4, t: D) -> D4 {
     return D4(mixD(a.x, b.x, t), mixD(a.y, b.y, t), mixD(a.z, b.z, t), mixD(a.w, b.w, t));
 }
 
+fn screen4(a: D4, b: D4) -> D4 {
+    let one = dualC(1.0);
+    return D4(sub(one, mul(sub(one, a.x), sub(one, b.x))), sub(one, mul(sub(one, a.y), sub(one, b.y))), sub(one, mul(sub(one, a.z), sub(one, b.z))), sub(one, mul(sub(one, a.w), sub(one, b.w))));
+}
+
 fn gammaLinear(a: D) -> D {
     return selectD((a.v > 0.04045), powD(divD(add(a, dualC(0.055)), dualC(1.055)), dualC(2.4)), divD(a, dualC(12.92)));
 }
@@ -346,6 +355,18 @@ fn evaluate(pos: vec2<i32>, o: ptr<function, array<D, 8>>) {
     var second: D4 = load4(1, pos);
     var alpha: D = ld(2, pos, 0);
     var col: D4 = mix4(second, first, alpha);
+    if (_Uniforms.mode > 0.5 && _Uniforms.mode < 1.5) {
+        col = mix4(second, mul4_D4_D4(first, second), alpha);
+    } else if (_Uniforms.mode > 1.5 && _Uniforms.mode < 2.5) {
+        col = mix4(second, screen4(first, second), alpha);
+    } else if (_Uniforms.mode > 2.5) {
+        let topAlpha = first.w.v * alpha.v;
+        let outAlpha = topAlpha + second.w.v * (1.0 - topAlpha);
+        let premul = first.x.v * topAlpha + second.x.v * second.w.v * (1.0 - topAlpha);
+        let premug = first.y.v * topAlpha + second.y.v * second.w.v * (1.0 - topAlpha);
+        let premub = first.z.v * topAlpha + second.z.v * second.w.v * (1.0 - topAlpha);
+        col = D4(dualC(select(0.0, premul / outAlpha, outAlpha > 0.0)), dualC(select(0.0, premug / outAlpha, outAlpha > 0.0)), dualC(select(0.0, premub / outAlpha, outAlpha > 0.0)), dualC(outAlpha));
+    }
     (*o)[0] = col.x;
     (*o)[1] = col.y;
     (*o)[2] = col.z;

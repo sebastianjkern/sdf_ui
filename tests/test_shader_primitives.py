@@ -31,7 +31,7 @@ CASES = [
     ("interpolation", dict(t=0.37)),
     ("intersection", {}),
     ("line", dict(a=(0.23, 0.41), b=(5.37, 3.71))),
-    ("masked_union", {}),
+    ("masked_union", dict(edgeWidth=0.5)),
     (
         "rect",
         dict(
@@ -180,13 +180,13 @@ def test_masked_union_has_scalar_distance_and_unquantized_rgba_mask():
     first = Parameter("first", [[-0.2, 0.7]])
     second = Parameter("second", [[0.1, -0.4]])
     distance, mask = RULES["masked_union"](
-        _context((2, 1)), dict(sdf0=first, sdf1=second), {}
+        _context((2, 1)), dict(sdf0=first, sdf1=second), {"edgeWidth": 0.5}
     )
     np.testing.assert_array_equal(distance.data, [[-0.2, -0.4]])
-    np.testing.assert_allclose(mask.data, [[[0.216] * 3 + [1.0], [0.0] * 3 + [1.0]]])
+    np.testing.assert_allclose(mask.data, [[[0.896] * 3 + [1.0], [0.0] * 3 + [1.0]]])
     mask.sum().backward()
-    np.testing.assert_allclose(first.grad, [[-3.78, 0.0]])
-    np.testing.assert_allclose(second.grad, [[3.78, 0.0]])
+    np.testing.assert_allclose(first.grad, [[-2.88, 0.0]])
+    np.testing.assert_allclose(second.grad, [[2.88, 0.0]])
 
 
 def test_repeat_integer_addressing_zero_spacing_gradient_and_oob_zero():

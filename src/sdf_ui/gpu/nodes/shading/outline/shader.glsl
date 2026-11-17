@@ -3,7 +3,6 @@
 #define PI 3.1415926538
 #define AA_DISTANCE 1.5
 
-#define OUTLINE_DISTANCE -1
 
 layout (local_size_x = 16, local_size_y = 16) in;
 
@@ -13,6 +12,7 @@ layout (r32f, binding = 1) readonly uniform image2D sdf;
 uniform vec4 background;
 uniform vec4 outline;
 uniform float inflate;
+uniform float width;
 
 vec3 rgb2xyz(vec3 c)
 {
@@ -54,7 +54,10 @@ void main() {
 
     float distance = abs(imageLoad(sdf, texelPos).r - inflate);
 
-    float smooth_d = smoothstep(-OUTLINE_DISTANCE / 2, OUTLINE_DISTANCE / 2 + AA_DISTANCE + SMOOTHSTEP_OFFSET, distance);
+    float half_width = max(abs(width) * 0.5, 0.0001);
+    float smooth_d = smoothstep(max(0.0, half_width - AA_DISTANCE * 0.5),
+                                 half_width + AA_DISTANCE * 0.5 + SMOOTHSTEP_OFFSET,
+                                 distance);
 
     vec4 fg_lab = vec4(rgb2lab(outline.rgb), outline.a);
     vec4 bg_lab = vec4(rgb2lab(background.rgb), background.a);

@@ -157,6 +157,26 @@ def test_layer_values_use_raw_channels_and_glsl_image_uniform_order():
         ).numpy(),
         second * (1 - mask[..., :1]) + first * mask[..., :1],
     )
+    multiply_expected = second * (1 - mask[..., :1]) + first * second * mask[..., :1]
+    np.testing.assert_allclose(
+        _run(
+            "layer_mask",
+            context,
+            {"tex0": first, "tex1": second, "mask": mask},
+            {"mode": 1.0},
+        ).numpy(),
+        multiply_expected,
+    )
+    screen = 1 - (1 - first) * (1 - second)
+    np.testing.assert_allclose(
+        _run(
+            "layer_mask",
+            context,
+            {"tex0": first, "tex1": second, "mask": mask},
+            {"mode": 2.0},
+        ).numpy(),
+        second * (1 - mask[..., :1]) + screen * mask[..., :1],
+    )
     np.testing.assert_allclose(
         _run("multiply", context, {"mask1": first, "mask2": second}, {}).numpy(),
         first * second,

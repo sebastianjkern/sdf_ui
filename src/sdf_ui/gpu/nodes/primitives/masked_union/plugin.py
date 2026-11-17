@@ -24,7 +24,7 @@ def render_masked_union(renderer, inputs, params):
             descriptor,
             tex,
             tuple(texture.tex for texture in inputs),
-            {},
+            {"edgeWidth": params["edge_width"]},
             extra_outputs=(mask,),
         )
     except BaseException:
@@ -44,10 +44,16 @@ def register_plugins(registry):
             PluginFamily.PRIMITIVE,
             TextureKind.MULTI_OUTPUT,
             (TextureKind.SDF, TextureKind.SDF),
+            params=("edge_width",),
+            defaults={"edge_width": 0.5},
             shader=shader(
-                "masked_union", "primitives/masked_union/shader.glsl",
-                derivative_contract=CONTRACT, program=PROGRAM, interface=INTERFACE,
+                "masked_union",
+                "primitives/masked_union/shader.glsl",
+                derivative_contract=CONTRACT,
+                program=PROGRAM,
+                interface=INTERFACE,
             ),
+            make_uniforms=lambda p: {"edgeWidth": p["edge_width"]},
             render_func=render_masked_union,
             lowering_func=lower_composite,
             method_of=(TextureKind.SDF,),
