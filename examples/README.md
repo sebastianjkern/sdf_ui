@@ -10,6 +10,7 @@ uv run python -m examples text_opentype
 uv run python -m examples vortices
 uv run python -m examples procedural_fields
 uv run python -m examples field_flow
+uv run python -m examples starry_current
 uv run python -m examples tidal_bloom
 uv run python -m examples blue_hour
 uv run python -m examples learned_score
@@ -89,3 +90,9 @@ and the frequency and amplitude of a turbulence field from normalized render
 progress. The combined field warps a finite repeated SDF pattern and the color
 backdrop. It writes ``out/generative_art/field_flow_animation.gif`` and a PNG
 preview.
+
+``starry_current`` is an original looping night landscape inspired by the
+swirling skies and saturated blues of Van Gogh's *The Starry Night*. A moving
+vortex field bends repeated SDF brush marks into a broad rotating sky whirl
+above a village and cypress silhouette. It writes
+``out/generative_art/starry_current.gif`` and a PNG preview.

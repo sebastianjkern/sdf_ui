@@ -32,6 +32,7 @@ from examples.render_api_example import render_api_example
 from examples.ring_example import ring_example
 from examples.rotation_example import rotation_example
 from examples.sector_example import sector_example
+from examples.starry_current_animation import starry_current_animation
 from examples.striped_circles_example import striped_circles_example
 from examples.text_layout_example import text_layout_example
 from examples.text_opentype_example import text_opentype_example
@@ -58,6 +59,7 @@ examples = {
     "font": font_example,
     "tidal_bloom": generative_art_animation,
     "field_flow": field_flow_animation_example,
+    "starry_current": starry_current_animation,
     "complex": complex_shapes_example,
     "anim": animation_example,
     "arc": arc_example,
@@ -85,7 +87,7 @@ examples = {
     "sector": sector_example,
 }
 
-_manual_stats_examples = {"text", "github", "art", "field_flow"}
+_manual_stats_examples = {"text", "github", "art", "field_flow", "starry_current"}
 
 
 def _format_stats(stats):

@@ -523,6 +523,10 @@ ___
 
 <img src="./docs/assets/examples/field_flow_animation.gif" width="480" alt="Two moving vortices animate a turbulence field that bends a repeated SDF pattern">
 
+#### Starry Current
+
+<img src="./docs/assets/examples/starry_current.gif" width="640" alt="An animated swirling blue night sky over a village, crescent moon, and cypress tree">
+
 #### Larger Scenes
 
 <table>

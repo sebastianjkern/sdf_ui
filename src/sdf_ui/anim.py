@@ -112,6 +112,13 @@ def save_animation(
                 # reference without a native GPU VJP shader. Animation does not
                 # need a backward pass, so keep those scenes renderable.
                 graph = None
+            except ValueError as error:
+                # Some display-only plugins render through a custom function
+                # that the graph compiler cannot lower. They remain usable in
+                # the session renderer, which invokes that function directly.
+                if "unsupported custom render function" not in str(error):
+                    raise
+                graph = None
             renderer_scope = (
                 stack.enter_context(canvas.session(params=params, dirty_regions=True))
                 if dirty_regions
