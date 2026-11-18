@@ -46,7 +46,7 @@ def vortex_field_example():
 
         scene = backdrop.alpha_overlay(shape)
         scene = scene.alpha_overlay(contours).alpha_overlay(flow).alpha_overlay(markers)
-        scene.save(OUTPUT_DIR / "vortex_distortion.png", ctx=canvas)
+        scene.save(OUTPUT_DIR / "vortex_distortion.png", canvas=canvas)
 
 
 if __name__ == "__main__":

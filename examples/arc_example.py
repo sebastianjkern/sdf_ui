@@ -13,4 +13,4 @@ def arc_example():
             (15, 23, 42, 255),
             (248, 250, 252, 255),
             2,
-        ).save(OUTPUT_DIR / "arc_square.png", ctx=ctx)
+        ).save(OUTPUT_DIR / "arc_square.png", canvas=ctx)

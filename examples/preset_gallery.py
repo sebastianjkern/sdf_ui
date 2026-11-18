@@ -111,7 +111,7 @@ def render_preset_gallery(preset_names=None, output_dir=OUTPUT_DIR):
     with Canvas(SIZE) as canvas:
         for name in names:
             path = output_dir / f"{name}.png"
-            build_preset_scene(PRESETS[name]).save(path, ctx=canvas)
+            build_preset_scene(PRESETS[name]).save(path, canvas=canvas)
             image_paths.append(path)
 
     comparison_path = None

@@ -663,6 +663,57 @@ class Context:
             progress=progress,
         ).render(texture)
 
+    def save(
+        self,
+        texture: Any,
+        path: str | Path,
+        params: dict[str, Any] | None = None,
+        cache: dict[Any, Any] | None = None,
+        *,
+        conversion: bool = True,
+        evaluation_rect: tuple[int, int, int, int] | None = None,
+        progress: float = 0.0,
+    ) -> Path:
+        """Render a node and save it, reusing this canvas and optional cache."""
+        return texture.save(
+            path,
+            canvas=self,
+            params=params,
+            cache=cache,
+            conversion=conversion,
+            evaluation_rect=evaluation_rect,
+            progress=progress,
+        )
+
+    def render_many(
+        self,
+        textures: Mapping[str, Any],
+        params: dict[str, Any] | None = None,
+        cache: dict[Any, Any] | None = None,
+        evaluation_rect: tuple[int, int, int, int] | None = None,
+        *,
+        progress: float = 0.0,
+    ) -> dict[str, Any]:
+        """Render named nodes with one renderer and a shared cache.
+
+        Returned nodes own GPU images; close each result when it is no longer
+        needed. Shared intermediate nodes are evaluated once when cacheable.
+        """
+        if not isinstance(textures, Mapping):
+            raise TypeError("textures must be a mapping of names to render nodes")
+        renderer = self.session(
+            params=params, cache=cache, evaluation_rect=evaluation_rect,
+            progress=progress,
+        )
+        try:
+            return {
+                name: renderer.render(texture)
+                for name, texture in textures.items()
+            }
+        finally:
+            if cache is None:
+                renderer.close()
+
     def session(
         self,
         params: dict[str, Any] | None = None,

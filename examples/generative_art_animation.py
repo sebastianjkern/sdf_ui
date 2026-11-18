@@ -144,7 +144,7 @@ def generative_art_animation(
     )
     with Canvas((SIZE, SIZE)) as canvas:
         scene = tidal_bloom_scene(canvas)
-        scene.save(output.with_suffix(".png"), ctx=canvas, params={"phase": phase})
+        scene.save(output.with_suffix(".png"), canvas=canvas, params={"phase": phase})
         canvas.save_animation(
             scene,
             output.with_suffix(".mp4"),

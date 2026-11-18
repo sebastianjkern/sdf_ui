@@ -96,7 +96,7 @@ def field_flow_animation_example(
         scene = field_flow_scene()
         scene.save(
             output.with_suffix(".png"),
-            ctx=canvas,
+            canvas=canvas,
             params={"phase": phase},
             progress=0.28,
         )

@@ -11,4 +11,4 @@ def capsule_example():
         sdf.capsule((190, 540), (890, 540), 72).fill(
             (15, 23, 42, 255),
             (248, 250, 252, 255),
-        ).save(OUTPUT_DIR / "capsule_square.png", ctx=ctx)
+        ).save(OUTPUT_DIR / "capsule_square.png", canvas=ctx)

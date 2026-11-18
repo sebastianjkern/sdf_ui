@@ -248,7 +248,7 @@ def kinetic_city_animation(
         scene = kinetic_city_scene()
         scene.save(
             output.with_suffix(".png"),
-            ctx=canvas,
+            canvas=canvas,
             params={"phase": phase},
             progress=0.5,
         )

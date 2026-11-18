@@ -11,4 +11,4 @@ def sector_example():
         sdf.sector((540, 540), 320, -0.6, 1.8).fill(
             (15, 23, 42, 255),
             (248, 250, 252, 255),
-        ).save(OUTPUT_DIR / "sector_square.png", ctx=ctx)
+        ).save(OUTPUT_DIR / "sector_square.png", canvas=ctx)

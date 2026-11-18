@@ -118,23 +118,43 @@ def _stats_hooks(enabled):
     original_save = TextureNode.save
 
     def show_with_stats(
-        self, ctx=None, params=None, cache=None, conversion=True, size=None
-    ):
-        result = original_show(
-            self, ctx=ctx, params=params, cache=cache, conversion=conversion, size=size
-        )
-        _print_stats(ctx or self.context)
-        return result
-
-    def save_with_stats(
         self,
-        name="./image.png",
         ctx=None,
         params=None,
         cache=None,
         conversion=True,
         size=None,
+        evaluation_rect=None,
         progress=0.0,
+        *,
+        canvas=None,
+    ):
+        result = original_show(
+            self,
+            ctx=ctx,
+            params=params,
+            cache=cache,
+            conversion=conversion,
+            size=size,
+            evaluation_rect=evaluation_rect,
+            progress=progress,
+            canvas=canvas,
+        )
+        _print_stats(canvas or ctx or self.context)
+        return result
+
+    def save_with_stats(
+        self,
+        name,
+        ctx=None,
+        params=None,
+        cache=None,
+        conversion=True,
+        size=None,
+        evaluation_rect=None,
+        progress=0.0,
+        *,
+        canvas=None,
     ):
         result = original_save(
             self,
@@ -144,9 +164,11 @@ def _stats_hooks(enabled):
             cache=cache,
             conversion=conversion,
             size=size,
+            evaluation_rect=evaluation_rect,
             progress=progress,
+            canvas=canvas,
         )
-        _print_stats(ctx or self.context)
+        _print_stats(canvas or ctx or self.context)
         return result
 
     TextureNode.show = show_with_stats

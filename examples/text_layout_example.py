@@ -70,7 +70,7 @@ def text_layout_example(output=Path("out/examples/text_layout.png")):
         ).fill("#f8fafc", "#00000000")
         scene = scene.over(paragraph_background).over(paragraph_text)
 
-        scene.to_rgb().save(output, ctx=canvas)
+        scene.to_rgb().save(output, canvas=canvas)
     return output
 
 

@@ -21,7 +21,7 @@ def procedural_fields_example():
             spacing=8, line_width=0.8, feather=0.35,
         )
         grid_scene = backdrop.alpha_overlay(grid_color).alpha_overlay(grid_lines)
-        grid_scene.save(OUTPUT_DIR / "finite_field_grid.png", ctx=canvas)
+        grid_scene.save(OUTPUT_DIR / "finite_field_grid.png", canvas=canvas)
 
         flow = field.vortex((450, 300), 260, 0.75).add(
             field.radial((300, 300), 220, -0.28)
@@ -47,7 +47,7 @@ def procedural_fields_example():
         ).warp(flow, strength=1.5, steps=2)
         scene = field_backdrop.alpha_overlay(shape).alpha_overlay(contours)
         scene = scene.alpha_overlay(visual).alpha_overlay(inspected)
-        scene.save(OUTPUT_DIR / "composed_vector_fields.png", ctx=canvas)
+        scene.save(OUTPUT_DIR / "composed_vector_fields.png", canvas=canvas)
 
 
 if __name__ == "__main__":

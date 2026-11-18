@@ -68,7 +68,7 @@ def optimize(output, steps=200, gpu=False):
     parameters.save(output / "parameters.json")
     if gpu:
         with Canvas((48, 40)) as canvas:
-            display.save(output / "gpu_after.png", ctx=canvas, params=parameters)
+            display.save(output / "gpu_after.png", canvas=canvas, params=parameters)
     shader = registry.get("ring").shader
     # A local backward pass is also available independently of a render graph.
     import numpy as np

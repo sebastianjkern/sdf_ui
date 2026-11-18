@@ -18,6 +18,14 @@ from ..util import hex_col
 from ._suggestions import unknown_name_message
 
 
+def _resolve_canvas_alias(ctx, canvas):
+    if canvas is not None:
+        if ctx is not None and ctx is not canvas:
+            raise ValueError("Pass either ctx or canvas, not both")
+        return canvas
+    return ctx
+
+
 def _texture_bytes(texture):
     read_bytes = getattr(texture, "read_bytes", None)
     return read_bytes() if callable(read_bytes) else texture.read()
@@ -1032,7 +1040,14 @@ class TextureNode(ABC):
         return sorted(names)
 
     def render(
-        self, ctx=None, params=None, cache=None, evaluation_rect=None, *, progress=0.0
+        self,
+        ctx=None,
+        params=None,
+        cache=None,
+        evaluation_rect=None,
+        *,
+        progress=0.0,
+        canvas=None,
     ) -> Self:
         """Materialize this node, optionally cropping to a canvas pixel rect.
 
@@ -1040,6 +1055,7 @@ class TextureNode(ABC):
         tree use the same region, so this currently supports pointwise
         operations and rejects filters that need neighboring pixels.
         """
+        ctx = _resolve_canvas_alias(ctx, canvas)
         if self.tex is not None and getattr(self.tex, "closed", False):
             raise RuntimeError("Cannot render a closed texture node")
         if self.tex is not None and ctx is None:
@@ -1102,7 +1118,11 @@ class TextureNode(ABC):
         size: tuple[int, int] | None = None,
         evaluation_rect: tuple[int, int, int, int] | None = None,
         progress: float = 0.0,
+        *,
+        canvas: Any = None,
     ) -> None:
+        ctx = _resolve_canvas_alias(ctx, canvas)
+
         def _show(texture):
             converted = None
             if (
@@ -1130,7 +1150,7 @@ class TextureNode(ABC):
 
     def save(
         self,
-        name: str | Path = "./image.png",
+        name: str | Path,
         ctx: Any = None,
         params: dict[str, Any] | None = None,
         cache: dict[Any, Any] | None = None,
@@ -1138,7 +1158,12 @@ class TextureNode(ABC):
         size: tuple[int, int] | None = None,
         evaluation_rect: tuple[int, int, int, int] | None = None,
         progress: float = 0.0,
-    ) -> None:
+        *,
+        canvas: Any = None,
+    ) -> Path:
+        ctx = _resolve_canvas_alias(ctx, canvas)
+        name = Path(name)
+
         def _save(texture):
             converted = None
             if self.kind == "color":
@@ -1175,6 +1200,7 @@ class TextureNode(ABC):
             evaluation_rect=evaluation_rect,
             progress=progress,
         )
+        return name
 
     def named(self, label: str):
         return self._clone(label=label, should_cache=self.should_cache)

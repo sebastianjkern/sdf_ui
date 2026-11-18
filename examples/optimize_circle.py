@@ -31,7 +31,7 @@ def optimize(steps=150, output=None):
         if output is not None:
             output = Path(output)
             output.parent.mkdir(parents=True, exist_ok=True)
-            field.save(output, ctx=canvas, params={"radius": radius})
+            field.save(output, canvas=canvas, params={"radius": radius})
 
     return {
         "radius": radius.item(),

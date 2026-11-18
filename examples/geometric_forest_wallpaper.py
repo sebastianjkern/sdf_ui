@@ -285,7 +285,7 @@ def render_wallpaper(size=DEFAULT_SIZE, output=DEFAULT_OUTPUT):
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     with Canvas(size) as canvas:
-        geometric_forest_scene(size).save(output, ctx=canvas)
+        geometric_forest_scene(size).save(output, canvas=canvas)
     # SDF coordinates use a bottom-left origin; wallpaper layouts use top-left.
     with Image.open(output) as rendered:
         rendered.transpose(Image.Transpose.FLIP_TOP_BOTTOM).save(output)

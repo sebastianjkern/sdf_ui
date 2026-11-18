@@ -38,7 +38,7 @@ def distance_corrections_example():
                     align="center",
                     valign="middle",
                 ).fill((0.94, 0.96, 0.98, 1.0), (0.0, 0.0, 0.0, 0.0))
-                diagnostic.alpha_overlay(caption).save(panel_path, ctx=canvas)
+                diagnostic.alpha_overlay(caption).save(panel_path, canvas=canvas)
             panels.append(Image.open(panel_path).convert("RGB"))
 
         gap = 14

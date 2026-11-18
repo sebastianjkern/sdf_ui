@@ -111,6 +111,26 @@ class Context:
         *,
         progress: float = ...,
     ) -> TextureNode: ...
+    def save(
+        self,
+        texture: TextureNode,
+        path: str | Path,
+        params: dict[str, Any] | None = ...,
+        cache: dict[Any, Any] | None = ...,
+        *,
+        conversion: bool = ...,
+        evaluation_rect: tuple[int, int, int, int] | None = ...,
+        progress: float = ...,
+    ) -> Path: ...
+    def render_many(
+        self,
+        textures: Mapping[str, TextureNode],
+        params: dict[str, Any] | None = ...,
+        cache: dict[Any, Any] | None = ...,
+        evaluation_rect: tuple[int, int, int, int] | None = ...,
+        *,
+        progress: float = ...,
+    ) -> dict[str, TextureNode]: ...
     def session(
         self,
         params: dict[str, Any] | None = ...,

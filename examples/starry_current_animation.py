@@ -251,7 +251,7 @@ def starry_current_animation(
         preview = output.with_name(output.name + "_preview.png")
         scene.save(
             preview,
-            ctx=canvas,
+            canvas=canvas,
             params={"phase": phase},
             progress=0.31,
         )

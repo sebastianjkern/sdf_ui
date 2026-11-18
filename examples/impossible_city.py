@@ -65,4 +65,4 @@ def impossible_city_example():
                 cubes.append(isometric_cube(ctx, offset=(grid_width + w*2*grid_width, h*2*grid_height)))
 
         scene = bg.alpha_overlay(reduce(lambda x, y: x.alpha_overlay(y), cubes)).uncached()
-        scene.save(OUTPUT_DIR / "impossible_city_square.png", ctx=ctx)
+        scene.save(OUTPUT_DIR / "impossible_city_square.png", canvas=ctx)

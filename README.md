@@ -286,8 +286,13 @@ scene = (
 
 cache = {}
 with Canvas((640, 360)) as canvas:
-    scene.save("out.png", ctx=canvas, cache=cache)
+    canvas.save(scene, "out.png", cache=cache)
 ```
+
+`canvas.save(scene, path)` reuses the canvas and returns the output path. The
+node shortcut accepts either `canvas=` or the backward-compatible `ctx=`:
+`scene.save(path, canvas=canvas)`. A path is required so an accidental save
+cannot silently overwrite a generic `image.png` file.
 
 `render()` returns a materialized texture that owns a GPU image. Close it when
 you are done, or use it as a context manager. Call `.read()` for a NumPy copy of
@@ -300,9 +305,24 @@ with Canvas((640, 360)) as canvas:
         image.save("out.png")
 ```
 
+`Canvas.render_many({...})` evaluates several named scenes through one renderer
+and cache, which is useful when outputs share cached subgraphs. Each returned
+image owns a GPU resource and should be closed when finished:
+
+```python
+with Canvas((640, 360)) as canvas:
+    images = canvas.render_many({"base": base_scene, "framed": framed_scene})
+    try:
+        images["base"].save("base.png")
+        images["framed"].save("framed.png")
+    finally:
+        for image in images.values():
+            image.close()
+```
+
 Calling `scene.save(..., size=(640, 360))` creates and closes a temporary canvas
-for one-off output. Pass `ctx=canvas` when you want to reuse a canvas across
-multiple renders.
+for one-off output. Pass `canvas=canvas` (or the backward-compatible
+`ctx=canvas`) when you want to reuse an existing canvas.
 
 For repeated evaluations, `Canvas.session()` reuses one renderer and cache and
 exposes render counters:

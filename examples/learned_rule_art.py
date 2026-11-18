@@ -209,7 +209,7 @@ def learned_rule_art(
     with Canvas((WIDTH, HEIGHT)) as canvas:
         scene.save(
             output.with_suffix(".png"),
-            ctx=canvas,
+            canvas=canvas,
             params=render_params,
             progress=0.5,
         )

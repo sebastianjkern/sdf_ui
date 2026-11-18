@@ -6,5 +6,5 @@ def parallelogram_example():
         sdf.parallelogram((400, 250), (320, 180), 60).fill(
             (15, 23, 42, 255),
             (248, 250, 252, 255),
-        ).show(ctx=ctx)
+        ).show(canvas=ctx)
 

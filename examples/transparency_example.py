@@ -146,7 +146,7 @@ def transparency_example():
             .alpha_overlay(reflection)
             .alpha_overlay(reflection_tail)
         )
-        image.save(OUTPUT_DIR / "transparency_square.png", ctx=ctx)
+        image.save(OUTPUT_DIR / "transparency_square.png", canvas=ctx)
 
 
 if __name__ == "__main__":

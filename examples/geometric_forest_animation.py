@@ -27,7 +27,7 @@ def render_animation(
 
     with Canvas(size) as canvas:
         scene = geometric_forest_scene(size, animated=True)
-        scene.save(preview, ctx=canvas, params={"phase": phase}, progress=0.25)
+        scene.save(preview, canvas=canvas, params={"phase": phase}, progress=0.25)
         canvas.save_animation(
             scene,
             output,

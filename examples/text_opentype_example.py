@@ -39,7 +39,7 @@ def text_opentype_example(output=Path("out/examples/text_opentype.png")):
                 ).fill("#f8fafc", "#00000000")
             )
 
-        scene.to_rgb().save(output, ctx=canvas)
+        scene.to_rgb().save(output, canvas=canvas)
     return output
 
 
