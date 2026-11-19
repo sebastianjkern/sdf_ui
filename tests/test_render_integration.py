@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
+from examples.lagrange_intuition_short import SIZE, _build_static_scenes
 from sdf_ui import Canvas, color, sdf
 from tests.helpers import render, rgba_array
 
@@ -53,6 +54,33 @@ def test_circle_fill_has_distinct_inside_and_outside_pixels():
 
     assert pixels[8, 8, 0] > 200
     assert pixels[0, 0, 0] < 20
+
+
+def test_lagrange_panel_leaves_heading_and_plot_visible():
+    pytest.importorskip("matplotlib")
+    scenes, _gradient_labels = _build_static_scenes()
+
+    with Canvas(SIZE, device_scale=0.25) as canvas, canvas.session() as renderer:
+        pixels = rgba_array(renderer.render(scenes[0]))
+
+    # The panel starts at x=700. The plot's right-hand side stays clear and
+    # the centered equation sits entirely above the panel.
+    assert pixels[100, 160, 0] < pixels[100, 180, 0]
+    assert pixels[16:24, 130:190, 0].max() > 190
+
+
+def test_small_text_fades_on_both_sides_of_its_contour():
+    text = sdf.text("Thin", size=15, ox=3.2, oy=6.4)
+    with Canvas((36, 24)) as canvas, canvas.session() as renderer:
+        distance = np.frombuffer(renderer.render(text).tex.read(), dtype=np.float32)
+        alpha = rgba_array(renderer.render(text.fill("#ffffff", "#ffffff00")))[::-1, :, 3]
+
+    # The default inflation moves the contour to 0.2. Pixels just outside it
+    # still contribute coverage to small glyphs.
+    outside_edge = (distance > 0.2) & (distance < 0.5)
+    assert np.any(outside_edge)
+    edge_alpha = alpha.ravel()[outside_edge]
+    assert np.all((edge_alpha > 0) & (edge_alpha <= 128))
 
 
 def test_percentage_expressions_are_resolved_during_render():

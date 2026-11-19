@@ -87,7 +87,6 @@ def render_text(renderer, _inputs, params):
     if overflow != "visible" and box is None:
         raise ValueError("text overflow modes require a box")
 
-    effective_font_size = max(font_size, min_render_size)
     field = np.full((height, width), max(width, height), dtype=np.float32)
     glyph_cache_size = _glyph_cache_size(
         font_size, oversample, cache_size, min_render_size
@@ -438,7 +437,9 @@ def _cached_hinted_glyph_sdf(path, glyph_id, hinted_size, supersample):
     import cv2
 
     coverage = np.asarray(mask, dtype=np.uint8).reshape(height, width)
-    pad = 2
+    # Leave room for the fill ramp and a small positive distance offset at
+    # the final pixel size, including when glyph placement is fractional.
+    pad = 2 * scale
     alpha = np.pad(coverage, pad, mode="constant").astype(np.float32) / 255.0
     inside = (alpha >= 0.5).astype(np.uint8)
     outside = 1 - inside
@@ -448,9 +449,7 @@ def _cached_hinted_glyph_sdf(path, glyph_id, hinted_size, supersample):
     inside_distance = cv2.distanceTransform(
         inside, cv2.DIST_L2, cv2.DIST_MASK_PRECISE
     )
-    # Offset distances to the half-pixel contour. Keep a one-pixel-per-pixel
-    # gradient: the fill shader derives its antialias width from this gradient,
-    # so adding grayscale coverage here would distort that width.
+    # Offset distances to the contour between the inside and outside samples.
     field = (
         outside_distance
         - inside_distance
@@ -464,8 +463,8 @@ def _cached_hinted_glyph_sdf(path, glyph_id, hinted_size, supersample):
     pixel_center_offset = 0.5
     pixel_to_font_units = units_per_pixel
     origin = (
-        (float(offset[0]) - pad - pixel_center_offset) * pixel_to_font_units,
-        (-float(offset[1]) - height - pad - pixel_center_offset)
+        (float(offset[0]) - pad + pixel_center_offset) * pixel_to_font_units,
+        (-float(offset[1]) - height - pad + pixel_center_offset)
         * pixel_to_font_units,
     )
     return {

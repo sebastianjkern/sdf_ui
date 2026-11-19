@@ -228,6 +228,9 @@ equation = sdf.math(
 scene = equation.fill("#f8fafc", "#00000000")
 ```
 
+Pass `height=None` to size equations by `font_size` in canvas units. This keeps
+ordinary symbols consistent across equations with superscripts or fractions.
+
 The SVG renderer handles filled paths and simple one-line text; text uses the
 matching system font when available, then the bundled Roboto fallback. Nested
 `<tspan>` layout, strokes, gradients, filters, clipping paths, and external

@@ -1,4 +1,8 @@
-from sdf_ui import fonts
+import numpy as np
+import pytest
+
+from sdf_ui import fonts, sdf
+from sdf_ui.gpu.nodes.primitives.svg.plugin import _collect_shapes, _parse_svg
 from sdf_ui.gpu.nodes.primitives.text.plugin import (
     _composite_glyph,
     _justify_placements,
@@ -123,9 +127,28 @@ def test_measure_text_reports_vertical_overflow():
     assert result["overflow"] is True
 
 
-def test_glyph_compositing_can_be_clipped_to_a_text_box():
-    import numpy as np
+def test_math_font_size_preserves_glyph_scale_across_formula_heights():
+    matplotlib = pytest.importorskip("matplotlib")
 
+    def glyph_size(expression, height):
+        node = sdf.math(expression, height=height, font_size=32)
+        params = dict(node.params)
+        root, view_box = _parse_svg(params["source"])
+        shapes = _collect_shapes(root, view_box, (0, 0), params["height"], 32)
+        contours, _fill_rule = shapes[0]
+        points = np.asarray([point for contour in contours for point in contour])
+        return np.ptp(points, axis=0)
+
+    with matplotlib.rc_context({"svg.fonttype": "none"}):
+        plain = glyph_size("x", None)
+        superscript = glyph_size("x^2", None)
+        fixed = glyph_size("x^2", 64)
+
+    np.testing.assert_allclose(plain, superscript)
+    assert fixed[1] > superscript[1]
+
+
+def test_glyph_compositing_can_be_clipped_to_a_text_box():
     field = np.full((5, 5), 10.0, dtype=np.float32)
     patch = {
         "field": np.full((5, 5), -1.0, dtype=np.float32),

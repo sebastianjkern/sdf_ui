@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from io import BytesIO
 import math
 import xml.etree.ElementTree as ET
+from io import BytesIO
 
 
 def render_mathtext(
@@ -23,7 +23,8 @@ def render_mathtext(
 
     if not isinstance(expression, str) or not expression.strip():
         raise ValueError("math expression must be a non-empty string")
-    if not all(math.isfinite(value) and value > 0 for value in (height, font_size)):
+    sizes = (font_size,) if height is None else (height, font_size)
+    if not all(math.isfinite(value) and value > 0 for value in sizes):
         raise ValueError("height and font_size must be finite and positive")
 
     math_expression = expression.strip()
@@ -31,7 +32,7 @@ def render_mathtext(
         math_expression = f"${math_expression}$"
 
     output = BytesIO()
-    with rc_context({"mathtext.fontset": fontset}):
+    with rc_context({"mathtext.fontset": fontset, "svg.fonttype": "path"}):
         math_to_image(
             math_expression,
             output,
@@ -55,7 +56,7 @@ def render_mathtext(
         "svg",
         source=ET.tostring(root, encoding="unicode"),
         center=center,
-        height=height,
+        height=float(root.attrib["viewBox"].split()[3]) if height is None else height,
         samples=samples,
         inflate=inflate,
         oversample=oversample,

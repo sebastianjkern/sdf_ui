@@ -93,7 +93,8 @@ class SDFNamespace(_OperationNamespace):
         MathText supports a useful subset of TeX math, without requiring TeX,
         Node.js, or npm. Install the optional dependency with
         ``pip install 'sdf_ui[math]'``. ``height`` controls the rendered formula
-        height in canvas units; ``font_size`` controls MathText's source size.
+        height in canvas units. Pass ``height=None`` to use ``font_size`` as the
+        font size in canvas units and let each expression have its natural height.
         ``inflate`` applies a signed-distance offset in canvas units.
         ``oversample`` improves subpixel detail and accepts values from 1 to 4.
         """

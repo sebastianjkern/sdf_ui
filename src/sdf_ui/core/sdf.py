@@ -15,12 +15,17 @@ class SDFTexture(TextureNode):
         bg_color=(0.0, 0.0, 0.0, 1.0),
         inflate=None,
         inner=None,
-        outer=0.0,
+        outer=None,
     ):
-        """Fill this signed distance field with foreground and background colors."""
+        """Fill this signed distance field with foreground and background colors.
+
+        Text uses a centered one-unit antialiasing ramp by default.
+        """
         is_text = self.op == "text"
         if inflate is None:
             inflate = 0.2 if is_text else 0.0
+        if outer is None:
+            outer = 0.5 if is_text and inner is None else 0.0
         return build(
             "fill",
             self,

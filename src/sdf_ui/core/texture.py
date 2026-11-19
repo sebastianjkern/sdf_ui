@@ -874,6 +874,16 @@ class Renderer:
                     self.cache[self._node_key(item)] = output
                     self.stats.cache_writes += 1
             current = outputs[len(group) - 1]
+            last_item = group[-1]
+            if last_item is not root and not last_item.should_cache:
+                # This batch output becomes the base of the next batch. Track
+                # it like any other uncached graph output so its parent can
+                # recycle it once the next composite has consumed it.
+                self._graph_outputs[id(last_item)] = current
+            for item in group:
+                # The fused shader consumed these inputs without going through
+                # _eval's usual reference-count cleanup path.
+                self._consume_graph_inputs(item)
         return current
 
     @staticmethod

@@ -99,6 +99,16 @@ vortex field bends repeated SDF brush marks into a broad rotating sky whirl
 above a village and cypress silhouette. It writes
 ``out/generative_art/starry_current.gif`` and a PNG preview.
 
+``lagrange_intuition_short`` renders a one-minute narrated visual explanation
+of constrained optimization. It follows the contours of ``xy`` to their
+tangency with the unit circle, then shows why the gradients align and how the
+multiplier measures the value of relaxing the constraint. SDF UI renders the
+plot, equations, annotations, and animation frames; Matplotlib supplies the
+MathText parser used by ``sdf.math``. Render it with
+``uv run --extra math python -m examples.lagrange_intuition_short``; ffmpeg and
+espeak-ng are also required. The MP4, poster, and subtitle file are written
+under ``out/learning/``.
+
 ``preset_gallery`` demonstrates named and custom palettes with four
 parameterized vector-field scenes. Running it without options writes each
 render and a labeled side-by-side comparison to
