@@ -97,6 +97,18 @@ class SDFTexture(TextureNode):
     def __sub__(self, other):
         return self.subtract(other)
 
+    def __xor__(self, other):
+        """Return the symmetric difference of this SDF and another SDF."""
+        return self.xor(other)
+
+    def xor(self, other):
+        """Combine two SDFs, keeping points inside exactly one of them."""
+        return self.union(other).subtract(self.intersection(other))
+
+    def __xor__(self, other):
+        """Return the symmetric difference of this SDF and another SDF."""
+        return self.xor(other)
+
     def intersect(self, other):
         return self.intersection(other)
 
