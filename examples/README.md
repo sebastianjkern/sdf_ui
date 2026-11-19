@@ -27,6 +27,9 @@ The first command lists the original rendering examples. The learning and GPU
 examples have their own command-line options; append `--help` for details.
 Generated images and checkpoints go under `out/`.
 
+The standalone aurora illustration can be rendered with
+`uv run python -m examples.aurora_landscape`.
+
 ``tidal_bloom`` renders a looping 640×640 generative animation from animated
 SDF petals, contour threads, orbiting constellations, and layered orbital
 tracks. It writes ``out/generative_art/tidal_bloom.mp4`` and a still preview
@@ -115,3 +118,7 @@ parameterized vector-field scenes. Running it without options writes each
 render and a labeled side-by-side comparison to
 ``out/examples/preset_gallery/``. Select one or more variants with repeated
 ``--preset`` options, such as ``--preset ember --preset moss``.
+
+``aurora_landscape`` is a standalone illustration example combining a warped
+SDF ribbon, radial glow, a crescent moon, layered hills, and small star fields.
+It writes ``out/examples/aurora_landscape.png``.
