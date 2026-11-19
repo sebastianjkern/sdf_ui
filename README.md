@@ -253,6 +253,37 @@ For fixed boxes, `align="justify"` expands word spacing on non-final lines.
 `overflow="visible"`, `"clip"`, and `"error"` select box overflow behavior;
 `trim_trailing_spaces=False` preserves the final space advance.
 
+### Graphing
+
+`Plot` maps mathematical coordinates into a canvas rectangle. Its axes,
+grid and labels form a transparent layer, and each curve returns a distance
+field that can be stroked or composed with other SDFs.
+
+```python
+from math import sin
+from sdf_ui import Canvas, Plot, color
+
+plot = Plot(box=(72, 60, 504, 252), x_range=(-4, 4), y_range=(-1.5, 1.5))
+axes = plot.axes(
+    x_ticks=(-4, -2, 0, 2, 4), y_ticks=(-1, 1), x_label="x", y_label="y"
+)
+wave = plot.curve(sin).stroke(3, "#62dfcf")
+scene = color.clear("#10151f").alpha_overlay(axes).alpha_overlay(wave)
+with Canvas((640, 360)) as canvas:
+    scene.save("plot.png", ctx=canvas)
+```
+
+`Plot.curve(f)` graphs `y = f(x)`, and `Plot.parametric(f, domain)` graphs
+a callable returning `(x(t), y(t))`. Both refine the sampled line according
+to `tolerance` in canvas units and clip its centerline to the plot rectangle.
+Increase `samples` for highly oscillatory functions, and pass known
+discontinuities in `breaks` to keep the branches separate.
+
+`sdf.polyline(points)` also accepts sampled canvas points directly. The GPU
+computes Euclidean distance to the nearest line segment. Use `None` between
+disconnected runs and a positive `radius` for a filled band. Distance is
+measured to the sampled geometry, so agreement with the original function
+depends on how well the samples capture it.
 
 For development from a checkout, install [uv](https://docs.astral.sh/uv/getting-started/installation/) and run:
 

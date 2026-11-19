@@ -2,6 +2,8 @@
 
 __docformat__ = "google"
 
+from numbers import Real
+
 from ..gpu.nodes.base import TextureKind
 from ..gpu.nodes.common import build
 from ._suggestions import unknown_name_message
@@ -45,6 +47,22 @@ class _OperationNamespace:
 
 class SDFNamespace(_OperationNamespace):
     kind = TextureKind.SDF
+
+    def polyline(self, points, radius=0.0):
+        """Create a distance field from canvas points joined by line segments.
+
+        Insert ``None`` between runs to start a new line. Zero radius yields
+        unsigned distance to the centerline. A positive radius offsets that
+        distance outward in canvas units to make a filled, round-ended band.
+        """
+        vertices = tuple(
+            tuple(float(value) if isinstance(value, Real) else value for value in point)
+            if point is not None else None
+            for point in points
+        )
+        if isinstance(radius, Real):
+            radius = float(radius)
+        return build("polyline", vertices, radius)
 
     def svg(
         self,

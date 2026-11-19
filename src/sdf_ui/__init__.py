@@ -19,6 +19,7 @@ from .core.field import FieldNamespace
 from .core.palette import Palette, get_palette, palettes
 from .gpu.context import Context, DispatchConfig
 from .log import logger
+from .plot import Plot
 
 Canvas = Context
 sdf = SDFNamespace()
@@ -32,6 +33,7 @@ __all__ = [
     "ColorTexture",
     "FieldTexture",
     "Palette",
+    "Plot",
     "SDFTexture",
     "color",
     "field",

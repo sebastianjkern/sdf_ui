@@ -103,8 +103,9 @@ above a village and cypress silhouette. It writes
 of constrained optimization. It follows the contours of ``xy`` to their
 tangency with the unit circle, then shows why the gradients align and how the
 multiplier measures the value of relaxing the constraint. SDF UI renders the
-plot, equations, annotations, and animation frames; Matplotlib supplies the
-MathText parser used by ``sdf.math``. Render it with
+plot, equations, annotations, and animation frames. The ``Plot`` widget draws
+the axes and samples the hyperbolas directly from ``y = c/x``. Matplotlib
+supplies the MathText parser used by ``sdf.math``. Render it with
 ``uv run --extra math python -m examples.lagrange_intuition_short``; ffmpeg and
 espeak-ng are also required. The MP4, poster, and subtitle file are written
 under ``out/learning/``.

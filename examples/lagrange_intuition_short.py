@@ -16,7 +16,7 @@ import wave
 from pathlib import Path
 from time import monotonic, strftime
 
-from sdf_ui import Canvas, color, sdf
+from sdf_ui import Canvas, Plot, color, sdf
 
 OUTPUT = Path("out/learning/lagrange_intuition_short.mp4")
 SIZE = (1280, 720)
@@ -36,6 +36,7 @@ TRANSPARENT = (0.0, 0.0, 0.0, 0.0)
 # The plot uses the lower-left canvas origin used by SDF UI geometry.
 PLOT_ORIGIN = (116.0, 92.0)
 PLOT_SCALE = 454.0
+PLOT = Plot((*PLOT_ORIGIN, 1.2 * PLOT_SCALE, 1.2 * PLOT_SCALE), (0, 1.2), (0, 1.2))
 
 NARRATION = (
     "Can you maximize a function if you can only move along a curve?",
@@ -184,10 +185,7 @@ def _speak_clips(directory, speed=150):
 
 
 def _pixel(point):
-    return (
-        PLOT_ORIGIN[0] + point[0] * PLOT_SCALE,
-        PLOT_ORIGIN[1] + point[1] * PLOT_SCALE,
-    )
+    return PLOT.point(*point)
 
 
 def _overlay(scene, layer, *, cache=True):
@@ -238,30 +236,13 @@ def _formula(value, center, size=34, tint=GOLD):
     return _fill_type(node, tint)
 
 
-def _quadratic(level, x0, x1, tint, width, *, cache=True):
-    """Approximate one hyperbola interval with a quadratic SDF Bezier."""
-    xm = (x0 + x1) / 2
-    p0 = _pixel((x0, level / x0))
-    pm = _pixel((xm, level / xm))
-    p2 = _pixel((x1, level / x1))
-    control = (
-        2 * pm[0] - 0.5 * (p0[0] + p2[0]),
-        2 * pm[1] - 0.5 * (p0[1] + p2[1]),
-    )
-    curve = sdf.bezier(p0, control, p2)
+def _level_curve(level, tint, width=2.2, *, cache=True):
+    # Keep the endpoints a little inside the viewport, clear of the labels.
+    curve = PLOT.curve(lambda x: level / x, domain=(level / 1.18, 1.18))
     if not cache:
         curve = curve.uncached()
     layer = curve.stroke(width, tint)
     return layer if cache else layer.uncached()
-
-
-def _level_curve(level, tint, width=2.2, *, cache=True):
-    low_x = max(level / 1.18, 0.004)
-    high_x = 1.18
-    split = min(high_x - 0.001, max(low_x + 0.001, math.sqrt(level)))
-    first = _quadratic(level, low_x, split, tint, width, cache=cache)
-    second = _quadratic(level, split, high_x, tint, width, cache=cache)
-    return _overlay(first, second, cache=cache)
 
 
 def _arrow(start, end, tint, width=3.0, head=13.0):
@@ -308,33 +289,16 @@ def _build_static_scenes():
     )
 
     # Plot grid, axes, tick labels, and the unit-circle constraint.
-    left, bottom = _pixel((0, 0))
-    right, top = _pixel((1.2, 1.2))
-    for value in (0.5, 1.0):
-        px, py = _pixel((value, value))
-        scene = _overlay(scene, _segment((px, bottom), (px, top), 0.55, GRID))
-        scene = _overlay(scene, _segment((left, py), (right, py), 0.55, GRID))
-    scene = _overlay(scene, _segment((left, bottom), (right, bottom), 1.25, MUTED))
-    scene = _overlay(scene, _segment((left, bottom), (left, top), 1.25, MUTED))
-
-    for value, label in ((0.0, "0"), (0.5, "0.5"), (1.0, "1.0")):
-        px, py = _pixel((value, value))
-        scene = _overlay(
-            scene,
-            _text(label, (px - 24, bottom - 34, 48, 24), size=15, tint=MUTED, align="center"),
-        )
-        if value:
-            scene = _overlay(
-                scene,
-                _text(label, (left - 48, py - 12, 42, 24), size=15, tint=MUTED, align="right"),
-            )
     scene = _overlay(
         scene,
-        _text("x", (right - 4, bottom - 35, 28, 25), size=19, tint=WHITE),
-    )
-    scene = _overlay(
-        scene,
-        _text("y", (left - 26, top - 4, 24, 25), size=19, tint=WHITE, align="center"),
+        PLOT.axes(
+            x_ticks=(0, 0.5, 1),
+            y_ticks=(0.5, 1),
+            axis_color=MUTED,
+            grid_color=GRID,
+            x_label="x",
+            y_label="y",
+        ),
     )
 
     constraint = sdf.arc(PLOT_ORIGIN, PLOT_SCALE, 0.0, math.pi / 2).stroke(
