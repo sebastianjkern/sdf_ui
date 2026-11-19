@@ -105,11 +105,12 @@ class SDFTexture(TextureNode):
         """Combine two SDFs, keeping points inside exactly one of them."""
         return self.union(other).subtract(self.intersection(other))
 
-    def __xor__(self, other):
-        """Return the symmetric difference of this SDF and another SDF."""
-        return self.xor(other)
+    def intersection(self, other):
+        """Return the shared interior of this SDF and another SDF."""
+        return build("intersection", self, other)
 
     def intersect(self, other):
+        """Compatibility alias for :meth:`intersection`."""
         return self.intersection(other)
 
     def mask(
