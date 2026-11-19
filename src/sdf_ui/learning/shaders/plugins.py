@@ -160,8 +160,10 @@ def _fill_texture_plugin(renderer, inputs, params, input_modes):
 def _iterated_blur_plugin(renderer, inputs, params, input_modes):
     base = _integer(params["base"], "blur base")
     base = 13 if base == 13 else 9
-    result = _blur(renderer, _rgb(inputs[0], input_modes[0]), base, params["n"])
-    return (result, "RGB") if input_modes[0] == "RGB" else (_rgb_to_lab(result), "LAB")
+    mode = input_modes[0]
+    source = inputs[0] if mode == "LINEAR" else _rgb(inputs[0], mode)
+    result = _blur(renderer, source, base, params["n"])
+    return (_rgb_to_lab(result), "LAB") if mode == "LAB" else (result, mode)
 
 
 def _shadow_plugin(renderer, inputs, params):

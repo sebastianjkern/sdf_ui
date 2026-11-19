@@ -25,7 +25,7 @@ def render_alpha_overlay_pair(renderer, inputs, params):
     from sdf_ui.core.color import ColorSpaceMode, ColorTexture
 
     ctx = renderer.ctx
-    if renderer._dirty_regions_enabled and ctx._active_evaluation_rect is not None:
+    if ctx._active_evaluation_rect is not None:
         # The fused overlay kernel uses full-canvas coordinates. Use the
         # regular pointwise node shader so it can dispatch into a crop.
         top = renderer.render(inputs[1].to_rgb())

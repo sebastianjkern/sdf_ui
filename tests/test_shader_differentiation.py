@@ -19,14 +19,18 @@ def test_all_shader_files_have_contracts_and_executable_rules():
     root = Path(__file__).resolve().parents[1] / "src/sdf_ui"
     assert {
         str(path.relative_to(root)) for path in (root / "gpu/nodes").rglob("*.glsl")
-    } == {shader.path for shader in shaders.values()}
+    } == {shader.path for shader in shaders.values() if shader.wgsl is None}
     for name, shader in shaders.items():
         contract = shader.differentiation
         assert contract is not None, name
         assert contract.name == name and contract.path == shader.path
         assert contract.outputs and contract.notes
         assert shader.interface is not None, name
-        assert shader.program is not None, name
+        if shader.wgsl is not None:
+            assert "fn compute_main" in shader.wgsl.forward()
+            assert "fn compute_main" in shader.wgsl.backward
+        elif shader.program is None:
+            assert (root / f"gpu/shaders/{name}.wgsl").is_file(), name
         assert callable(contract.reference), name
         assert [
             item.name

@@ -57,6 +57,7 @@ SDF_CONTRACT = ShaderDifferentiation(
     (ShaderArgument("strength", (), "float"), ShaderArgument("steps", (), "int")),
     (ShaderArgument("destTex", (), "r32f"),),
     zero_gradient_parameters=("steps",), sampling="linear_clamp",
+    notes="Differentiate bilinear weights within a fixed cell; integration steps are discrete.",
     reference=lambda context, inputs, params: _reference(context, inputs, params),
 )
 COLOR_CONTRACT = ShaderDifferentiation(
@@ -66,5 +67,6 @@ COLOR_CONTRACT = ShaderDifferentiation(
     (ShaderArgument("strength", (), "float"), ShaderArgument("steps", (), "int")),
     (ShaderArgument("destTex", (4,), "rgba8"),),
     zero_gradient_parameters=("steps",), sampling="linear_clamp",
+    notes="Differentiate bilinear weights within a fixed cell; integration steps are discrete.",
     reference=lambda context, inputs, params: _reference(context, inputs, params, color=True),
 )

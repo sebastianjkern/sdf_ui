@@ -643,6 +643,29 @@ ___
 
 <img src="./docs/assets/examples/starry_current.gif" width="640" alt="An animated swirling blue night sky over a village, crescent moon, and cypress tree">
 
+#### Linear light and large stills
+
+Use linear RGBA to keep bright light and subtle gradients in 32-bit floating
+point through compositing. RGB values can exceed 1, and alpha stays in
+`[0, 1]`. Finish the scene with exposure, tone mapping, and optional
+dithering before saving a display image.
+
+```python
+from sdf_ui import Canvas, color, sdf
+
+light = sdf.circle(("50%x", "50%y"), "12%min").ink_linear((3.5, 1.3, 0.24, 1))
+scene = color.linear_rgba((0.015, 0.025, 0.055, 1)).over(light)
+finished = scene.bloom(threshold=0.9, amount=0.55).finish(exposure=0.25)
+with Canvas((960, 640), device_scale=4) as canvas:
+    canvas.save_tiled(finished, "glow.png", tile_size=(512, 512))
+```
+
+`save_tiled()` allocates GPU textures for one tile and its sampling margin.
+The finished image is assembled on the CPU. See the
+[high-fidelity rendering guide](docs/high_fidelity.rst) for compatible
+operations and parameter behavior. Render the example with
+`uv run python -m examples.high_fidelity_art --scale 4`.
+
 #### Larger Scenes
 
 <table>

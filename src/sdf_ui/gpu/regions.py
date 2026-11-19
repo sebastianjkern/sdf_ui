@@ -136,29 +136,33 @@ def _split_arguments(source):
 
 
 def _offset_entry_point(code):
-    match = re.search(r"\bfn\s+compute_main\s*\([^)]*\)[^{]*\{", code)
+    match = re.search(
+        r"\bfn\s+compute_main\s*\(\s*@builtin\(global_invocation_id\)\s+(\w+)\s*:[^{]*\{",
+        code,
+    )
     if match is None:
         raise ValueError("Region evaluation requires a compute_main entry point")
     open_brace = match.end() - 1
+    invocation = match.group(1)
     close_brace = _matching_brace(code, open_brace)
     body = code[open_brace + 1 : close_brace]
     body = re.sub(
-        r"\bglobal_invocation_id\.xy\b",
-        "(global_invocation_id.xy + _sdfRegion.outputOrigin)",
+        rf"\b{invocation}\.xy\b",
+        f"({invocation}.xy + _sdfRegion.outputOrigin)",
         body,
     )
     body = re.sub(
-        r"\bglobal_invocation_id\.x\b",
-        "(global_invocation_id.x + _sdfRegion.outputOrigin.x)",
+        rf"\b{invocation}\.x\b",
+        f"({invocation}.x + _sdfRegion.outputOrigin.x)",
         body,
     )
     body = re.sub(
-        r"\bglobal_invocation_id\.y\b",
-        "(global_invocation_id.y + _sdfRegion.outputOrigin.y)",
+        rf"\b{invocation}\.y\b",
+        f"({invocation}.y + _sdfRegion.outputOrigin.y)",
         body,
     )
-    guard = "\n    if (global_invocation_id.x >= _sdfRegion.outputExtent.x || "
-    guard += "global_invocation_id.y >= _sdfRegion.outputExtent.y) { return; }\n"
+    guard = f"\n    if ({invocation}.x >= _sdfRegion.outputExtent.x || "
+    guard += f"{invocation}.y >= _sdfRegion.outputExtent.y) {{ return; }}\n"
     body = guard + body
     return code[: open_brace + 1] + body + code[close_brace:]
 

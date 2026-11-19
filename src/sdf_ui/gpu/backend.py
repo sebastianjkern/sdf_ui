@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import struct
 import re
+import struct
 from hashlib import sha256
 from pathlib import Path
 
@@ -124,6 +124,12 @@ class GPUShaderBackend:
 
     def shader_fingerprints(self, name):
         self.contract(name)
+        kernel = self.descriptors[name].wgsl
+        if kernel is not None:
+            return (
+                sha256(kernel.backward.encode()).hexdigest(),
+                sha256(kernel.forward().encode()).hexdigest(),
+            )
         forward = self._shader_path(name, "rgba32f")
         backward = self._shader_path(name, backward=True)
         return (
@@ -133,6 +139,9 @@ class GPUShaderBackend:
 
     def derivative_code(self, name):
         self.contract(name)
+        kernel = self.descriptors[name].wgsl
+        if kernel is not None:
+            return kernel.backward
         return self._shader_path(name, backward=True).read_text(encoding="utf-8")
 
     def _shader_path(self, name, color_format="rgba8", backward=False):
@@ -210,6 +219,8 @@ class GPUShaderBackend:
             return SDFTexture(tex=texture, context=self.canvas)
         from ..core.color import ColorTexture
 
+        if mode == "LINEAR":
+            return ColorTexture(tex=self.canvas.copy_image(image), context=self.canvas, mode=mode)
         texture = self.canvas.rgba8(image.size)
         try:
             self.canvas.run_shader("display_color", {0: texture, 1: image})

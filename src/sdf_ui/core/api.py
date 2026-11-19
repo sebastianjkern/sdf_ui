@@ -419,6 +419,10 @@ class SDFNamespace(_OperationNamespace):
 class ColorNamespace(_OperationNamespace):
     kind = TextureKind.COLOR
 
+    def linear_rgba(self, rgba):
+        """Create a floating point layer with linear RGBA values."""
+        return build("hdr_clear", rgba)
+
     def concentric_rings(self, center, radius, *, count, tint, line_width=2.0, gap=5.0):
         """Compose equally spaced colored outlines inside a circle.
 

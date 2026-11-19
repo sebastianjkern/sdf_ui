@@ -63,6 +63,14 @@ class SDFTexture(TextureNode):
             inflate=inflate,
         )
 
+    def ink_linear(self, rgba):
+        """Paint this SDF with linear RGBA, allowing RGB values above one."""
+        return build("hdr_ink", self, rgba)
+
+    def fill_linear(self, rgba, background, *, inner=0.0, outer=1.0):
+        """Interpolate two linear RGBA colors over a signed distance interval."""
+        return build("hdr_fill", self, rgba, background, inner, outer)
+
     def repeat_grid(self, columns, rows, spacing, center):
         """Repeat this SDF in a finite array, centered on its source location."""
         return build(

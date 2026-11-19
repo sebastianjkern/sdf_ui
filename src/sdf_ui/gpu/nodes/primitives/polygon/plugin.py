@@ -53,8 +53,8 @@ def render_polygon(renderer, inputs, params):
     if abs(_polygon_area(points)) < 1e-9:
         raise ValueError("polygon points must enclose a non-zero area")
 
-    width, height = ctx.size
-    yy, xx = np.mgrid[0:height, 0:width]
+    x, y, width, height = ctx._active_evaluation_rect or (0, 0, *ctx.size)
+    yy, xx = np.mgrid[y:y + height, x:x + width]
     grid = np.stack((xx.astype(np.float32), yy.astype(np.float32)), axis=-1)
     distance_sq = np.full((height, width), np.inf, dtype=np.float32)
 
@@ -68,7 +68,11 @@ def render_polygon(renderer, inputs, params):
     field[_point_in_polygon(grid, points)] *= -1.0
 
     tex = ctx.r32f()
-    tex.write(field.tobytes())
+    try:
+        tex.write(field.tobytes())
+    except BaseException:
+        tex.close()
+        raise
     return SDFTexture(tex=tex, context=ctx)
 
 

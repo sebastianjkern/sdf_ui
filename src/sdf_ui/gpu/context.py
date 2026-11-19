@@ -259,6 +259,7 @@ class Context:
         self._image_pool_bytes = 0
         self._image_pool_limit_bytes = 128 * 1024 * 1024
         self._active_evaluation_rect = None
+        self._tiled_export = False
         self._active_render_stats = None
         self.last_render_stats = None
         self._command_batch_active = False
@@ -560,7 +561,7 @@ class Context:
     ):
         """Load a packaged WGSL compute shader and dispatch it by resource name."""
         path = self._shader_path(name, color_format)
-        if not path.is_file():
+        if source_code is None and not path.is_file():
             raise KeyError(f"Unknown WebGPU shader '{name}'")
         code = path.read_text(encoding="utf-8") if source_code is None else source_code
         groups = self.run_compute(
@@ -577,7 +578,11 @@ class Context:
         return groups
 
     def supports_shader(self, name):
-        return (Path(__file__).with_name("shaders") / f"{name}.wgsl").is_file()
+        if (Path(__file__).with_name("shaders") / f"{name}.wgsl").is_file():
+            return True
+        from .nodes.registry import registry
+
+        return any(shader.name == name and shader.wgsl is not None for shader in registry.shader_files())
 
     def run_node_shader(
         self, descriptor, output, inputs, uniforms, *, extra_outputs=()
@@ -599,8 +604,12 @@ class Context:
             if any(image.format == "rgba32float" for image in color_outputs)
             else "rgba8"
         )
+        source_code = None
+        if descriptor.wgsl is not None:
+            display = any(image.format == "rgba8unorm" for image in (*images, output))
+            source_code = descriptor.wgsl.forward(display=display)
         source_code, group_count = self._region_shader(
-            descriptor, interface, resources, images, color_format
+            descriptor, interface, resources, images, color_format, source_code
         )
         return self.run_shader(
             descriptor.name,
@@ -611,20 +620,26 @@ class Context:
             source_code=source_code,
         )
 
-    def _region_shader(self, descriptor, interface, resources, images, color_format):
+    def _region_shader(self, descriptor, interface, resources, images, color_format, source_code):
         rect = self._active_evaluation_rect
         if rect is None:
-            return None, None
+            return source_code, None
         contract = descriptor.differentiation
-        if contract is None or contract.sampling != "pointwise":
+        from .tiled import NEIGHBOR_SHADERS
+
+        if contract is None or (
+            contract.sampling != "pointwise"
+            and not (self._tiled_export and descriptor.name in NEIGHBOR_SHADERS)
+        ):
             sampling = None if contract is None else contract.sampling
             raise NotImplementedError(
                 f"Evaluation rectangles require pointwise shader sampling; "
                 f"'{descriptor.name}' uses {sampling}"
             )
-        source_code = self._shader_path(descriptor.name, color_format).read_text(
-            encoding="utf-8"
-        )
+        if source_code is None:
+            source_code = self._shader_path(descriptor.name, color_format).read_text(
+                encoding="utf-8"
+            )
         bindings = re.findall(r"@group\(0\)\s*@binding\((\d+)\)", source_code)
         region_binding = max(map(int, bindings), default=-1) + 1
         from .regions import pack_rect, rect_groups, specialize_wgsl_for_rect
@@ -683,6 +698,22 @@ class Context:
             conversion=conversion,
             evaluation_rect=evaluation_rect,
             progress=progress,
+        )
+
+    def save_tiled(
+        self,
+        texture: Any,
+        path: str | Path,
+        *,
+        tile_size: tuple[int, int] = (512, 512),
+        params: dict[str, Any] | None = None,
+        progress: float = 0.0,
+    ) -> Path:
+        """Save a still with tile-sized GPU textures and a CPU output image."""
+        from .tiled import save_tiled
+
+        return save_tiled(
+            self, texture, path, tile_size=tile_size, params=params, progress=progress
         )
 
     def render_many(

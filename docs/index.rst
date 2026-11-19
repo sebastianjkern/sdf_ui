@@ -9,6 +9,7 @@ functions and composable render nodes.
    :caption: Contents
 
    core
+   high_fidelity
    plotting
    api
    learning

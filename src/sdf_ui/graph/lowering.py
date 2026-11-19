@@ -255,9 +255,19 @@ class _Lowerer:
             return port
         key = (port, mode)
         if key not in self.conversions:
-            self.conversions[key] = self.emit(
-                "to_rgb" if mode == "RGB" else "to_lab", {"origTex": port}, mode=mode
-            )[0]
+            if mode == "LINEAR":
+                result = self.emit("hdr_decode", {"source": self.convert(port, "RGB")}, mode=mode)[0]
+            elif port.mode == "LINEAR":
+                rgb = self.emit(
+                    "hdr_finish", {"source": port},
+                    lambda resolve: {"tone": 0.0, "dither": 0.0}, "RGB",
+                )[0]
+                result = rgb if mode == "RGB" else self.convert(rgb, mode)
+            else:
+                result = self.emit(
+                    "to_rgb" if mode == "RGB" else "to_lab", {"origTex": port}, mode=mode
+                )[0]
+            self.conversions[key] = result
         return self.conversions[key]
 
     def fill(self, source, values):
@@ -521,9 +531,10 @@ class _Lowerer:
         if name != "blur":
             return self.blur(inputs[0], 9 if name == "blur_9" else 13, raw["n"])
         base = _fixed_integer(raw["base"], "blur base")
-        result = self.blur(
-            self.convert(inputs[0], "RGB"), 13 if base == 13 else 9, raw["n"]
-        )
+        source = inputs[0]
+        if source.mode != "LINEAR":
+            source = self.convert(source, "RGB")
+        result = self.blur(source, 13 if base == 13 else 9, raw["n"])
         return self.convert(result, inputs[0].mode)
 
     def _composite_shadow(self, inputs, raw, values):

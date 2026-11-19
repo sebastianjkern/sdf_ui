@@ -88,7 +88,8 @@ class PluginRegistry:
             return SDFTexture(op=plugin.name, inputs=inputs, params=params)
         if plugin.result == TextureKind.COLOR:
             return ColorTexture(
-                op=plugin.name, inputs=inputs, params=params, mode=plugin.mode
+                op=plugin.name, inputs=inputs, params=params,
+                mode=plugin.mode or (getattr(inputs[0], "mode", None) if inputs else None),
             )
         if plugin.result == TextureKind.FIELD:
             return FieldTexture(op=plugin.name, inputs=inputs, params=params)

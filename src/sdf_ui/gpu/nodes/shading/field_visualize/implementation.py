@@ -63,6 +63,7 @@ VISUALIZE = ShaderDifferentiation(
     (ShaderArgument("scale", (), "float"), ShaderArgument("magnitude", (), "float")),
     (ShaderArgument("destTex", (4,), "rgba8"),),
     zero_gradient_parameters=("scale", "magnitude"), behavior="constant",
+    notes="Diagnostic visualization with no parameter gradients.",
     reference=visualize_reference,
 )
 CONTOURS = ShaderDifferentiation(
@@ -71,5 +72,6 @@ CONTOURS = ShaderDifferentiation(
     (ShaderArgument("spacing", (), "float"), ShaderArgument("line_width", (), "float"), ShaderArgument("scale", (), "float")),
     (ShaderArgument("destTex", (4,), "rgba8"),),
     zero_gradient_parameters=("spacing", "line_width", "scale"), behavior="constant",
+    notes="Diagnostic contours with no parameter gradients.",
     reference=contours_reference,
 )

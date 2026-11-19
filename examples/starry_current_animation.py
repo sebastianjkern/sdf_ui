@@ -62,7 +62,7 @@ def _village():
     )
 
 
-def starry_current_scene():
+def starry_current_scene(*, linear=False):
     """Build an original village-and-cypress scene under moving sky currents."""
     phase = param("phase")
     cx, cy = CENTER
@@ -206,6 +206,18 @@ def starry_current_scene():
     cypress_glint = sdf.segment((207, 395), (202, 73), 2.0).fill(
         "#1b4961", (0.0, 0.0, 0.0, 0.0)
     )
+
+    if linear:
+        # Keep the painted textures and give the emissive shapes actual
+        # highlight headroom before compositing and finishing in linear light.
+        return sky_base.to_linear().over(
+            sky, sky_glaze, flow_lines, shadows, cross_strokes, brush_color,
+            highlights, glows, stars.ink_linear((3.5, 2.6, 0.9, 1.0)),
+            moon.ink_linear((2.4, 1.85, 0.8, 1.0)), back_layer, middle_layer,
+            foreground_layer, village_layer, roof_layer,
+            window_shapes.ink_linear((2.2, 1.15, 0.3, 1.0)),
+            cypress_layer, cypress_glint, color.film_grain().transparency(0.025),
+        )
 
     scene = sky_base.alpha_overlay(sky).alpha_overlay(sky_glaze).alpha_overlay(flow_lines)
     scene = scene.alpha_overlay(shadows).alpha_overlay(cross_strokes)

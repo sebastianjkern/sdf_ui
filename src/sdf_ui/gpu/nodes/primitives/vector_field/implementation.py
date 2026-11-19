@@ -125,6 +125,7 @@ def contract_for(name):
         (ShaderArgument("destTex", (4,), "rgba32float"),),
         zero_gradient_parameters=zero,
         behavior="constant" if zero else "smooth_for_fixed_sampling",
+        notes="Turbulence has fixed sampling controls; the other fields use continuous vector components.",
         sampling="pointwise",
         reference=reference,
         defaults={

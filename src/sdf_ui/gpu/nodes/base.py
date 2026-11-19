@@ -84,6 +84,7 @@ class ShaderFile:
     gpu_derivative: Optional[str] = None
     program: object = None
     interface: Optional[ShaderInterface] = None
+    wgsl: object = None
 
     @property
     def operation(self):
@@ -255,7 +256,7 @@ class Plugin:
     ):
         from sdf_ui.core.field import FieldTexture
 
-        if not ctx.supports_shader(self.shader.name):
+        if self.shader.wgsl is None and not ctx.supports_shader(self.shader.name):
             raise NotImplementedError(
                 f"WebGPU shader '{self.shader.name}' has not been ported to WGSL"
             )
@@ -267,19 +268,22 @@ class Plugin:
         if len(interface.inputs) != len(inputs):
             raise ValueError(f"Shader '{self.shader.name}' has invalid input count")
 
+        mode = self.mode
+        if mode is None and inputs and hasattr(inputs[0], "mode"):
+            mode = inputs[0].mode
         if self.result == TextureKind.SDF:
             texture = ctx.r32f()
         elif self.result == TextureKind.COLOR:
-            texture = ctx.rgba8()
+            texture = ctx.rgba32f() if mode == ColorSpaceMode.LINEAR else ctx.rgba8()
         elif self.result == TextureKind.FIELD:
             texture = ctx.rgba32f()
         else:
             raise ValueError(
                 f"Plugin '{self.name}' cannot render result '{self.result}' on WebGPU"
             )
-        uniforms = {} if self.make_uniforms is None else self.make_uniforms(params)
-        images = tuple(item.tex for item in inputs)
         try:
+            uniforms = {} if self.make_uniforms is None else self.make_uniforms(params)
+            images = tuple(item.tex for item in inputs)
             ctx.run_node_shader(self.shader, texture, images, uniforms)
         except BaseException:
             texture.close()
@@ -289,7 +293,4 @@ class Plugin:
             return SDFTexture(tex=texture, context=ctx)
         if self.result == TextureKind.FIELD:
             return FieldTexture(tex=texture, context=ctx)
-        mode = self.mode
-        if mode is None and inputs and hasattr(inputs[0], "mode"):
-            mode = inputs[0].mode
         return ColorTexture(tex=texture, context=ctx, mode=mode or ColorSpaceMode.LAB)

@@ -33,6 +33,10 @@ class Context:
     dispatch_config: DispatchConfig
     dispatch_groups: tuple[int, int, int]
     device_info: dict[str, Any]
+    def save_tiled(
+        self, texture: Any, path: str | Path, *, tile_size: tuple[int, int] = ...,
+        params: dict[str, Any] | None = ..., progress: float = ...,
+    ) -> Path: ...
     def __init__(
         self,
         size: tuple[int, int],

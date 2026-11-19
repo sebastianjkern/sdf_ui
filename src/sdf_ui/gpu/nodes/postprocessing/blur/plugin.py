@@ -11,40 +11,35 @@ def blur_shader(name, path):
     return shader(name, path, derivative_contract=contract, program=program, interface=interface)
 
 
-def render_blur_9(renderer, inputs, params):
+def _render_blur_passes(renderer, inputs, params, base):
     from sdf_ui.core.color import ColorTexture
 
     ctx = renderer.ctx
-    tex0 = ctx.rgba8()
-    tex1 = ctx.rgba8()
+    allocate = ctx.rgba32f if inputs[0].mode == "LINEAR" else ctx.rgba8
+    scratch = allocate()
+    output = None
+    try:
+        output = allocate()
+        source = inputs[0]
+        for _ in range(max(0, params["n"]) + 1):
+            blur_pass(ctx, f"blur_ver_{base}", scratch, source)
+            blur_pass(ctx, f"blur_hor_{base}", output, scratch)
+            source = output
+        return ColorTexture(tex=output, context=ctx, mode=inputs[0].mode)
+    except BaseException:
+        if output is not None:
+            output.close()
+        raise
+    finally:
+        scratch.close()
 
-    blur_pass(ctx, "blur_ver_9", tex0, inputs[0])
-    blur_pass(ctx, "blur_hor_9", tex1, tex0)
 
-    for _ in range(params["n"]):
-        blur_pass(ctx, "blur_ver_9", tex0, tex1)
-        blur_pass(ctx, "blur_hor_9", tex1, tex0)
-
-    _release_intermediate(ctx, tex0)
-    return ColorTexture(tex=tex1, context=ctx, mode=inputs[0].mode)
+def render_blur_9(renderer, inputs, params):
+    return _render_blur_passes(renderer, inputs, params, 9)
 
 
 def render_blur_13(renderer, inputs, params):
-    from sdf_ui.core.color import ColorTexture
-
-    ctx = renderer.ctx
-    tex0 = ctx.rgba8()
-    tex1 = ctx.rgba8()
-
-    blur_pass(ctx, "blur_ver_13", tex0, inputs[0])
-    blur_pass(ctx, "blur_hor_13", tex1, tex0)
-
-    for _ in range(params["n"]):
-        blur_pass(ctx, "blur_ver_13", tex0, tex1)
-        blur_pass(ctx, "blur_hor_13", tex1, tex0)
-
-    _release_intermediate(ctx, tex0)
-    return ColorTexture(tex=tex1, context=ctx, mode=inputs[0].mode)
+    return _render_blur_passes(renderer, inputs, params, 13)
 
 
 def render_blur(renderer, inputs, params):
@@ -53,18 +48,14 @@ def render_blur(renderer, inputs, params):
     texture = inputs[0]
     rgb = (
         texture
-        if texture.mode == "RGB"
+        if texture.mode in {"RGB", "LINEAR"}
         else renderer.render(registry.build("to_rgb", texture))
     )
     base = 13 if params["base"] == 13 else 9
     blurred = renderer.render(registry.build(f"blur_{base}", rgb, n=params["n"]))
-    if texture.mode == "RGB":
+    if texture.mode in {"RGB", "LINEAR"}:
         return blurred
     return renderer.render(registry.build("to_lab", blurred))
-
-
-def _release_intermediate(ctx, texture):
-    texture.close()
 
 
 def register_plugins(registry):

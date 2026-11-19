@@ -239,6 +239,8 @@ def _scale_spatial_params(op, params, scale):
 
     result = dict(params)
     for key in _SPATIAL_PARAMS.intersection(result):
+        if op == "blur" and key == "base":
+            continue
         result[key] = scaled(result[key])
     if op == "text":
 
@@ -454,12 +456,14 @@ class Renderer:
         if id(value) in visited:
             return
         visited.add(id(value))
-        children = self._region_children(value, registry)
+        children = self._region_children(
+            value, registry, tiled=getattr(self.ctx, "_tiled_export", False)
+        )
         for child in children:
             self._validate_region_graph(child, visited)
 
     @staticmethod
-    def _region_children(value, registry):
+    def _region_children(value, registry, *, tiled=False):
         if isinstance(value, TextureNode) and value.tex is not None:
             return ()
         if not isinstance(value, (TextureNode, MultiOutputResult)):
@@ -468,6 +472,13 @@ class Renderer:
             return value.inputs
         plugin = registry.get(value.op)
         shader = plugin.shader
+        if tiled:
+            from ..gpu.tiled import COMPOSITES, NEIGHBOR_SHADERS
+
+            if value.op in COMPOSITES or (
+                shader is not None and shader.name in NEIGHBOR_SHADERS
+            ):
+                return value.inputs
         if value.op == "output":
             return value.inputs
         if shader is None or shader.differentiation is None:
@@ -504,6 +515,15 @@ class Renderer:
             skips=self.stats.cache_skips,
         )
 
+    def _cache_node(self, node):
+        if not node.should_cache:
+            return False
+        # Tiles have distinct origins and never reuse an earlier tile's cache.
+        # Only shared inputs benefit from being retained within one tile.
+        if getattr(self.ctx, "_tiled_export", False):
+            return self._graph_ref_counts.get(id(node), 0) > 1
+        return True
+
     def _eval(self, node):
         if self._dirty_regions_enabled:
             return self._eval_dirty_layer(node)
@@ -512,14 +532,15 @@ class Renderer:
                 raise RuntimeError("Cannot use a closed texture node as an input")
             return node
 
-        cache_key = self._node_key(node)
-        if node.should_cache and cache_key in self.cache:
+        cacheable = self._cache_node(node)
+        cache_key = self._node_key(node) if cacheable else None
+        if cacheable and cache_key in self.cache:
             cached = self.cache[cache_key]
             if not getattr(getattr(cached, "tex", None), "closed", False):
                 self.stats.cache_hits += 1
                 return cached
             del self.cache[cache_key]
-        if node.should_cache:
+        if cacheable:
             self.stats.cache_misses += 1
         else:
             self.stats.cache_skips += 1
@@ -527,10 +548,14 @@ class Renderer:
         from sdf_ui.gpu.nodes.registry import registry
 
         plugin = registry.get(node.op)
-        if node.op == "alpha_overlay" and not self._dirty_regions_enabled:
+        if (
+            node.op == "alpha_overlay"
+            and not self._dirty_regions_enabled
+            and self.ctx._active_evaluation_rect is None
+        ):
             result = self._render_overlay_chain(node)
             if result is not None:
-                if node.should_cache:
+                if cacheable:
                     self.cache[cache_key] = result
                     self.stats.cache_writes += 1
                 return result
@@ -542,7 +567,7 @@ class Renderer:
             params = _scale_spatial_params(node.op, params, scale)
         result = plugin.render(self, inputs, params)
 
-        if node.should_cache:
+        if cacheable:
             self.cache[cache_key] = result
             self.stats.cache_writes += 1
         elif (
@@ -570,7 +595,7 @@ class Renderer:
             self._graph_remaining_refs[identity] = remaining
             if remaining != 0 or identity == self._root_graph_id:
                 continue
-            if getattr(child, "should_cache", True):
+            if self._cache_node(child):
                 continue
             output = self._graph_outputs.pop(identity, None)
             if output is not None:
@@ -1136,9 +1161,8 @@ class TextureNode(ABC):
         def _show(texture):
             converted = None
             if (
-                getattr(texture, "mode", None) == "LAB"
-                and conversion
-                and hasattr(texture, "to_rgb")
+                getattr(texture, "mode", None) == "LINEAR"
+                or (getattr(texture, "mode", None) == "LAB" and conversion)
             ):
                 converted = texture.to_rgb().render(texture.context)
                 texture = converted
@@ -1178,9 +1202,8 @@ class TextureNode(ABC):
             converted = None
             if self.kind == "color":
                 if (
-                    getattr(texture, "mode", None) == "LAB"
-                    and conversion
-                    and hasattr(texture, "to_rgb")
+                    getattr(texture, "mode", None) == "LINEAR"
+                    or (getattr(texture, "mode", None) == "LAB" and conversion)
                 ):
                     converted = texture.to_rgb().render(texture.context)
                     texture = converted

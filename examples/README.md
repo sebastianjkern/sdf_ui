@@ -49,6 +49,7 @@ uv run python -m examples.learning_ui --mode all --steps 250
 uv run python -m examples.learned_dashboard --steps 80
 uv run python -m examples.gpu_graph --steps 150
 uv run --extra math python -m examples.plot_gallery
+uv run python -m examples.high_fidelity_art --scale 4
 uv run python -m examples.series_plot
 uv run python -m examples.mark_gallery
 uv run python -m examples.chart_grammar
