@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from .core.sdf import SDFTexture
+from .core.color import ColorTexture
 
 def glyph(
     char: str,
@@ -13,6 +14,10 @@ def glyph(
     path: str | Path | None = ...,
     samples: int = ...,
 ) -> SDFTexture: ...
+
+def icon(value: Any, size: Any = ..., ox: Any = ..., oy: Any = ..., path: str | Path | None = ..., **text_options: Any) -> SDFTexture: ...
+
+def badge(value: Any, center: Any = ..., size: Any = ..., padding: Any = ..., radius: Any = ..., fg_color: Any = ..., bg_color: Any = ..., path: str | Path | None = ...) -> ColorTexture: ...
 
 def text(
     value: Any,

@@ -36,6 +36,39 @@ def glyph(char, scale, ox, oy, path=None, samples=16):
     )
 
 
+def icon(value, size=64, ox=0, oy=0, path=None, **text_options):
+    """Create an SDF icon from text, including bundled-font symbol glyphs."""
+    return text(value, size=size, ox=ox, oy=oy, path=path, **text_options)
+
+
+def badge(
+    value,
+    center=(0, 0),
+    size=24,
+    padding=(12, 7),
+    radius=8,
+    fg_color=(1.0, 1.0, 1.0, 1.0),
+    bg_color=(0.12, 0.32, 0.82, 1.0),
+    path=None,
+):
+    """Create a centered text badge as a composable color texture.
+
+    ``size`` is the text size in pixels. ``padding`` is horizontal and vertical
+    padding; ``radius`` is the rounded-rectangle corner radius.
+    """
+    from .gpu.nodes.common import build
+
+    metrics = measure_text(value, size=size, path=path)
+    width = metrics["width"] + 2 * padding[0]
+    height = metrics["height"] + 2 * padding[1]
+    background = build(
+        "rounded_rect", center, (width, height), radius
+    ).fill(bg_color)
+    box = (center[0] - width / 2, center[1] - height / 2, width, height)
+    label = text(value, size=size, path=path, box=box, align="center", valign="middle")
+    return background.alpha_overlay(label.fill(fg_color, (0.0, 0.0, 0.0, 0.0)))
+
+
 def text(
     value,
     size=64,
