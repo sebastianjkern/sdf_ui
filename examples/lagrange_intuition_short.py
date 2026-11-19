@@ -17,6 +17,7 @@ from pathlib import Path
 from time import monotonic, strftime
 
 from sdf_ui import Canvas, Plot, color, sdf
+from sdf_ui.widgets import Panel, progress_bar
 
 OUTPUT = Path("out/learning/lagrange_intuition_short.mp4")
 SIZE = (1280, 720)
@@ -245,21 +246,6 @@ def _level_curve(level, tint, width=2.2, *, cache=True):
     return layer if cache else layer.uncached()
 
 
-def _arrow(start, end, tint, width=3.0, head=13.0):
-    dx, dy = end[0] - start[0], end[1] - start[1]
-    length = math.hypot(dx, dy)
-    ux, uy = dx / length, dy / length
-    px, py = -uy, ux
-    base = (end[0] - ux * head, end[1] - uy * head)
-    stem = _segment(start, base, width / 2, tint, cache=False)
-    head_shape = sdf.triangle(
-        end,
-        (base[0] + px * head * 0.52, base[1] + py * head * 0.52),
-        (base[0] - px * head * 0.52, base[1] - py * head * 0.52),
-    ).uncached().fill(tint, TRANSPARENT).uncached()
-    return _overlay(stem, head_shape, cache=False)
-
-
 def _dot(center, radius, tint):
     return sdf.circle(center, radius).uncached().fill(tint, TRANSPARENT).uncached()
 
@@ -321,19 +307,18 @@ def _build_static_scenes():
         contour_scene = _overlay(contour_scene, contour)
     contour_scene = contour_scene.cache("lagrange_short_contours")
 
+    card = Panel((700, 85, 520, 540), padding=(35, 24), radius=20)
+    left, _, width, _ = card.content_box
     panels = []
     for index, (header, body, formulas, note) in enumerate(STORY):
-        # The rectangle uses half-extents for the 520 by 540 panel.
-        panel = sdf.rounded_rect((960, 355), (260, 270), 20).fill(
-            PANEL, TRANSPARENT
+        panel = card.layer(PANEL)
+        panel = _overlay(
+            panel,
+            _text(header, (left, 585, width, 36), size=19, tint=TEAL),
         )
         panel = _overlay(
             panel,
-            _text(header, (735, 585, 435, 36), size=19, tint=TEAL),
-        )
-        panel = _overlay(
-            panel,
-            _text(body, (735, 425, 440, 132), size=25, tint=WHITE, valign="top"),
+            _text(body, (left, 425, width, 132), size=25, tint=WHITE, valign="top"),
         )
         for formula_index, expression in enumerate(formulas):
             tint = (GOLD, TEAL, PURPLE)[formula_index % 3]
@@ -345,7 +330,7 @@ def _build_static_scenes():
         if note:
             panel = _overlay(
                 panel,
-                _text(note, (735, 98, 440, 62), size=18, tint=MUTED, valign="top"),
+                _text(note, (left, 98, width, 62), size=18, tint=MUTED, valign="top"),
             )
         panels.append(panel.cache(f"lagrange_short_panel_{index}"))
 
@@ -429,10 +414,12 @@ def _frame_scene(time, starts, durations, static_scenes, gradient_labels):
             short_end = _pixel((optimum + 0.20, optimum + 0.20))
             long_end = _pixel((optimum + 0.40, optimum + 0.40))
             scene = _overlay(
-                scene, _arrow(start, long_end, PURPLE, width=3.2), cache=False
+                scene, sdf.arrow(start, long_end, width=3.2).fill(PURPLE, TRANSPARENT),
+                cache=False,
             )
             scene = _overlay(
-                scene, _arrow(start, short_end, GOLD, width=3.2), cache=False
+                scene, sdf.arrow(start, short_end, width=3.2).fill(GOLD, TRANSPARENT),
+                cache=False,
             )
             scene = _overlay(scene, gradient_labels, cache=False)
 
@@ -447,9 +434,10 @@ def _frame_scene(time, starts, durations, static_scenes, gradient_labels):
         label_y = min(1.13, max(0.13, level / label_x + 0.05))
         scene = _overlay(
             scene,
-            _text(
+            PLOT.annotate(
+                (label_x, label_y),
                 "xy = c",
-                (*_pixel((label_x, label_y)), 88, 24),
+                offset=(0, 7),
                 size=16,
                 tint=GOLD,
                 cache=False,
@@ -457,16 +445,11 @@ def _frame_scene(time, starts, durations, static_scenes, gradient_labels):
             cache=False,
         )
 
-    # A simple SDF progress track and clock, kept within the frame margins.
     scene = _overlay(
         scene,
-        _segment((70, 35), (1210, 35), 2.5, GRID, cache=False),
-        cache=False,
-    )
-    scene = _overlay(
-        scene,
-        _segment(
-            (70, 35), (70 + 1140 * time / DURATION, 35), 2.5, TEAL, cache=False
+        progress_bar(
+            (67.5, 32.5, 1145, 5), time / DURATION,
+            track_color=GRID, fill_color=TEAL, cache=False,
         ),
         cache=False,
     )

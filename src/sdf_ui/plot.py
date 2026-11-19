@@ -6,14 +6,13 @@ import math
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from functools import cache
-from numbers import Integral
-from typing import TYPE_CHECKING
+from numbers import Integral, Real
+from typing import Any
 
+from .core.color import ColorTexture
+from .core.expressions import Expr, _lazy_scalar
+from .core.sdf import SDFTexture
 from .util import hex_col
-
-if TYPE_CHECKING:
-    from .core.color import ColorTexture
-    from .core.sdf import SDFTexture
 
 Point = tuple[float, float]
 Box = tuple[float, float, float, float]
@@ -97,6 +96,14 @@ def _path_points(segments):
     return tuple(points)
 
 
+def _transparent_ink(tint):
+    if isinstance(tint, str):
+        tint = hex_col(tint)
+    if isinstance(tint, (tuple, list)):
+        return (*tint[:3], 0.0)
+    return (*(Expr("index", (tint, index)) for index in range(3)), 0.0)
+
+
 @dataclass(frozen=True)
 class Plot:
     """Map graph coordinates into a lower-left-origin canvas viewport.
@@ -120,11 +127,12 @@ class Plot:
         object.__setattr__(self, "x_range", _ordered_range(self.x_range, "x_range"))
         object.__setattr__(self, "y_range", _ordered_range(self.y_range, "y_range"))
 
-    def point(self, x: float, y: float) -> Point:
-        """Map a graph coordinate to the canvas, including outside the plot."""
+    def point(self, x: Any, y: Any) -> tuple[Any, Any]:
+        """Map a graph coordinate or lazy data expression to the canvas."""
         left, bottom, width, height = self.box
         x_min, x_max = self.x_range
         y_min, y_max = self.y_range
+        x, y = _lazy_scalar(x), _lazy_scalar(y)
         return (
             left + (x - x_min) / (x_max - x_min) * width,
             bottom + (y - y_min) / (y_max - y_min) * height,
@@ -283,8 +291,7 @@ class Plot:
         layer = layer.alpha_overlay(sdf.polyline(lines).stroke(axis_width, axis_color))
 
         tint = axis_color if label_color is None else label_color
-        rgb = hex_col(tint) if isinstance(tint, str) else tint
-        transparent = (*rgb[:3], 0.0)
+        transparent = _transparent_ink(tint)
 
         def label(value, x, y, align):
             label_width = max(1, len(value)) * label_size
@@ -319,3 +326,51 @@ class Plot:
                 label(y_label, axis_x - 6, top - 0.25 * label_size, "right")
             )
         return layer
+
+    def annotate(
+        self,
+        point: tuple[Any, Any],
+        label: str | SDFTexture,
+        *,
+        offset: tuple[Any, Any] = (8.0, 8.0),
+        size: float = 16.0,
+        tint="#f4f1e9",
+        leader_width: Any = None,
+        label_origin: Point = (0.0, 0.0),
+        cache: bool = True,
+    ) -> ColorTexture:
+        """Place a label at a data point plus a canvas-space offset.
+
+        Text uses the destination as its left baseline origin. An SDF label
+        translates its ``label_origin`` to the destination. A materialized SDF
+        can be a static native graph input while its position and the optional
+        leader remain trainable. Use ``cache=False`` for moving annotations.
+        """
+        from . import sdf
+
+        if isinstance(leader_width, Real) and (
+            not math.isfinite(leader_width) or leader_width <= 0
+        ):
+            raise ValueError("annotation leader_width must be finite and positive")
+        anchor = self.point(*point)
+        dx, dy = map(_lazy_scalar, offset)
+        x, y = anchor[0] + dx, anchor[1] + dy
+        if isinstance(label, SDFTexture):
+            origin_x, origin_y = label_origin
+            glyphs = label.translate((x - origin_x, y - origin_y))
+        else:
+            glyphs = sdf.text(label, size=size, ox=x, oy=y)
+        if not cache:
+            glyphs = glyphs.uncached()
+        background = _transparent_ink(tint)
+        ink = glyphs.fill(tint, background, inflate=0.2, inner=-0.5, outer=0.5)
+        if leader_width is None:
+            return ink if cache else ink.uncached()
+
+        line = sdf.segment(anchor, (x, y), _lazy_scalar(leader_width) / 2)
+        if not cache:
+            line = line.uncached()
+            ink = ink.uncached()
+        leader = line.fill(tint, background)
+        layer = (leader if cache else leader.uncached()).alpha_overlay(ink)
+        return layer if cache else layer.uncached()

@@ -2,11 +2,18 @@
 
 __docformat__ = "google"
 
+import math
 from numbers import Real
 
 from ..gpu.nodes.base import TextureKind
 from ..gpu.nodes.common import build
 from ._suggestions import unknown_name_message
+from .expressions import (
+    _lazy_scalar,
+    _scalar_maximum,
+    _scalar_minimum,
+    _select_positive,
+)
 
 
 class _OperationNamespace:
@@ -47,6 +54,57 @@ class _OperationNamespace:
 
 class SDFNamespace(_OperationNamespace):
     kind = TextureKind.SDF
+
+    def arrow(self, start, end, width=3.0, head_length=13.0, head_width=None):
+        """Build a round shaft and triangular head between two canvas points.
+
+        Widths and lengths are positive canvas measurements and may be lazy
+        expressions. Short arrows scale the head to fit. Coincident points
+        produce a round mark with the shaft's diameter.
+        """
+        for name, value in (
+            ("width", width),
+            ("head_length", head_length),
+            ("head_width", head_width),
+        ):
+            if isinstance(value, Real) and (not math.isfinite(value) or value <= 0):
+                raise ValueError(f"arrow {name} must be finite and positive")
+
+        ax, ay = map(_lazy_scalar, start)
+        bx, by = map(_lazy_scalar, end)
+        radius = _lazy_scalar(width) / 2
+        head_length = _lazy_scalar(head_length)
+        half_head_width = (
+            0.52 * head_length if head_width is None else _lazy_scalar(head_width) / 2
+        )
+        dx, dy = bx - ax, by - ay
+        length_sq = dx * dx + dy * dy
+        # At subpixel lengths use a capsule and keep a valid head inside it.
+        # This also keeps a graph compiled at positive length valid at zero.
+        direction = length_sq - 1e-6
+        if isinstance(direction, Real) and direction <= 0:
+            return build("capsule", (ax, ay), (bx, by), radius)
+        length = _scalar_maximum(length_sq, 1e-6) ** 0.5
+        ux = _select_positive(direction, dx / length, 1.0)
+        uy = _select_positive(direction, dy / length, 0.0)
+        fitted_head = _scalar_minimum(head_length, length)
+        tip_length = _select_positive(direction, fitted_head, radius / 2)
+        tip_half_width = _select_positive(
+            direction, half_head_width * (fitted_head / head_length), radius / 2
+        )
+        base_x, base_y = bx - ux * tip_length, by - uy * tip_length
+        shaft_end = (
+            _select_positive(direction, base_x, bx),
+            _select_positive(direction, base_y, by),
+        )
+        shaft = build("capsule", (ax, ay), shaft_end, radius)
+        head = build(
+            "triangle",
+            (bx, by),
+            (base_x - uy * tip_half_width, base_y + ux * tip_half_width),
+            (base_x + uy * tip_half_width, base_y - ux * tip_half_width),
+        )
+        return shaft.union(head)
 
     def polyline(self, points, radius=0.0):
         """Create a distance field from canvas points joined by line segments.

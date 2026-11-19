@@ -70,6 +70,31 @@ class Expr:
         return Expr("minimum", (self, other))
 
 
+def _lazy_scalar(value):
+    """Keep literal arithmetic cheap and defer arithmetic on live leaves."""
+    if isinstance(value, (Real, Expr)):
+        return value
+    return Expr("add", (value, 0.0))
+
+
+def _scalar_minimum(left, right):
+    if isinstance(left, Real) and isinstance(right, Real):
+        return min(left, right)
+    return Expr("minimum", (left, right))
+
+
+def _scalar_maximum(left, right):
+    if isinstance(left, Real) and isinstance(right, Real):
+        return max(left, right)
+    return Expr("maximum", (left, right))
+
+
+def _select_positive(test, positive, otherwise):
+    if isinstance(test, Real):
+        return positive if test > 0.0 else otherwise
+    return Expr("select_positive", (test, positive, otherwise))
+
+
 def param(name: str, default: Any = None) -> Expr:
     """Reference a named render parameter, with an optional fallback."""
     if not isinstance(name, str) or not name:
@@ -217,6 +242,15 @@ def _evaluate_percent(op, value, ctx):
 
 
 def _apply_math_op(op, values, tensor_type):
+    if op == "select_positive":
+        test, positive, otherwise = values
+        if any(isinstance(value, tensor_type) for value in values):
+            from ..learning.autodiff import where
+
+            condition = test.data if isinstance(test, tensor_type) else test
+            return where(condition > 0.0, positive, otherwise)
+        return _select_positive(test, positive, otherwise)
+
     if op == "index":
         value, index = values
         if isinstance(value, tensor_type):

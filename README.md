@@ -285,6 +285,29 @@ disconnected runs and a positive `radius` for a filled band. Distance is
 measured to the sampled geometry, so agreement with the original function
 depends on how well the samples capture it.
 
+### Widgets and annotations
+
+`Panel` takes a full canvas box and exposes a padded `content_box`.
+Use `shape()` for an SDF or `layer()` to paint the surface and optionally
+composite a child. `progress_bar()` paints a track and a fill for a
+normalized value. Both accept lazy expressions for their geometry.
+
+```python
+from sdf_ui import param
+from sdf_ui.widgets import Panel, progress_bar
+
+panel = Panel((32, 40, 240, 104), padding=(14, 12), radius=12)
+x, y, width, _ = panel.content_box
+bar = progress_bar((x, y, width, 8), param("fraction", 0.6))
+scene = panel.layer("#171e2b", bar, clip=True)
+```
+
+`sdf.arrow(start, end)` returns an SDF that can be filled, stroked, or
+combined with other shapes. `plot.annotate((1, sin(1)), "sample",
+offset=(16, 12), leader_width=1.5)` adds a label and leader to the sine
+plot above. Annotation offsets are measured in canvas units. The label
+can be text or an existing SDF.
+
 For development from a checkout, install [uv](https://docs.astral.sh/uv/getting-started/installation/) and run:
 
 ```bash

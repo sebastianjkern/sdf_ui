@@ -183,6 +183,36 @@ layout-trainer checkpoints or validation with best-state restoration. Pass a
 The identity is supplied by the application: update it when the callback's
 meaning, referenced data, or rule configuration changes.
 
+Widgets with shared geometry
+----------------------------
+
+``Panel`` keeps its full canvas box and padded content box available for
+``Bounds`` and ``Element``. Use the same expressions for the layout and the
+render node::
+
+    from sdf_ui import param
+    from sdf_ui.learning import Bounds, Element
+    from sdf_ui.widgets import Panel
+
+    panel = Panel((16, 20, param("width"), 64), padding=(8, 6), radius=6)
+    element = Element(
+        "summary", Bounds(*panel.box),
+        content_bounds=Bounds(*panel.content_box),
+    )
+    field = panel.shape()
+
+``progress_bar`` and ``sdf.arrow`` also compose supported primitives, so a
+compiled graph can backpropagate to the progress value, box, or arrow endpoints.
+For trainable dimensions, use positive expressions such as ``softplus()``.
+A parameter initialized inside the progress range can change the fill length
+through a pixel loss.
+
+For a trainable plot annotation, render the label SDF once on the same
+``Canvas`` and pass that texture to ``Plot.annotate`` with its original
+``label_origin``. The GPU graph can then train the position or leader while
+using the label as a static input. Direct string annotations use the normal
+display renderer for text shaping.
+
 Procedural dashboard example
 ----------------------------
 
