@@ -3,6 +3,7 @@ API Reference
 
 .. automodule:: sdf_ui
    :members:
+   :exclude-members: Plot
    :undoc-members:
    :show-inheritance:
 
@@ -17,6 +18,22 @@ statistics for repeated evaluations.
    :members: TextureNode, Renderer, RenderStats, RenderCacheInfo, MultiOutputResult
    :undoc-members:
    :show-inheritance:
+
+Plotting and widgets
+--------------------
+
+See :doc:`plotting` for a walkthrough.
+
+.. autoclass:: sdf_ui.plot.Plot
+   :members:
+
+.. automodule:: sdf_ui.plot
+   :members: PlotSpec, PlotLayers, Layer, Geometry, aes, geom_point, geom_line, geom_linerange, geom_errorbar, geom_ribbon, geom_rect, geom_col, geom_bar, geom_histogram, facet_wrap, labs
+   :imported-members:
+
+.. automodule:: sdf_ui.widgets
+   :members: Panel, progress_bar
+   :imported-members:
 
 Learning API
 ------------

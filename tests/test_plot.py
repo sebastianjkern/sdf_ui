@@ -5,6 +5,91 @@ import pytest
 
 from examples.lagrange_intuition_short import PLOT, _level_curve
 from sdf_ui import Canvas, Plot, sdf
+from sdf_ui.graph import GraphTrainer
+from sdf_ui.learning import Objective, ParameterStore
+
+
+def test_plot_maps_both_directions_with_independent_scales():
+    plot = Plot((12, 8, 80, 45), (-2, 2), (-1, 3))
+    assert plot.point(-2, -1) == (12, 8)
+    assert plot.point(2, 3) == (92, 53)
+    assert plot.data_point(*plot.point(3, -0.5)) == pytest.approx((3, -0.5))
+
+
+def test_ribbon_has_no_ink_seam_at_a_join_and_preserves_gaps():
+    plot = Plot((4, 4, 24, 20), (0, 12), (0, 10))
+    samples = [(1, 3, 7), (2, 3, 7), (4, 3, 7), None, (10, 3, 7), (8, 3, 7)]
+    with Canvas((32, 28)) as canvas, canvas.render(plot.ribbon(samples)) as output:
+        field = np.frombuffer(output.tex.read(), dtype=np.float32).reshape(28, 32)
+    assert field[14, 8] <= -0.5  # First run's internal join.
+    assert field[14, 16] > 0  # Gap between runs.
+    assert field[14, 22] < 0  # Second run travels right to left.
+
+
+def test_axes_format_auto_ticks_and_validate_crossings():
+    plot = Plot((30, 30, 100, 80), (0, 1), (-2, 4))
+    formatted = []
+
+    def format_y(value):
+        formatted.append(value)
+        return f"{value:g} V"
+
+    plot.axes(x_ticks=(), y_ticks=None, y_format=format_y, x_axis_at=2)
+    assert formatted == [-2, -1, 0, 1, 2, 3, 4]
+    with pytest.raises(ValueError, match="y_axis_at"):
+        plot.axes(y_axis_at=2)
+
+
+def test_data_series_preserve_gaps_and_signed_bar_geometry():
+    plot = Plot((4, 8, 32, 24), (0, 4), (-2, 2))
+    path = plot.line([(0, 0), (1, 1), None, (2, -1), (3, 0)], radius=1)
+    first, second = path.inputs
+    assert dict(first.params)["b"] == plot.point(1, 1)
+    assert dict(second.params)["a"] == plot.point(2, -1)
+    bars = plot.bars([(1, -1), (2, 1)], width=0.5)
+    for node, x, y in zip(bars.inputs, (1, 2), (-0.5, 0.5)):
+        params = dict(node.params)
+        assert params["center"] == plot.point(x, y)
+        assert params["size"] == (2, 3)
+
+
+def test_series_train_through_shared_data_coordinate():
+    plot = Plot((3, 3, 26, 22), (0, 2), (-1, 1))
+    weights = ParameterStore()
+    value = weights.bind("value", 0.2)
+
+    def roots(y):
+        points = [(0.5, -0.35), (1.5, y)]
+        line = plot.clip(plot.line(points, radius=1))
+        return {
+            "bars": plot.clip(plot.bars(points, width=0.5)),
+            "line": line,
+            "markers": plot.scatter(points, radius=2).ink("#66e0c5").to_rgb(),
+        }
+
+    with Canvas((32, 28)) as canvas:
+        with canvas.compile(roots(0.55)) as target:
+            with (
+                target.snapshot("bars") as bars,
+                target.snapshot("line") as line,
+                target.snapshot("markers") as markers,
+                canvas.compile(roots(value), weights) as graph,
+            ):
+                objective = (
+                    Objective()
+                    .mse("bars", bars)
+                    .mse("line", line)
+                    .mse("markers", markers)
+                )
+                with graph.run(objective) as execution:
+                    initial = execution.loss
+                    execution.backward()
+                assert np.isfinite(weights["value"].grad).all()
+                assert abs(float(weights["value"].grad)) > 0
+                with GraphTrainer(graph, objective, lr=0.04) as trainer:
+                    trainer.fit(6)
+                with graph.run(objective) as execution:
+                    assert execution.loss < initial
 
 
 @pytest.mark.parametrize("scale", [1, 2])

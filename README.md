@@ -2,24 +2,19 @@
 
 # SDF UI
 
-What started [here](https://github.com/sebastianjkern/metaballs), has become a not yet fully featured but relatively complex 2d graphics rendering engine with gpu support.
+SDF UI is a GPU-backed Python framework for high-fidelity generative art.
+Build stills and animations from signed distance fields, procedural color,
+vector fields, and composable effects. Use the same scene at preview or export
+resolution, and drive geometry and shading with parameters that can be animated
+or optimized.
 
-SDF UI is the result of the experiment if you can extend the idea of MSDF text rendering and SDF based circle rendering to all standard 2D rendering stuff. Why don't draw rectangles, bezier curves, lines etc. with SDFs aswell. While in theory this is quiet slow, it offers great features like morphing between figures pretty much out of the box. And the determining factor of rendering cost is the size of the canvas and not the complexity of the object. For example the grid in the picture down below has pretty much the same cost as the rounded rectangle. And pretty much everything can be drawn with antialiasing without additional cost. And depending on what you're drawing, the rendered textures can be used again. 
+Start with the [art and animation examples](examples/README.md), including
+[Starry Current](#starry-current), [animated vector fields](#animated-fields),
+and the [preset gallery](examples/preset_gallery.py). See
+[What can I do with this engine?](#what-can-i-do-with-this-engine) for more renders.
 
-Many SDFs used by this project were originally created by [Inigo Quilez](https://iquilezles.org/articles/distfunctions2d/).
-
-
-### Why are basic Features not available?
-
-All roads lead to Rome. Many basic sdf shapes can be expressed trough boolean operations of other basic shapes. For example convex polygons can be expressed as the intersection of halfplanes. Non-convex polygons are not as simple, but can be expressed trough this technique aswell. The trick is to render the union of convex polygons that make up the non-convex polygon.
-
-The library also provides arc, half-plane, capsule, and polygon primitives directly.
-
-### But why should i use the sdf-ui library?
-
-While some functionality is not yet available or quiet expensive, many features are cost effective in comparison. While traditional render pipelines (atleast if they don't copy memory) have problems with repetition (Drawing 1000 circles is more expensive than 1 circle), sdf-ui can flex its muscles, because drawing equally spaced objects multiple times comes at a fixed cost. Drawing 1000 circles in a grid is not more expansive than drawing 100 circles in a grid.
-
-This makes the renderer especially interesting for procedural 2D scenes, repeated motifs, boolean-heavy shape construction, and soft effects like antialiasing, outlines, masks, and morphing. Instead of paying mainly for scene complexity, many operations behave more like full-canvas field evaluation, which opens up a different set of strengths than a traditional draw-call-based backend.
+The project grew out of a [metaballs experiment](https://github.com/sebastianjkern/metaballs).
+Many of the distance functions are based on [Inigo Quilez’s SDF reference](https://iquilezles.org/articles/distfunctions2d/).
 
 ### Installation:
 
@@ -253,37 +248,43 @@ For fixed boxes, `align="justify"` expands word spacing on non-final lines.
 `overflow="visible"`, `"clip"`, and `"error"` select box overflow behavior;
 `trim_trailing_spaces=False` preserves the final space advance.
 
-### Graphing
+### Plotting
 
-`Plot` maps mathematical coordinates into a canvas rectangle. Its axes,
-grid and labels form a transparent layer, and each curve returns a distance
-field that can be stroked or composed with other SDFs.
+`sdf_ui.plot` provides basic plotting layers for annotations, explanatory
+graphics, and data overlays in a scene.
+
+| Workflow | Available features |
+| --- | --- |
+| `Plot(box, x_range, y_range)` | Axes and annotations, sampled function and parametric curves, lines, points, bars, ribbons, and rectangles |
+| `Plot.from_data(rows, aes(...))` | Layered marks, grouped bars, histograms, ribbons and error bars, categorical legends, and facets with shared scales |
 
 ```python
 from math import sin
 from sdf_ui import Canvas, Plot, color
 
-plot = Plot(box=(72, 60, 504, 252), x_range=(-4, 4), y_range=(-1.5, 1.5))
-axes = plot.axes(
-    x_ticks=(-4, -2, 0, 2, 4), y_ticks=(-1, 1), x_label="x", y_label="y"
+plot = Plot((72, 60, 504, 252), (-4, 4), (-1.5, 1.5))
+scene = color.clear("#10151f").over(
+    plot.axes(x_ticks=None, y_ticks=None),
+    plot.curve(sin).stroke(3, "#62dfcf"),
 )
-wave = plot.curve(sin).stroke(3, "#62dfcf")
-scene = color.clear("#10151f").alpha_overlay(axes).alpha_overlay(wave)
 with Canvas((640, 360)) as canvas:
-    scene.save("plot.png", ctx=canvas)
+    canvas.save(scene, "wave.png")
 ```
 
-`Plot.curve(f)` graphs `y = f(x)`, and `Plot.parametric(f, domain)` graphs
-a callable returning `(x(t), y(t))`. Both refine the sampled line according
-to `tolerance` in canvas units and clip its centerline to the plot rectangle.
-Increase `samples` for highly oscillatory functions, and pass known
-discontinuities in `breaks` to keep the branches separate.
+<table>
+    <tr>
+        <th>Parametric curves</th>
+        <th>Forecast ribbon and error bars</th>
+    </tr>
+    <tr>
+        <td><img src="docs/assets/examples/plot_parametric_curves.png" width="420" alt="A five-petal rose and a Lissajous curve on separate axes"></td>
+        <td><img src="docs/assets/examples/plot_solar_forecast.png" width="420" alt="A solar generation forecast with a blue uncertainty band and gold sensor readings with capped error bars"></td>
+    </tr>
+</table>
 
-`sdf.polyline(points)` also accepts sampled canvas points directly. The GPU
-computes Euclidean distance to the nearest line segment. Use `None` between
-disconnected runs and a positive `radius` for a filled band. Distance is
-measured to the sampled geometry, so agreement with the original function
-depends on how well the samples capture it.
+Regenerate these with `uv run --extra math python -m examples.plot_gallery`
+and `uv run python -m examples.plot_distributions`. See the
+[plotting guide](docs/plotting.rst) for layered examples and live parameters.
 
 ### Widgets and annotations
 

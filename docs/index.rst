@@ -9,6 +9,7 @@ functions and composable render nodes.
    :caption: Contents
 
    core
+   plotting
    api
    learning
    shader_differentiation

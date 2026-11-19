@@ -48,6 +48,11 @@ These scripts are not entries in the catalog above. Run them as modules; use
 uv run python -m examples.learning_ui --mode all --steps 250
 uv run python -m examples.learned_dashboard --steps 80
 uv run python -m examples.gpu_graph --steps 150
+uv run --extra math python -m examples.plot_gallery
+uv run python -m examples.series_plot
+uv run python -m examples.mark_gallery
+uv run python -m examples.chart_grammar
+uv run python -m examples.plot_distributions
 uv run python -m examples.center_div --steps 60
 uv run python -m examples.benchmark_graph --help
 uv run python -m examples.benchmark_dirty_animation --help
@@ -180,3 +185,27 @@ render and a labeled side-by-side comparison to
 ``aurora_landscape`` is a standalone illustration example combining a warped
 SDF ribbon, radial glow, a crescent moon, layered hills, and small star fields.
 It writes ``out/examples/aurora_landscape.png``.
+
+``plot_gallery`` renders three math graphics under ``out/examples/plot_gallery/``:
+sampled sine and cosine functions with an annotated maximum, rose and Lissajous
+parametric curves, and objective contours meeting a circular constraint. It uses
+``Plot.axes``, ``curve``, ``parametric``, and ``annotate``, with equation labels
+from ``sdf.math``. Install the optional MathText dependency with ``uv sync
+--extra math`` before running it. Use ``--only functions``, ``--only parametric``,
+or ``--only optimization`` to render one panel.
+
+``series_plot`` combines signed bars, a line with circular markers, formatted
+axis ticks, and a data annotation tied to a render parameter. It writes
+``out/examples/series_plot.png``.
+
+``mark_gallery`` renders a scatter plot, a grouped bar chart, and a
+diverging bar chart in ``out/examples/mark_gallery/``.
+
+``chart_grammar`` demonstrates shared scales, facets, and layered intervals
+as well as grouped counting bars. It writes two images to
+``out/examples/chart_grammar/``.
+
+``plot_distributions`` renders a faceted latency histogram, a forecast with
+a ribbon and capped error bars, a schedule made from rectangle layers, and a
+sensor envelope drawn with direct ribbon and rectangle methods. Outputs are
+written to ``out/examples/plot_distributions/``.
