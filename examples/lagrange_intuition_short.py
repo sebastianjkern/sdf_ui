@@ -17,6 +17,7 @@ from pathlib import Path
 from time import monotonic, strftime
 
 from sdf_ui import Canvas, Plot, color, sdf
+from sdf_ui.anim import timeline_position
 from sdf_ui.widgets import Panel, progress_bar
 
 OUTPUT = Path("out/learning/lagrange_intuition_short.mp4")
@@ -89,7 +90,11 @@ STORY = (
     (
         "THE MULTIPLIER",
         "Lambda is the exchange rate: how\nmuch the best value changes when\nthe constraint loosens.",
-        (r"x^2+y^2=b", r"f_{\max}(b)=\frac{b}{2}", r"\lambda=\frac{df_{\max}}{db}=\frac{1}{2}"),
+        (
+            r"x^2+y^2=b",
+            r"f_{\max}(b)=\frac{b}{2}",
+            r"\lambda=\frac{df_{\max}}{db}=\frac{1}{2}",
+        ),
         "The multiplier is the marginal value\nof a little extra budget.",
     ),
 )
@@ -144,9 +149,8 @@ def _speak_clips(directory, speed=150):
         ):
             raise RuntimeError("speech clips were synthesized with mismatched formats")
         clips.append(samples)
-        clip_duration = (
-            len(samples)
-            / (params.framerate * params.nchannels * params.sampwidth)
+        clip_duration = len(samples) / (
+            params.framerate * params.nchannels * params.sampwidth
         )
         durations.append(clip_duration)
         _log(
@@ -167,9 +171,7 @@ def _speak_clips(directory, speed=150):
     )
     starts = []
     silence_frames = round(pause * wave_params.framerate)
-    silence = bytes(
-        silence_frames * wave_params.nchannels * wave_params.sampwidth
-    )
+    silence = bytes(silence_frames * wave_params.nchannels * wave_params.sampwidth)
     audio = bytearray()
     elapsed = 0.0
     for samples, clip_duration in zip(clips, durations):
@@ -183,29 +185,6 @@ def _speak_clips(directory, speed=150):
         output.setparams(wave_params._replace(nframes=0))
         output.writeframes(audio)
     return narration_path, starts, durations, pause
-
-
-def _pixel(point):
-    return PLOT.point(*point)
-
-
-def _overlay(scene, layer, *, cache=True):
-    composite = scene.alpha_overlay(layer)
-    return composite if cache else composite.uncached()
-
-
-def _segment(a, b, radius, tint, *, cache=True):
-    segment = sdf.segment(a, b, radius)
-    if not cache:
-        segment = segment.uncached()
-    layer = segment.fill(tint, TRANSPARENT)
-    return layer if cache else layer.uncached()
-
-
-def _fill_type(node, tint, *, inflate=0.0):
-    # Keep the ink color through the antialiased edge so straight-alpha
-    # compositing attenuates the glyph only once.
-    return node.fill(tint, f"{tint}00", inflate=inflate, inner=-0.5, outer=0.5)
 
 
 def _text(
@@ -228,13 +207,13 @@ def _text(
     )
     if not cache:
         text_node = text_node.uncached()
-    layer = _fill_type(text_node, tint, inflate=0.2)
+    layer = text_node.ink(tint, inflate=0.2)
     return layer if cache else layer.uncached()
 
 
 def _formula(value, center, size=34, tint=GOLD):
     node = sdf.math(value, center=center, height=None, font_size=size, inflate=0.2)
-    return _fill_type(node, tint)
+    return node.ink(tint)
 
 
 def _level_curve(level, tint, width=2.2, *, cache=True):
@@ -246,37 +225,27 @@ def _level_curve(level, tint, width=2.2, *, cache=True):
     return layer if cache else layer.uncached()
 
 
-def _dot(center, radius, tint):
-    return sdf.circle(center, radius).uncached().fill(tint, TRANSPARENT).uncached()
-
-
 def _build_static_scenes():
     """Build common plot layers and the seven reusable explanation panels."""
     scene = color.clear(BG)
 
     # Main heading and a compact problem statement.
-    scene = _overlay(
-        scene,
+    scene = scene.over(
         _text(
-            "A GEOMETRIC GUIDE TO OPTIMIZATION",
-            (66, 665, 740, 28),
-            size=17,
-            tint=MUTED,
-        ),
+            "A GEOMETRIC GUIDE TO OPTIMIZATION", (66, 665, 740, 28), size=17, tint=MUTED
+        )
     )
-    scene = _overlay(
-        scene,
+    scene = scene.over(
         _formula(
-            r"\text{Maximize }f(x,y)=xy\quad\text{on}\quad x^2+y^2=1",
+            "\\text{Maximize }f(x,y)=xy\\quad\\text{on}\\quad x^2+y^2=1",
             (640, 641),
             size=34,
             tint=WHITE,
-        ),
+        )
     )
 
     # Plot grid, axes, tick labels, and the unit-circle constraint.
-    scene = _overlay(
-        scene,
+    scene = scene.over(
         PLOT.axes(
             x_ticks=(0, 0.5, 1),
             y_ticks=(0.5, 1),
@@ -284,27 +253,21 @@ def _build_static_scenes():
             grid_color=GRID,
             x_label="x",
             y_label="y",
-        ),
+        )
     )
 
-    constraint = sdf.arc(PLOT_ORIGIN, PLOT_SCALE, 0.0, math.pi / 2).stroke(
-        3.0, TEAL
+    constraint = sdf.arc(PLOT_ORIGIN, PLOT_SCALE, 0.0, math.pi / 2).stroke(3.0, TEAL)
+    scene = scene.over(constraint)
+    scene = scene.over(
+        _formula("x^2+y^2=1", PLOT.point(0.62, 1.04), size=23, tint=TEAL)
     )
-    scene = _overlay(scene, constraint)
-    scene = _overlay(
-        scene,
-        _formula(r"x^2+y^2=1", _pixel((0.62, 1.04)), size=23, tint=TEAL),
-    )
-    scene = _overlay(
-        scene,
-        _text("constraint", (450, 100, 125, 25), size=14, tint=TEAL),
-    )
+    scene = scene.over(_text("constraint", (450, 100, 125, 25), size=14, tint=TEAL))
 
     common = scene.cache("lagrange_short_plot")
     contour_scene = color.clear(TRANSPARENT)
     for level in (0.08, 0.16, 0.24, 0.32, 0.40, 0.46):
         contour = _level_curve(level, (1.0, 0.78, 0.47, 0.42), width=1.35)
-        contour_scene = _overlay(contour_scene, contour)
+        contour_scene = contour_scene.over(contour)
     contour_scene = contour_scene.cache("lagrange_short_contours")
 
     card = Panel((700, 85, 520, 540), padding=(35, 24), radius=20)
@@ -312,64 +275,46 @@ def _build_static_scenes():
     panels = []
     for index, (header, body, formulas, note) in enumerate(STORY):
         panel = card.layer(PANEL)
-        panel = _overlay(
-            panel,
-            _text(header, (left, 585, width, 36), size=19, tint=TEAL),
-        )
-        panel = _overlay(
-            panel,
-            _text(body, (left, 425, width, 132), size=25, tint=WHITE, valign="top"),
+        panel = panel.over(_text(header, (left, 585, width, 36), size=19, tint=TEAL))
+        panel = panel.over(
+            _text(body, (left, 425, width, 132), size=25, tint=WHITE, valign="top")
         )
         for formula_index, expression in enumerate(formulas):
             tint = (GOLD, TEAL, PURPLE)[formula_index % 3]
             center_y = 330 - formula_index * 64
-            panel = _overlay(
-                panel,
-                _formula(expression, (960, center_y), tint=tint),
-            )
+            panel = panel.over(_formula(expression, (960, center_y), tint=tint))
         if note:
-            panel = _overlay(
-                panel,
-                _text(note, (left, 98, width, 62), size=18, tint=MUTED, valign="top"),
+            panel = panel.over(
+                _text(note, (left, 98, width, 62), size=18, tint=MUTED, valign="top")
             )
         panels.append(panel.cache(f"lagrange_short_panel_{index}"))
 
     scenes = []
     for index, panel in enumerate(panels):
-        base = _overlay(common, panel)
+        base = common.over(panel)
         if index >= 2:
-            base = _overlay(base, contour_scene)
+            base = base.over(contour_scene)
         scenes.append(base.cache(f"lagrange_short_section_{index}"))
 
     optimum = 1 / math.sqrt(2)
-    short_end = _pixel((optimum + 0.20, optimum + 0.20))
-    long_end = _pixel((optimum + 0.40, optimum + 0.40))
+    short_end = PLOT.point(optimum + 0.2, optimum + 0.2)
+    long_end = PLOT.point(optimum + 0.4, optimum + 0.4)
     gradient_labels = color.clear(TRANSPARENT)
-    gradient_labels = _overlay(
-        gradient_labels,
-        _formula(r"\nabla f", (short_end[0] + 30, short_end[1] + 12), size=24, tint=GOLD),
+    gradient_labels = gradient_labels.over(
+        _formula(
+            "\\nabla f", (short_end[0] + 30, short_end[1] + 12), size=24, tint=GOLD
+        )
     )
-    gradient_labels = _overlay(
-        gradient_labels,
-        _formula(r"\nabla g", (long_end[0] + 30, long_end[1] + 12), size=24, tint=PURPLE),
+    gradient_labels = gradient_labels.over(
+        _formula(
+            "\\nabla g", (long_end[0] + 30, long_end[1] + 12), size=24, tint=PURPLE
+        )
     ).cache("lagrange_short_gradient_labels")
     return scenes, gradient_labels
 
 
-def _section_at(time, starts):
-    return max(index for index, start in enumerate(starts) if start <= time)
-
-
-def _local_progress(time, section, starts, durations):
-    return min(
-        1.0,
-        max(0.0, (time - starts[section]) / max(durations[section], 0.001)),
-    )
-
-
 def _frame_scene(time, starts, durations, static_scenes, gradient_labels):
-    section = _section_at(time, starts)
-    local = _local_progress(time, section, starts, durations)
+    section, local = timeline_position(time, starts, durations)
     if section == 0:
         angle = 0.16
     elif section == 1:
@@ -387,53 +332,56 @@ def _frame_scene(time, starts, durations, static_scenes, gradient_labels):
 
     if section >= 1:
         current = _level_curve(level, GOLD, width=3.0, cache=False)
-        scene = _overlay(scene, current, cache=False)
+        scene = scene.over(current, cache=False)
     if section >= 3:
         optimum = 1 / math.sqrt(2)
-        optimum_pixel = _pixel((optimum, optimum))
+        optimum_pixel = PLOT.point(optimum, optimum)
         ring = sdf.circle(optimum_pixel, 12).uncached().stroke(2, GOLD).uncached()
-        tangent = _segment(
-            _pixel((optimum - 0.24, optimum + 0.24)),
-            _pixel((optimum + 0.24, optimum - 0.24)),
-            1.5,
-            PURPLE,
-            cache=False,
+        tangent = (
+            sdf.segment(
+                PLOT.point(optimum - 0.24, optimum + 0.24),
+                PLOT.point(optimum + 0.24, optimum - 0.24),
+                1.5,
+            )
+            .uncached()
+            .fill(PURPLE, TRANSPARENT)
+            .uncached()
         )
-        scene = _overlay(scene, tangent, cache=False)
-        scene = _overlay(scene, ring, cache=False)
+        scene = scene.over(tangent, cache=False)
+        scene = scene.over(ring, cache=False)
         if section == 3 and level < 0.499:
             other_angle = math.pi / 2 - angle
-            other_point = _pixel((math.cos(other_angle), math.sin(other_angle)))
-            scene = _overlay(
-                scene,
-                _dot(other_point, 6, GOLD),
+            other_point = PLOT.point(math.cos(other_angle), math.sin(other_angle))
+            scene = scene.over(
+                sdf.circle(other_point, 6)
+                .uncached()
+                .fill(GOLD, TRANSPARENT)
+                .uncached(),
                 cache=False,
             )
         if section >= 4:
             start = optimum_pixel
-            short_end = _pixel((optimum + 0.20, optimum + 0.20))
-            long_end = _pixel((optimum + 0.40, optimum + 0.40))
-            scene = _overlay(
-                scene, sdf.arrow(start, long_end, width=3.2).fill(PURPLE, TRANSPARENT),
+            short_end = PLOT.point(optimum + 0.2, optimum + 0.2)
+            long_end = PLOT.point(optimum + 0.4, optimum + 0.4)
+            scene = scene.over(
+                sdf.arrow(start, long_end, width=3.2).fill(PURPLE, TRANSPARENT),
                 cache=False,
             )
-            scene = _overlay(
-                scene, sdf.arrow(start, short_end, width=3.2).fill(GOLD, TRANSPARENT),
+            scene = scene.over(
+                sdf.arrow(start, short_end, width=3.2).fill(GOLD, TRANSPARENT),
                 cache=False,
             )
-            scene = _overlay(scene, gradient_labels, cache=False)
+            scene = scene.over(gradient_labels, cache=False)
 
-    point_pixel = _pixel(point)
-    scene = _overlay(
-        scene,
-        _dot(point_pixel, 8, WHITE),
+    point_pixel = PLOT.point(*point)
+    scene = scene.over(
+        sdf.circle(point_pixel, 8).uncached().fill(WHITE, TRANSPARENT).uncached(),
         cache=False,
     )
     if section >= 2:
         label_x = min(1.08, max(0.76, point[0] + 0.10))
         label_y = min(1.13, max(0.13, level / label_x + 0.05))
-        scene = _overlay(
-            scene,
+        scene = scene.over(
             PLOT.annotate(
                 (label_x, label_y),
                 "xy = c",
@@ -445,24 +393,20 @@ def _frame_scene(time, starts, durations, static_scenes, gradient_labels):
             cache=False,
         )
 
-    scene = _overlay(
-        scene,
+    scene = scene.over(
         progress_bar(
-            (67.5, 32.5, 1145, 5), time / DURATION,
-            track_color=GRID, fill_color=TEAL, cache=False,
+            (67.5, 32.5, 1145, 5),
+            time / DURATION,
+            track_color=GRID,
+            fill_color=TEAL,
+            cache=False,
         ),
         cache=False,
     )
     clock = f"{int(time // 60):01d}:{int(time % 60):02d}"
-    scene = _overlay(
-        scene,
+    scene = scene.over(
         _text(
-            clock,
-            (1150, 8, 62, 20),
-            size=13,
-            tint=MUTED,
-            align="right",
-            cache=False,
+            clock, (1150, 8, 62, 20), size=13, tint=MUTED, align="right", cache=False
         ),
         cache=False,
     )
@@ -626,7 +570,7 @@ def render_short(output=OUTPUT):
                 frame_started = monotonic()
                 for frame_index in range(frame_count):
                     time = frame_index / FPS
-                    section = _section_at(time, starts)
+                    section, _ = timeline_position(time, starts, durations)
                     current_frame = frame_index + 1
                     _log(
                         f"Frame {current_frame}/{frame_count} "
@@ -676,7 +620,9 @@ def main(argv=None):
     print(video)
     print(poster)
     print(subtitles)
-    print(f"Render: {SIZE[0]}x{SIZE[1]}, {DURATION:.0f}s, narration pauses: {pause:.2f}s")
+    print(
+        f"Render: {SIZE[0]}x{SIZE[1]}, {DURATION:.0f}s, narration pauses: {pause:.2f}s"
+    )
 
 
 if __name__ == "__main__":

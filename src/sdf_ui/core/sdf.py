@@ -3,6 +3,7 @@
 __docformat__ = "google"
 
 from ..gpu.nodes.common import build
+from .color import _transparent_ink
 from .texture import TextureNode
 
 
@@ -33,6 +34,21 @@ class SDFTexture(TextureNode):
             bg_color=bg_color,
             inflate=inflate,
             inner=(-0.5 if is_text else -1.5) if inner is None else inner,
+            outer=outer,
+        )
+
+    def ink(self, fg_color, inflate=0.0, *, inner=-0.5, outer=0.5):
+        """Render this SDF as transparent ink with color-preserving antialiasing.
+
+        The transparent background keeps the foreground RGB values, preventing
+        straight-alpha compositing from darkening antialiased edges. This is
+        useful for text and math glyphs as well as other thin SDF marks.
+        """
+        return self.fill(
+            fg_color,
+            _transparent_ink(fg_color),
+            inflate=inflate,
+            inner=inner,
             outer=outer,
         )
 

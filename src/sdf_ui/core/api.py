@@ -8,16 +8,24 @@ from numbers import Real
 from ..gpu.nodes.base import TextureKind
 from ..gpu.nodes.common import build
 from ._suggestions import unknown_name_message
+from .color import _transparent_ink
 from .expressions import (
     _lazy_scalar,
     _scalar_maximum,
     _scalar_minimum,
     _select_positive,
+    cos,
+    sin,
 )
 
 
+def _half_dimensions(size):
+    width, height = (_lazy_scalar(value) for value in size)
+    return width / 2, height / 2
+
+
 class _OperationNamespace:
-    kind = None
+    kind: str | None = None
 
     def __getattr__(self, name):
         from ..gpu.nodes.registry import registry
@@ -54,6 +62,219 @@ class _OperationNamespace:
 
 class SDFNamespace(_OperationNamespace):
     kind = TextureKind.SDF
+
+    def union_all(self, shapes):
+        """Combine an iterable of signed distance fields with hard union.
+
+        The iterable must contain at least one SDF. Inputs stay as scene nodes,
+        so lazy parameters and shared subgraphs remain available to rendering
+        and learning.
+        """
+        from .sdf import SDFTexture
+
+        iterator = iter(shapes)
+        try:
+            result = next(iterator)
+        except StopIteration as exc:
+            raise ValueError("union_all requires at least one shape") from exc
+        if not isinstance(result, SDFTexture):
+            raise TypeError("union_all expects SDFTexture instances")
+        for shape in iterator:
+            if not isinstance(shape, SDFTexture):
+                raise TypeError("union_all expects SDFTexture instances")
+            result = result.union(shape)
+        return result
+
+    def rect_from_size(self, center, size, corner_radius=0.0, angle=0.0):
+        """Create a rectangle using full width and height measurements.
+
+        ``size`` is the full width and height. The existing ``rect`` factory
+        continues to take half extents. Center and size values may be lazy
+        expressions or trainable parameters.
+        """
+        center = tuple(_lazy_scalar(value) for value in center)
+        return build(
+            "rect",
+            center,
+            _half_dimensions(size),
+            corner_radius=corner_radius,
+            angle=angle,
+        )
+
+    def rounded_rect_from_size(self, center, size, corner_radius, angle=0.0):
+        """Create a rounded rectangle using full width and height measurements.
+
+        ``size`` is the full width and height. The existing ``rounded_rect``
+        factory continues to take half extents. Center, size, and corner-radius
+        values may be lazy expressions or trainable parameters.
+        """
+        center = tuple(_lazy_scalar(value) for value in center)
+        return build(
+            "rounded_rect",
+            center,
+            _half_dimensions(size),
+            corner_radius=corner_radius,
+            angle=angle,
+        )
+
+    def star(
+        self, center, outer_radius, inner_radius=None, rays=5, rotation=-math.pi / 2
+    ):
+        """Create a regular star from differentiable triangular wedges.
+
+        ``rays`` is a fixed integer of at least two. Center, radii, and rotation
+        may be lazy expressions or trainable parameters. Radii must remain
+        positive, with ``inner_radius`` smaller than ``outer_radius``. When
+        omitted, the inner radius is 45 percent of the outer radius.
+        """
+        from numbers import Integral
+
+        if isinstance(rays, bool) or not isinstance(rays, Integral) or rays < 2:
+            raise ValueError("star rays must be an integer of at least 2")
+        for name, value in (
+            ("outer_radius", outer_radius),
+            ("inner_radius", inner_radius),
+        ):
+            if value is not None and isinstance(value, Real):
+                if isinstance(value, bool) or not math.isfinite(value) or value <= 0:
+                    raise ValueError(f"star {name} must be finite and positive")
+        if isinstance(rotation, Real) and (
+            isinstance(rotation, bool) or not math.isfinite(rotation)
+        ):
+            raise ValueError("star rotation must be finite")
+        if (
+            isinstance(outer_radius, Real)
+            and isinstance(inner_radius, Real)
+            and inner_radius >= outer_radius
+        ):
+            raise ValueError("star inner_radius must be smaller than outer_radius")
+
+        center_x, center_y = map(_lazy_scalar, center)
+        outer_radius = _lazy_scalar(outer_radius)
+        inner_radius = (
+            outer_radius * 0.45 if inner_radius is None else _lazy_scalar(inner_radius)
+        )
+        rotation = _lazy_scalar(rotation)
+        vertices = []
+        for index in range(int(rays) * 2):
+            angle = rotation + index * math.pi / int(rays)
+            radius = outer_radius if index % 2 == 0 else inner_radius
+            vertices.append(
+                (
+                    center_x + radius * cos(angle),
+                    center_y + radius * sin(angle),
+                )
+            )
+        wedges = (
+            build(
+                "triangle",
+                (center_x, center_y),
+                vertices[index],
+                vertices[(index + 1) % len(vertices)],
+            )
+            for index in range(len(vertices))
+        )
+        return self.union_all(wedges)
+
+    def fir_tree(self, center_x, base_y, height, width, tiers=3):
+        """Build a stepped fir silhouette from triangle boughs and a trunk.
+
+        Position and dimensions accept lazy expressions or trainable parameters.
+        ``tiers`` is a fixed integer topology control of at least one. A single
+        tier is a plain triangle; larger values add stepped boughs and a trunk.
+        """
+        from numbers import Integral
+
+        if isinstance(tiers, bool) or not isinstance(tiers, Integral) or tiers < 1:
+            raise ValueError("fir_tree tiers must be an integer of at least 1")
+        for name, value in (("height", height), ("width", width)):
+            if isinstance(value, Real) and (
+                isinstance(value, bool) or not math.isfinite(value) or value <= 0
+            ):
+                raise ValueError(f"fir_tree {name} must be finite and positive")
+
+        center_x, base_y, height, width = map(
+            _lazy_scalar, (center_x, base_y, height, width)
+        )
+        if tiers == 1:
+            return build(
+                "triangle",
+                (center_x, base_y - height),
+                (center_x - width / 2, base_y),
+                (center_x + width / 2, base_y),
+            )
+
+        shapes = []
+        for index in range(int(tiers)):
+            top_fraction = 1.0 - 0.18 * index
+            bottom_fraction = 0.64 - 0.18 * index
+            half_width = width * (0.19 + 0.105 * index)
+            top_y = base_y - height * top_fraction
+            bottom_y = base_y - height * bottom_fraction
+            shapes.append(
+                build(
+                    "triangle",
+                    (center_x, top_y),
+                    (center_x - half_width, bottom_y),
+                    (center_x + half_width, bottom_y),
+                )
+            )
+        shapes.append(
+            build(
+                "rect",
+                (center_x, base_y - height * 0.04),
+                (width * 0.075, height * 0.15),
+                corner_radius=width * 0.02,
+            )
+        )
+        return self.union_all(shapes)
+
+    def isometric_cube(self, offset, cell_width, cell_height, stroke_width=2.0):
+        """Build a wireframe isometric cube from differentiable segments.
+
+        ``offset`` is the front lower vertex. ``cell_width`` and
+        ``cell_height`` are the horizontal and vertical grid steps used by the
+        diagram. All geometry values and ``stroke_width`` accept lazy
+        expressions or trainable parameters.
+        """
+        for name, value in (
+            ("cell_width", cell_width),
+            ("cell_height", cell_height),
+            ("stroke_width", stroke_width),
+        ):
+            if isinstance(value, Real) and (
+                isinstance(value, bool) or not math.isfinite(value) or value <= 0
+            ):
+                raise ValueError(f"isometric_cube {name} must be finite and positive")
+
+        x, y = map(_lazy_scalar, offset)
+        cell_width = _lazy_scalar(cell_width)
+        cell_height = _lazy_scalar(cell_height)
+        radius = _lazy_scalar(stroke_width) / 2
+        points = (
+            (x, y),
+            (x, y + cell_height),
+            (x + cell_width, y + 0.5 * cell_height),
+            (x + cell_width, y + 1.5 * cell_height),
+            (x - cell_width, y + 0.5 * cell_height),
+            (x - cell_width, y + 1.5 * cell_height),
+            (x, y + 2 * cell_height),
+        )
+        edge_indices = (
+            (0, 1),
+            (1, 3),
+            (0, 2),
+            (2, 3),
+            (1, 5),
+            (0, 4),
+            (4, 5),
+            (5, 6),
+            (3, 6),
+        )
+        return self.union_all(
+            build("capsule", points[first], points[second], radius)
+            for first, second in edge_indices
+        )
 
     def arrow(self, start, end, width=3.0, head_length=13.0, head_width=None):
         """Build a round shaft and triangular head between two canvas points.
@@ -115,7 +336,8 @@ class SDFNamespace(_OperationNamespace):
         """
         vertices = tuple(
             tuple(float(value) if isinstance(value, Real) else value for value in point)
-            if point is not None else None
+            if point is not None
+            else None
             for point in points
         )
         if isinstance(radius, Real):
@@ -196,6 +418,49 @@ class SDFNamespace(_OperationNamespace):
 
 class ColorNamespace(_OperationNamespace):
     kind = TextureKind.COLOR
+
+    def concentric_rings(self, center, radius, *, count, tint, line_width=2.0, gap=5.0):
+        """Compose equally spaced colored outlines inside a circle.
+
+        ``count`` is a fixed positive topology control. Center, radius, tint,
+        line width, and gap remain render-time inputs. Choose a count that fits
+        within the radius; the innermost ring is not clipped automatically.
+        """
+        import math
+        from numbers import Integral, Real
+
+        if isinstance(count, bool) or not isinstance(count, Integral) or count < 1:
+            raise ValueError("concentric ring count must be a positive integer")
+        for name, value, allow_zero in (
+            ("line_width", line_width, False),
+            ("gap", gap, True),
+        ):
+            if isinstance(value, Real) and (
+                isinstance(value, bool)
+                or not math.isfinite(value)
+                or value < 0
+                or (not allow_zero and value == 0)
+            ):
+                qualifier = "nonnegative" if allow_zero else "positive"
+                raise ValueError(
+                    f"concentric ring {name} must be finite and {qualifier}"
+                )
+
+        circle = SDFNamespace().circle(center, radius)
+        transparent = _transparent_ink(tint)
+        spacing = _lazy_scalar(line_width) + _lazy_scalar(gap)
+        result = self.clear(transparent)
+        for index in range(int(count)):
+            ring = circle.outline(
+                tint,
+                transparent,
+                inflate=-index * spacing,
+                width=line_width,
+            ).uncached()
+            result = result.alpha_overlay(ring)
+            if index + 1 < count:
+                result = result.uncached()
+        return result
 
     def palette(self, value):
         """Resolve a named or custom palette for reuse in color arguments."""

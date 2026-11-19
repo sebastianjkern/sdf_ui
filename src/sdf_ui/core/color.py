@@ -3,7 +3,17 @@
 __docformat__ = "google"
 
 from ..gpu.nodes.common import build
+from ..util import hex_col
+from .expressions import Expr
 from .texture import PostNamespace, TextureNode
+
+
+def _transparent_ink(color):
+    if isinstance(color, str):
+        color = hex_col(color)
+    if isinstance(color, (tuple, list)):
+        return (*color[:3], 0.0)
+    return (*(Expr("index", (color, index)) for index in range(3)), 0.0)
 
 
 class ColorSpaceMode:
@@ -22,8 +32,20 @@ class ColorTexture(TextureNode):
     def post(self):
         return PostNamespace(self)
 
-    def over(self, other):
-        return build("alpha_overlay", self, other)
+    def over(self, *layers, cache=True):
+        """Composite color layers in order using straight alpha.
+
+        With no layers, return this color node. With several layers, each later
+        layer is composited over the accumulated result. Temporary intermediate
+        composites are not cached; set ``cache=False`` to leave the final result
+        uncached as well.
+        """
+        result = self
+        for index, layer in enumerate(layers):
+            result = build("alpha_overlay", result, layer)
+            if index + 1 < len(layers):
+                result = result.uncached()
+        return result if cache else result.uncached()
 
     def mask(self, top, mask, mode="mix"):
         """Blend this layer and ``top`` through a mask using a named mode.

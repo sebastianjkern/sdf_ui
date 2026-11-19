@@ -4,6 +4,7 @@ from pathlib import Path
 
 from sdf_ui import Canvas, color, sdf
 from sdf_ui.text import measure_glyph, measure_text, span
+from sdf_ui.widgets import Panel
 
 
 def text_layout_example(output=Path("out/examples/text_layout.png")):
@@ -36,13 +37,12 @@ def text_layout_example(output=Path("out/examples/text_layout.png")):
             )["overflow"]
             left = center_x - width / 2
             bottom = center_y - height / 2
-            button = sdf.rounded_rect((center_x, center_y), (width, height), 12).fill(
-                "#263449", "#00000000"
-            )
+            panel = Panel((left, bottom, width, height), padding=(16, 0), radius=12)
+            button = panel.layer("#263449")
             text = sdf.text(
                 label,
                 size=font_size,
-                box=(left + 16, bottom, width - 32, height),
+                box=panel.content_box,
                 align="center",
                 valign="middle",
                 overflow="clip" if has_overflow else "visible",
@@ -54,9 +54,9 @@ def text_layout_example(output=Path("out/examples/text_layout.png")):
             "the final paragraph line natural.   "
         )
         paragraph_box = (40, 6, 560, 46)
-        paragraph_background = sdf.rounded_rect((320, 29), (560, 46), 10).fill(
-            "#263449", "#00000000"
-        )
+        paragraph_background = sdf.rounded_rect_from_size(
+            (320, 29), (560, 46), 10
+        ).fill("#263449", "#00000000")
         paragraph_text = sdf.text(
             paragraph,
             size=16,

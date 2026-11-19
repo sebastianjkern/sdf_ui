@@ -13,19 +13,6 @@ CENTER = (SIZE[0] / 2, SIZE[1] / 2)
 OUTPUT_DIR = Path("out/generative_art")
 
 
-def _star_points(center, outer, inner, rays=8, rotation=-math.pi / 2):
-    cx, cy = center
-    return [
-        (
-            cx + (outer if index % 2 == 0 else inner)
-            * math.cos(rotation + index * math.pi / rays),
-            cy + (outer if index % 2 == 0 else inner)
-            * math.sin(rotation + index * math.pi / rays),
-        )
-        for index in range(rays * 2)
-    ]
-
-
 def _village():
     houses = []
     roofs = []
@@ -68,13 +55,11 @@ def _village():
         )
     )
 
-    def combine(shapes):
-        result = shapes[0]
-        for shape in shapes[1:]:
-            result = result.union(shape)
-        return result
-
-    return combine(houses), combine(roofs), combine(windows)
+    return (
+        sdf.union_all(houses),
+        sdf.union_all(roofs),
+        sdf.union_all(windows),
+    )
 
 
 def starry_current_scene():
@@ -172,7 +157,9 @@ def starry_current_scene():
             outer=radius * 2.4,
         )
         glows = glows.alpha_overlay(glow)
-        star = sdf.polygon(_star_points(center, radius, radius * 0.34)).union(
+        star = sdf.star(
+            center, radius, radius * 0.34, rays=8, rotation=-math.pi / 2
+        ).union(
             sdf.circle(center, radius * 0.30)
         )
         stars = star if stars is None else stars.union(star)

@@ -10,6 +10,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 from sdf_ui import Canvas, color, param, sdf
+from sdf_ui.anim import write_gif
 from sdf_ui.learning import Adam, Parameter
 
 
@@ -102,8 +103,8 @@ def create_animation(steps=60, output=Path("out/center_div")):
 
     gif_path = output / "center_div.gif"
     motion_gif_path = output / "center_div_motion.gif"
-    _assemble_gif(learning_frame_paths, gif_path)
-    _assemble_gif(motion_frame_paths, motion_gif_path)
+    write_gif(learning_frame_paths, gif_path, duration=80)
+    write_gif(motion_frame_paths, motion_gif_path, duration=80)
 
     print(
         f"Saved {len(learning_frame_paths)} learning frames and "
@@ -114,25 +115,6 @@ def create_animation(steps=60, output=Path("out/center_div")):
         f"loss={losses[-1]:.6f}"
     )
     return gif_path
-
-
-def _assemble_gif(frame_paths, path):
-    frames = [
-        Image.open(frame_path).convert("P", palette=Image.Palette.ADAPTIVE)
-        for frame_path in frame_paths
-    ]
-    try:
-        frames[0].save(
-            path,
-            save_all=True,
-            append_images=frames[1:],
-            duration=80,
-            loop=0,
-            optimize=False,
-        )
-    finally:
-        for frame in frames:
-            frame.close()
 
 
 def _annotate_frame(

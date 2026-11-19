@@ -23,12 +23,6 @@ TITLE_TEXT_COLOR = "#f6f7f9"
 SUBTITLE_TEXT_COLOR = "#dde4ec"
 
 
-def _over(base, *layers):
-    for layer in layers:
-        base = base.alpha_overlay(layer)
-    return base
-
-
 def github_banner_example(output="out/banner.png"):
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -151,8 +145,7 @@ def github_banner_example(output="out/banner.png"):
             cache_size=192,
         ).cache("ui_sdf")
 
-        title = _over(
-            color.clear(TRANSPARENT),
+        title = color.clear(TRANSPARENT).over(
             title_sdf.fill(TITLE_ACCENT_COLOR, TRANSPARENT, inflate=1.2),
             ui_sdf.fill(TITLE_TEXT_COLOR, TRANSPARENT, inflate=1.2),
         ).cache("title")
@@ -160,8 +153,7 @@ def github_banner_example(output="out/banner.png"):
             SUBTITLE_TEXT_COLOR, TRANSPARENT, inflate=0.6
         ).cache("subtitle")
 
-        scene = _over(
-            background,
+        scene = background.over(
             warm_halo,
             cool_halo,
             grid,

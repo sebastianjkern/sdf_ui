@@ -22,7 +22,7 @@ def masked_union_example():
             (161, 453)]
         discs = [sdf.circle(point, 50).cache(f"disc_{index}") for index, point in enumerate(points)]
 
-        combined_discs = reduce(lambda x, y: x.union(y), discs).cache("combined_discs")
+        combined_discs = sdf.union_all(discs).cache("combined_discs")
         masks = [mask for _, mask in (discs[0].masked_union(disc) for disc in discs[1:])]
 
         mask = reduce(lambda m1, m2: m1.multiply(m2), masks).uncached()

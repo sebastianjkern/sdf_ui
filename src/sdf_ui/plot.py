@@ -10,9 +10,8 @@ from numbers import Integral, Real
 from typing import Any
 
 from .core.color import ColorTexture
-from .core.expressions import Expr, _lazy_scalar
+from .core.expressions import _lazy_scalar
 from .core.sdf import SDFTexture
-from .util import hex_col
 
 Point = tuple[float, float]
 Box = tuple[float, float, float, float]
@@ -94,14 +93,6 @@ def _path_points(segments):
         points.append(b)
         previous = b
     return tuple(points)
-
-
-def _transparent_ink(tint):
-    if isinstance(tint, str):
-        tint = hex_col(tint)
-    if isinstance(tint, (tuple, list)):
-        return (*tint[:3], 0.0)
-    return (*(Expr("index", (tint, index)) for index in range(3)), 0.0)
 
 
 @dataclass(frozen=True)
@@ -291,7 +282,6 @@ class Plot:
         layer = layer.alpha_overlay(sdf.polyline(lines).stroke(axis_width, axis_color))
 
         tint = axis_color if label_color is None else label_color
-        transparent = _transparent_ink(tint)
 
         def label(value, x, y, align):
             label_width = max(1, len(value)) * label_size
@@ -304,7 +294,7 @@ class Plot:
                 size=label_size,
                 box=(x, y, label_width, 1.5 * label_size),
                 align=align,
-            ).fill(tint, transparent)
+            ).ink(tint, inflate=0.2)
 
         for value, x in xt:
             layer = layer.alpha_overlay(
@@ -362,8 +352,7 @@ class Plot:
             glyphs = sdf.text(label, size=size, ox=x, oy=y)
         if not cache:
             glyphs = glyphs.uncached()
-        background = _transparent_ink(tint)
-        ink = glyphs.fill(tint, background, inflate=0.2, inner=-0.5, outer=0.5)
+        ink = glyphs.ink(tint, inflate=0.2)
         if leader_width is None:
             return ink if cache else ink.uncached()
 
@@ -371,6 +360,6 @@ class Plot:
         if not cache:
             line = line.uncached()
             ink = ink.uncached()
-        leader = line.fill(tint, background)
+        leader = line.ink(tint, inner=-1.5, outer=0.0)
         layer = (leader if cache else leader.uncached()).alpha_overlay(ink)
         return layer if cache else layer.uncached()

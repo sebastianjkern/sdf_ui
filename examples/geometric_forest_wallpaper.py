@@ -11,45 +11,6 @@ DEFAULT_SIZE = (3840, 2160)
 DEFAULT_OUTPUT = Path("out/wallpapers/liquid_glass_geometric_forest.png")
 
 
-def _merge(shapes):
-    result = shapes[0]
-    for shape in shapes[1:]:
-        result = result.union(shape)
-    return result
-
-
-def _fir_tree(center_x, base_y, height, width, tiers):
-    """Build a stepped fir silhouette from overlapping triangular boughs."""
-    if tiers == 1:
-        return sdf.triangle(
-            (center_x, base_y - height),
-            (center_x - width / 2, base_y),
-            (center_x + width / 2, base_y),
-        )
-
-    shapes = []
-    for index in range(tiers):
-        top_fraction = 1.0 - 0.18 * index
-        bottom_fraction = 0.64 - 0.18 * index
-        half_width = width * (0.19 + 0.105 * index)
-        top_y = base_y - height * top_fraction
-        bottom_y = base_y - height * bottom_fraction
-        shapes.append(
-            sdf.triangle(
-                (center_x, top_y),
-                (center_x - half_width, bottom_y),
-                (center_x + half_width, bottom_y),
-            )
-        )
-    trunk = sdf.rect(
-        (center_x, base_y - height * 0.04),
-        (width * 0.075, height * 0.15),
-        width * 0.02,
-    )
-    shapes.append(trunk)
-    return _merge(shapes)
-
-
 def geometric_forest_scene(size=DEFAULT_SIZE, animated=False):
     """Create an opaque sky, sculpted glass forest, and liquid reflections."""
     width, height = size
@@ -156,7 +117,7 @@ def geometric_forest_scene(size=DEFAULT_SIZE, animated=False):
     )
 
     # Tiny lights sit behind the canopy, like distant stars caught in glass.
-    stars = _merge(
+    stars = sdf.union_all(
         [
             sdf.circle((width * x, height * y), radius * scale)
             for x, y, radius in (
@@ -195,9 +156,11 @@ def geometric_forest_scene(size=DEFAULT_SIZE, animated=False):
         (0.80, 0.74, 0.22, 0.10),
         (0.95, 0.75, 0.23, 0.11),
     )
-    far_trees = _merge(
+    far_trees = sdf.union_all(
         [
-            _fir_tree(width * x, height * base, height * tree_height, width * tree_width, 1)
+            sdf.fir_tree(
+                width * x, height * base, height * tree_height, width * tree_width, 1
+            )
             for x, base, tree_height, tree_width in far_specs
         ]
     )
@@ -213,10 +176,12 @@ def geometric_forest_scene(size=DEFAULT_SIZE, animated=False):
         (0.95, 0.82, 0.42, 0.21),
     )
     mid_trees = [
-        _fir_tree(width * x, height * base, height * tree_height, width * tree_width, 3)
+        sdf.fir_tree(
+            width * x, height * base, height * tree_height, width * tree_width, 3
+        )
         for x, base, tree_height, tree_width in mid_specs
     ]
-    mid_forest = _merge(mid_trees).warp(flow, strength=4.0 * scale, steps=4)
+    mid_forest = sdf.union_all(mid_trees).warp(flow, strength=4.0 * scale, steps=4)
     mid_fill = mid_forest.fill(
         (0.018, 0.105, 0.14, 0.92), (0.0, 0.0, 0.0, 0.0)
     )
@@ -232,7 +197,9 @@ def geometric_forest_scene(size=DEFAULT_SIZE, animated=False):
         (0.92, 0.94, 0.49, 0.24),
     )
     front_trees = [
-        _fir_tree(width * x, height * base, height * tree_height, width * tree_width, 4)
+        sdf.fir_tree(
+            width * x, height * base, height * tree_height, width * tree_width, 4
+        )
         for x, base, tree_height, tree_width in front_specs
     ]
 
@@ -254,7 +221,7 @@ def geometric_forest_scene(size=DEFAULT_SIZE, animated=False):
     ).fill((0.31, 0.71, 0.72, 0.42), (0.0, 0.0, 0.0, 0.0))
     scene = scene.alpha_overlay(water_glints).alpha_overlay(horizon_glow)
 
-    front_forest = _merge(front_trees).warp(flow, strength=5.5 * scale, steps=4)
+    front_forest = sdf.union_all(front_trees).warp(flow, strength=5.5 * scale, steps=4)
     front_fill = front_forest.fill(
         (0.035, 0.16, 0.19, 0.88), (0.0, 0.0, 0.0, 0.0)
     )

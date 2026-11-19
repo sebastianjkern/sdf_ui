@@ -88,6 +88,41 @@ expressions or trainable parameters::
 Dynamic API namespaces
 ~~~~~~~~~~~~~~~~~~~~~~
 
+``sdf.rect`` and ``sdf.rounded_rect`` take half-width and half-height values.
+Use ``sdf.rect_from_size`` or ``sdf.rounded_rect_from_size`` when the inputs
+are full dimensions. These helpers keep lazy expressions live for training.
+``sdf.union_all`` combines a nonempty iterable of SDF nodes. ``sdf.star`` and
+``sdf.fir_tree`` build reusable geometry from parameterized triangle nodes;
+their ray and tier counts are fixed topology controls. ``sdf.isometric_cube``
+builds a learnable wireframe from segment nodes. ``color.concentric_rings``
+composes a fixed number of outlines while keeping the geometry and tint live.
+``ColorTexture.over`` composites layers in order and leaves temporary
+intermediate composites uncached::
+
+    from sdf_ui import color, param, sdf
+
+    panel = sdf.rounded_rect_from_size(
+        (param("x"), 80), (param("width"), 48), corner_radius=8
+    )
+    field = sdf.union_all((sdf.circle((40, 80), 12), panel))
+    star = sdf.star((param("star_x"), 80), 18, rays=6)
+    tree = sdf.fir_tree(100, 20, 42, 30, tiers=3)
+    cube = sdf.isometric_cube((180, 20), 10, 10, stroke_width=2)
+    rings = color.concentric_rings(
+        (140, 80), 20, count=3, tint="#ffc978", line_width=2, gap=4
+    )
+    scene = color.clear("#10151f").over(
+        field.fill("#78c7a4", "#00000000"),
+        star.fill("#ffc978", "#00000000"),
+        tree.fill("#78c7a4", "#00000000"),
+        cube.fill("#ffc978", "#00000000"),
+        rings,
+        color.radial_gradient((40, 80), "#ffffff", "#00000000", 0, 24),
+    )
+
+Pass ``cache=False`` to ``ColorTexture.over`` when the final composite is
+unique to one frame. Intermediate results remain disposable in either mode.
+
 .. automodule:: sdf_ui.core.api
    :members:
    :undoc-members:

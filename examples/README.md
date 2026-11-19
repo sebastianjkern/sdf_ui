@@ -1,6 +1,10 @@
 # Examples
 
-Run examples from the repository root after `uv sync`:
+Run examples from the repository root after `uv sync`. The catalog command
+(`python -m examples`) accepts the names in the first section below. Scripts
+in the second section are standalone modules and accept their own options.
+
+## Rendering examples
 
 ```bash
 uv run python -m examples --help
@@ -17,15 +21,69 @@ uv run python -m examples tidal_bloom
 uv run python -m examples blue_hour
 uv run python -m examples learned_score
 uv run python -m examples distance_corrections
+```
+
+The catalog also supports `all` (the default) and `--no-stats`. Run
+`uv run python -m examples --help` for the complete list of catalog names.
+
+### Catalog index
+
+| Topic | Names | What to explore |
+| --- | --- | --- |
+| Shapes and operations | `arc`, `capsule`, `complex`, `convex_polygon`, `diamond`, `ellipse`, `half_plane`, `masked_union`, `ngon`, `parallelogram`, `polygon`, `ring`, `sector` | Shape primitives, composition, and boolean operations |
+| Rendering and effects | `distance_corrections`, `isolines`, `light`, `neuromorphism`, `render_api`, `transparency`, `vortices`, `voronoi` | Render controls, fields, lighting, and color effects |
+| Text | `font`, `text`, `text_layout`, `text_opentype` | Font selection, layout, shaping, and rendering |
+| Animation and artwork | `anim`, `art`, `blue_hour`, `github`, `striped_circles`, `tidal_bloom`, `field_flow`, `starry_current`, `ic` | Animated scenes and finished compositions |
+| Learning | `learned_score`, `pd` | Learned layout and partial derivative visualization |
+| Vector fields | `procedural_fields` | Finite repetition and composable fields |
+| Geometry transforms | `rotation` | Shape rotation |
+| Presets | `preset_gallery` | Palette and field presets |
+
+## Learning and standalone examples
+
+These scripts are not entries in the catalog above. Run them as modules; use
+`--help` for each script's options:
+
+```bash
 uv run python -m examples.learning_ui --mode all --steps 250
 uv run python -m examples.learned_dashboard --steps 80
 uv run python -m examples.gpu_graph --steps 150
 uv run python -m examples.center_div --steps 60
+uv run python -m examples.benchmark_graph --help
+uv run python -m examples.benchmark_dirty_animation --help
+uv run python -m examples.geometric_forest_animation --help
+uv run python -m examples.geometric_forest_wallpaper --help
+uv run python -m examples.optimize_circle --help
+uv run python -m examples.shader_optimization --help
+uv run python -m examples.high_level_learning
+uv run python -m examples.contextual_graph_learning
+uv run python -m examples.dawn_example
+uv run python -m examples.distance_corrections_example
+uv run python -m examples.field_flow_animation
+uv run python -m examples.generative_art_animation
+uv run python -m examples.github_banner_example
+uv run python -m examples.kinetic_city_animation
+uv run python -m examples.learned_rule_art
+uv run python -m examples.procedural_fields_example
+uv run python -m examples.starry_current_animation
+uv run python -m examples.text_layout_example
+uv run python -m examples.text_opentype_example
+uv run python -m examples.transparency_example
+uv run python -m examples.vortex_field_example
 ```
 
-The first command lists the original rendering examples. The learning and GPU
-examples have their own command-line options; append `--help` for details.
-Generated images and checkpoints go under `out/`.
+The narrated optimization video also requires ffmpeg and espeak-ng. Generated
+images, videos, and checkpoints are generally written under `out/`.
+
+## Catalog-only examples
+
+These examples are available through `python -m examples NAME`; they do not
+define a standalone module entry point:
+
+`arc`, `capsule`, `complex`, `convex_polygon`, `diamond`, `ellipse`, `font`,
+`half_plane`, `ic`, `isolines`, `light`, `masked_union`, `neuromorphism`,
+`ngon`, `parallelogram`, `pd`, `polygon`, `ring`, `rotation`, `sector`,
+`striped_circles`, `text`, and `voronoi`.
 
 The standalone aurora illustration can be rendered with
 `uv run python -m examples.aurora_landscape`.

@@ -3,12 +3,51 @@
 __docformat__ = "google"
 
 from contextlib import ExitStack
+from math import isfinite
+from numbers import Integral, Real
 
 import cv2
 
 from .log import logger
 
 _MAX_DIRTY_ANIMATION_NODES = 96
+
+
+def timeline_position(time, starts, durations):
+    """Return the active section and its clamped progress for a timeline.
+
+    ``starts`` must be strictly increasing and pair with positive ``durations``.
+    Time before the first section maps to its start; time in gaps or after the
+    final section maps to the preceding section at progress one.
+    """
+    if isinstance(time, bool) or not isinstance(time, Real) or not isfinite(time):
+        raise ValueError("time must be a finite number")
+    starts = tuple(starts)
+    durations = tuple(durations)
+    if not starts or len(starts) != len(durations):
+        raise ValueError("starts and durations must have the same nonzero length")
+    if any(
+        isinstance(value, bool) or not isinstance(value, Real) or not isfinite(value)
+        for value in starts
+    ):
+        raise ValueError("section starts must be finite numbers")
+    if any(first >= second for first, second in zip(starts, starts[1:])):
+        raise ValueError("section starts must be strictly increasing")
+    if any(
+        isinstance(value, bool)
+        or not isinstance(value, Real)
+        or not isfinite(value)
+        or value <= 0
+        for value in durations
+    ):
+        raise ValueError("section durations must be finite positive numbers")
+
+    section = max(
+        (index for index, start in enumerate(starts) if start <= time),
+        default=0,
+    )
+    progress = (time - starts[section]) / durations[section]
+    return section, min(1.0, max(0.0, progress))
 
 
 def _dirty_animation_node_count(scene):
@@ -18,7 +57,9 @@ def _dirty_animation_node_count(scene):
     visited = set()
     while pending:
         node = pending.pop()
-        if id(node) in visited or not isinstance(node, (TextureNode, MultiOutputResult)):
+        if id(node) in visited or not isinstance(
+            node, (TextureNode, MultiOutputResult)
+        ):
             continue
         visited.add(id(node))
         if isinstance(node, TextureNode) and node.tex is not None:
@@ -48,7 +89,12 @@ def _write_mp4(path, image_paths, fps):
     from math import isfinite
     from numbers import Real
 
-    if isinstance(fps, bool) or not isinstance(fps, Real) or not isfinite(fps) or fps <= 0:
+    if (
+        isinstance(fps, bool)
+        or not isinstance(fps, Real)
+        or not isfinite(fps)
+        or fps <= 0
+    ):
         raise ValueError("fps must be a finite positive number")
     image_paths = list(image_paths)
     if not image_paths:
@@ -126,8 +172,6 @@ def save_animation(
     from numbers import Integral, Real
     from pathlib import Path
 
-    from PIL import Image
-
     if isinstance(frames, bool) or not isinstance(frames, Integral) or frames < 1:
         raise ValueError("frames must be a positive integer")
     if isinstance(fps, bool) or not isinstance(fps, Real) or fps <= 0:
@@ -197,7 +241,9 @@ def save_animation(
                     # The dirty cache owns intermediate render targets for the session.
                     owned = {}
                     for _, state in renderer_scope._dirty_layer_cache.values():
-                        outputs = state[1] if isinstance(state[1], tuple) else (state[1],)
+                        outputs = (
+                            state[1] if isinstance(state[1], tuple) else (state[1],)
+                        )
                         for output in outputs:
                             texture = getattr(output, "tex", None)
                             if texture is not None:
@@ -206,22 +252,54 @@ def save_animation(
                         texture.close()
 
         if suffix == ".gif":
-            images = [
-                Image.open(frame).convert("P", palette=Image.Palette.ADAPTIVE)
-                for frame in frame_paths
-            ]
-            try:
-                images[0].save(
-                    path,
-                    save_all=True,
-                    append_images=images[1:],
-                    duration=max(1, round(1000 / fps)),
-                    loop=0,
-                    optimize=False,
-                )
-            finally:
-                for image in images:
-                    image.close()
+            write_gif(frame_paths, path, duration=max(1, round(1000 / fps)))
         else:
             _write_mp4(path, frame_paths, fps)
+    return path
+
+
+def write_gif(image_paths, path, *, duration=100, loop=0):
+    """Encode existing image frames as a GIF and return its path.
+
+    ``duration`` is the frame delay in milliseconds. ``loop=0`` repeats
+    forever, as specified by the GIF format.
+    """
+    from pathlib import Path
+
+    from PIL import Image
+
+    if isinstance(duration, bool) or not isinstance(duration, Integral) or duration < 1:
+        raise ValueError("duration must be a positive integer number of milliseconds")
+    if isinstance(loop, bool) or not isinstance(loop, Integral) or loop < 0:
+        raise ValueError("loop must be a non-negative integer")
+    image_paths = tuple(image_paths)
+    if not image_paths:
+        raise ValueError("at least one image frame is required")
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    frames = []
+    try:
+        expected_size = None
+        for image_path in image_paths:
+            with Image.open(image_path) as image:
+                if expected_size is None:
+                    expected_size = image.size
+                elif image.size != expected_size:
+                    raise ValueError(
+                        f"GIF frame {image_path} has size {image.width}x{image.height}, "
+                        f"expected {expected_size[0]}x{expected_size[1]}"
+                    )
+                frames.append(image.convert("P", palette=Image.Palette.ADAPTIVE))
+        frames[0].save(
+            path,
+            save_all=True,
+            append_images=frames[1:],
+            duration=int(duration),
+            loop=int(loop),
+            optimize=False,
+        )
+    finally:
+        for frame in frames:
+            frame.close()
     return path

@@ -62,3 +62,15 @@ GPU optimizers
    :members:
    :undoc-members:
    :show-inheritance:
+
+Animation helpers
+-----------------
+
+``sdf_ui.anim.timeline_position`` maps a time value into a section index and
+clamped local progress. ``sdf_ui.anim.write_gif`` assembles existing image
+frames while closing image resources and checking that all frame sizes match.
+
+.. automodule:: sdf_ui.anim
+   :members:
+   :undoc-members:
+   :show-inheritance:

@@ -18,6 +18,7 @@ from PIL import Image, ImageDraw
 from sdf_ui import Canvas, color, input_value, sdf
 from sdf_ui.graph import GraphCase, GraphDatasetTrainer
 from sdf_ui.learning import Bounds, Element, GaussianPolicy, Layout, Objective
+from sdf_ui.widgets import Panel
 
 HEIGHT = 72
 MARGIN = 8
@@ -113,17 +114,18 @@ def make_layout(width, content, card_bounds, *, inputs=None):
 def make_scene(bounds, content):
     """Create SDF card fields and a rendered dashboard preview."""
     fields = [
-        Element(name, box).shape(corner_radius=4) for name, box in zip(NAMES, bounds)
+        Panel((box.x, box.y, box.width, box.height), radius=4).shape()
+        for box in bounds
     ]
     scene = color.clear("#111c2a")
-    header = sdf.rect((28, HEIGHT - 10), (20, 2), corner_radius=2)
+    header = sdf.rect_from_size((28, HEIGHT - 10), (40, 4), corner_radius=2)
     scene = scene.over(header.fill("#a2b4c6", (0, 0, 0, 0)))
     for field, box, length, tint in zip(fields, bounds, content, COLORS):
         scene = scene.over(field.fill(tint, (0, 0, 0, 0)))
         # Content bars represent measured content. They deliberately are not
         # clipped, so content that does not fit is visible in the preview.
-        bar = sdf.rect(
-            (box.x + 3 + length / 2, CARD_Y + 13), (length / 2, 2), corner_radius=2
+        bar = sdf.rect_from_size(
+            (box.x + 3 + length / 2, CARD_Y + 13), (length, 4), corner_radius=2
         )
         scene = scene.over(bar.fill("#e8f1f3", (0, 0, 0, 0)))
     return fields, scene.to_rgb()

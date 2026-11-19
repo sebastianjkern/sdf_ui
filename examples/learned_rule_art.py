@@ -29,14 +29,6 @@ PALETTE = (
 )
 
 
-def _union(shapes):
-    shapes = iter(shapes)
-    result = next(shapes)
-    for shape in shapes:
-        result = result.union(shape)
-    return result
-
-
 def make_learned_layout():
     """Find a rhythmic, centered layout from four composition rules."""
     parameters = ParameterStore()
@@ -136,7 +128,7 @@ def build_score(layout, parameters, widths, heights, names):
         sdf.rect((WIDTH / 2, HEIGHT - y), (WIDTH / 2 - 52, 0.55))
         for y in (54, 104, 150, BASELINE, 542)
     ]
-    guides = _union(guide_shapes).fill(
+    guides = sdf.union_all(guide_shapes).fill(
         (0.16, 0.22, 0.30, 0.15), (0.0, 0.0, 0.0, 0.0)
     )
     ground = sdf.rect((WIDTH / 2, HEIGHT - BASELINE), (WIDTH / 2 - 42, 1.2)).fill(
@@ -171,14 +163,14 @@ def build_score(layout, parameters, widths, heights, names):
         caps.append(sdf.circle((center_x, top_y), 4.2))
         tops.append((center_x, top_y))
 
-    cap_layer = _union(caps).fill(
+    cap_layer = sdf.union_all(caps).fill(
         (0.98, 0.72, 0.27, 0.98), (0.0, 0.0, 0.0, 0.0)
     )
     connectors = [
         sdf.capsule(tops[index], tops[index + 1], 1.55)
         for index in range(BAR_COUNT - 1)
     ]
-    connector_layer = _union(connectors).fill(
+    connector_layer = sdf.union_all(connectors).fill(
         (0.08, 0.47, 0.59, 0.68), (0.0, 0.0, 0.0, 0.0)
     )
 

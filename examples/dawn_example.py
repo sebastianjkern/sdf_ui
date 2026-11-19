@@ -7,12 +7,6 @@ WIDTH = 1000
 HEIGHT = 1250
 
 
-def _over(base, *layers):
-    for layer in layers:
-        base = base.alpha_overlay(layer)
-    return base
-
-
 def dawn_example(output="dawn.png"):
     output = Path(output)
     cache = {}
@@ -88,8 +82,7 @@ def dawn_example(output="dawn.png"):
         # If your installed sdf_ui version exposes it under the new API,
         # add it here as another overlay layer.
 
-        scene = _over(
-            background,
+        scene = background.over(
             sea,
             sun,
             *stripe_layers,
