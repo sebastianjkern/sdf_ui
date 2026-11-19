@@ -20,6 +20,7 @@ from .core.palette import Palette, get_palette, palettes
 from .gpu.context import Context, DispatchConfig
 from .log import logger
 from .plot import Plot
+from .text import badge, glyph, icon
 
 Canvas = Context
 sdf = SDFNamespace()
@@ -28,6 +29,7 @@ field = FieldNamespace()
 
 __all__ = [
     "Canvas",
+    "badge",
     "Context",
     "DispatchConfig",
     "ColorTexture",
@@ -38,6 +40,8 @@ __all__ = [
     "color",
     "field",
     "get_palette",
+    "glyph",
+    "icon",
     "core",
     "cos",
     "ease_in_cubic",
