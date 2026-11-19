@@ -97,7 +97,12 @@ class SDFTexture(TextureNode):
     def __sub__(self, other):
         return self.subtract(other)
 
+    def intersection(self, other):
+        """Return the shared interior of this SDF and another SDF."""
+        return build("intersection", self, other)
+
     def intersect(self, other):
+        """Compatibility alias for :meth:`intersection`."""
         return self.intersection(other)
 
     def mask(
