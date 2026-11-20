@@ -13,7 +13,7 @@ def main():
     parameters = ParameterStore()
     radius = parameters.scalar("radius", initial=3, min=0)
     field = sdf.circle((16, 16), radius)
-    destination = Path("out/learning/high_level")
+    destination = Path("out/examples/high_level_learning")
     destination.mkdir(parents=True, exist_ok=True)
 
     with Canvas((32, 32)) as canvas:

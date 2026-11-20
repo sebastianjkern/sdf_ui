@@ -2,7 +2,7 @@ from pathlib import Path
 
 from sdf_ui import Canvas, color, sdf
 
-OUTPUT_DIR = Path("out/examples")
+OUTPUT_DIR = Path("out/examples/voronoi")
 
 def voronoi_example():
     with Canvas((1080, 1080)) as ctx:

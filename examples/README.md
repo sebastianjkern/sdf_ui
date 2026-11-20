@@ -51,8 +51,10 @@ uv run python -m examples.gpu_graph --steps 150
 uv run --extra math python -m examples.plot_gallery
 uv run python -m examples.high_fidelity_art --scale 4
 uv run python -m examples.spatial_parameters
+uv run python -m examples.texture_sampled_arrows
 uv run python -m examples.quadtree_mosaic
 uv run python -m examples.vanishing_signal
+uv run python -m examples.molten_reflection
 uv run python -m examples.series_plot
 uv run python -m examples.mark_gallery
 uv run python -m examples.chart_grammar
@@ -81,8 +83,16 @@ uv run python -m examples.transparency_example
 uv run python -m examples.vortex_field_example
 ```
 
-The narrated optimization video also requires ffmpeg and espeak-ng. Generated
-images, videos, and checkpoints are generally written under `out/`.
+Examples that save files put them in `out/examples/<example>/` by default.
+Stills, animations, input maps, frames, and checkpoints for the same example
+share that directory. The folder usually matches the module name without
+`_example`; named pieces such as `tidal_bloom` use their artwork name.
+Use `--output` to choose a separate destination where the example supports it.
+The narrated optimization video also requires ffmpeg and espeak-ng.
+
+`texture_sampled_arrows` samples two grayscale textures at each arrow's grid
+cell center. One map sets the angle and the other sets the scale. The two maps
+and the result are saved in `out/examples/texture_sampled_arrows/`.
 
 ## Catalog-only examples
 
@@ -99,21 +109,29 @@ The standalone aurora illustration can be rendered with
 
 ``tidal_bloom`` renders a looping 640×640 generative animation from animated
 SDF petals, contour threads, orbiting constellations, and layered orbital
-tracks. It writes ``out/generative_art/tidal_bloom.mp4`` and a still preview
-to ``out/generative_art/tidal_bloom.png``. The scene is intentionally built
+tracks. It writes ``out/examples/tidal_bloom/tidal_bloom.mp4`` and a still preview
+to ``out/examples/tidal_bloom/tidal_bloom.png``. The scene is intentionally built
 from a modest number of GPU passes to keep frame renders comfortably below
 ten seconds on typical adapters.
 
 ``blue_hour`` is a landscape-format neon city animation: layered SDF skylines,
 lit windows, diagonal rain, a gliding tram, and moving water reflections. It
-writes ``out/generative_art/blue_hour_relay.mp4`` and a PNG preview alongside
+writes ``out/examples/blue_hour/blue_hour_relay.mp4`` and a PNG preview alongside
 it.
+
+``molten_reflection`` renders a portrait of a red light field refracted through
+fluted glass, then uses Canvas to bloom and finish the highlights. It writes
+``out/examples/molten_reflection/molten_reflection.png``. Pass ``--seed`` to vary the rib
+depths or ``--output`` to save a variant separately.
+Run ``uv run python -m examples.molten_reflection --animate`` to render a
+six-second loop to ``out/examples/molten_reflection/molten_reflection.mp4``. Animation
+export requires FFmpeg.
 
 ``learned_score`` uses the learning API to arrange a kinetic graphic score.
 Its marks begin with small deterministic offsets; a layout trainer discovers
 their shared spacing, baseline, page coverage, and visual balance. The final
 learned layout breathes into a 72-frame animation and is saved with its learned
-layout report under ``out/generative_art/``.
+layout report under ``out/examples/learned_score/``.
 
 ``vortices`` shows an SDF warped by a pair of counter-rotating fields, with
 streamlines drawn over the distorted contours.
@@ -150,24 +168,24 @@ for consistent output between systems.
 ``center_div`` trains an offset at progress 0.5, then sweeps the learned div
 across its animation curve. It exports ``center_div.gif`` for the learning
 curve and ``center_div_motion.gif`` for the timeline sweep. PNG frames are kept
-in ``out/center_div/frames`` and ``out/center_div/motion``.
+in ``out/examples/center_div/frames`` and ``out/examples/center_div/motion``.
 
 ``procedural_fields`` renders a finite repeated SDF array and a composed
 vector-field scene. The field scene adds radial, vortex, and fractal turbulence
 fields, warps an SDF on the GPU, and overlays direction and magnitude
-visualizations. Both images are written to ``out/examples/``.
+visualizations. Both images are written to ``out/examples/procedural_fields/``.
 
 ``field_flow`` animates two counter-rotating vortex centers, their strengths,
 and the frequency and amplitude of a turbulence field from normalized render
 progress. The combined field warps a finite repeated SDF pattern and the color
-backdrop. It writes ``out/generative_art/field_flow_animation.gif`` and a PNG
+backdrop. It writes ``out/examples/field_flow/field_flow_animation.gif`` and a PNG
 preview.
 
 ``starry_current`` is an original looping night landscape inspired by the
 swirling skies and saturated blues of Van Gogh's *The Starry Night*. A moving
 vortex field bends repeated SDF brush marks into a broad rotating sky whirl
 above a village and cypress silhouette. It writes
-``out/generative_art/starry_current.gif`` and a PNG preview.
+``out/examples/starry_current/starry_current.gif`` and a PNG preview.
 
 ``lagrange_intuition_short`` renders a one-minute narrated visual explanation
 of constrained optimization. It follows the contours of ``xy`` to their
@@ -178,7 +196,7 @@ the axes and samples the hyperbolas directly from ``y = c/x``. Matplotlib
 supplies the MathText parser used by ``sdf.math``. Render it with
 ``uv run --extra math python -m examples.lagrange_intuition_short``; ffmpeg and
 espeak-ng are also required. The MP4, poster, and subtitle file are written
-under ``out/learning/``.
+under ``out/examples/lagrange_intuition_short/``.
 
 ``preset_gallery`` demonstrates named and custom palettes with four
 parameterized vector-field scenes. Running it without options writes each
@@ -188,7 +206,7 @@ render and a labeled side-by-side comparison to
 
 ``aurora_landscape`` is a standalone illustration example combining a warped
 SDF ribbon, radial glow, a crescent moon, layered hills, and small star fields.
-It writes ``out/examples/aurora_landscape.png``.
+It writes ``out/examples/aurora_landscape/aurora_landscape.png``.
 
 ``plot_gallery`` renders three math graphics under ``out/examples/plot_gallery/``:
 sampled sine and cosine functions with an annotated maximum, rose and Lissajous
@@ -200,7 +218,7 @@ or ``--only optimization`` to render one panel.
 
 ``series_plot`` combines signed bars, a line with circular markers, formatted
 axis ticks, and a data annotation tied to a render parameter. It writes
-``out/examples/series_plot.png``.
+``out/examples/series_plot/series_plot.png``.
 
 ``mark_gallery`` renders a scatter plot, a grouped bar chart, and a
 diverging bar chart in ``out/examples/mark_gallery/``.

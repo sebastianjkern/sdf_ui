@@ -89,7 +89,7 @@ def tidal_bloom_scene(canvas=None):
 
 
 def generative_art_animation(
-    frames=96, output=Path("out/generative_art/tidal_bloom")
+    frames=96, output=Path("out/examples/tidal_bloom/tidal_bloom")
 ):
     """Render an MP4 loop and a still preview of the Tidal Bloom artwork."""
     output = Path(output)

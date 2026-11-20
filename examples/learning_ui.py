@@ -200,7 +200,7 @@ def main():
         "--mode", choices=("geometry", "image", "reward", "all"), default="all"
     )
     parser.add_argument("--steps", type=int, default=250)
-    parser.add_argument("--output", type=Path, default=Path("out/learning"))
+    parser.add_argument("--output", type=Path, default=Path("out/examples/learning_ui"))
     args = parser.parse_args()
     if args.steps <= 0:
         parser.error("--steps must be positive")

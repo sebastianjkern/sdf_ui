@@ -13,6 +13,7 @@ Start with the [art and animation examples](examples/README.md), including
 [Starry Current](#starry-current), [animated vector fields](#animated-fields),
 and the [preset gallery](examples/preset_gallery.py). See
 [What can I do with this engine?](#what-can-i-do-with-this-engine) for more renders.
+Examples that save files write to `out/examples/<example>/` by default.
 
 The project grew out of a [metaballs experiment](https://github.com/sebastianjkern/metaballs).
 Many of the distance functions are based on [Inigo Quilez’s SDF reference](https://iquilezles.org/articles/distfunctions2d/).
@@ -132,7 +133,7 @@ phase_value = Parameter("phase", 0.0, animate=lambda progress: progress)
 
 with Canvas((640, 360)) as canvas:
     paths = canvas.save_frame_sequence(
-        scene, "out/frames", frames=48, params={"phase": phase_value}
+        scene, "out/examples/frame_sequence", frames=48, params={"phase": phase_value}
     )
 ```
 
@@ -534,7 +535,7 @@ curve at that frame and the final sweep:
 ![The learned div sweeping across the canvas](docs/assets/examples/center_div_motion.gif)
 
 Run it with `uv run python -m examples.center_div --steps 60`; the script saves
-both GIFs and individual PNG frames under `out/center_div/`. See
+both GIFs and individual PNG frames under `out/examples/center_div/`. See
 [the example source](examples/center_div.py).
 
 For a larger procedural layout example, run
@@ -643,6 +644,14 @@ shape. Sample at each cell center for one value per copy, or at each pixel
 for variation within a copy. See the [spatial parameters guide](docs/spatial_parameters.rst)
 and the [example source](examples/spatial_parameters.py).
 
+In [Texture Sampled Arrows](examples/texture_sampled_arrows.py), one grayscale
+texture sets the angle of each arrow and a second sets its scale.
+
+<img src="docs/assets/examples/texture_sampled_arrows.png" width="540" alt="A grid of pale arrows whose directions and lengths vary across a dark field">
+
+Run `uv run python -m examples.texture_sampled_arrows` to write the render and
+both input maps to `out/examples/texture_sampled_arrows/`.
+
 <table>
     <tr>
         <th>Halftone</th>
@@ -678,7 +687,7 @@ Run these from the repository root to regenerate the artwork.
 ```bash
 uv run python -m examples.spatial_parameters
 uv run python -m examples.quadtree_mosaic
-uv run python -m examples.quadtree_mosaic --max-depth 2 --output out/generative_art/quadtree_mosaic_depth2.png
+uv run python -m examples.quadtree_mosaic --max-depth 2 --output out/examples/quadtree_mosaic/quadtree_mosaic_depth2.png
 ```
 
 #### Animated Fields
@@ -690,6 +699,14 @@ uv run python -m examples.quadtree_mosaic --max-depth 2 --output out/generative_
 <img src="./docs/assets/examples/starry_current.gif" width="640" alt="An animated swirling blue night sky over a village, crescent moon, and cypress tree">
 
 #### Linear light and large stills
+
+[Molten Reflection](examples/molten_reflection.py) bends a red light field
+through fluted glass and blooms the highlights in linear light.
+
+<img src="docs/assets/examples/molten_reflection.png" width="270" alt="Red fluted glass stretching bright reflections across a dark diagonal fold">
+
+Run `uv run python -m examples.molten_reflection` to save the still in
+`out/examples/molten_reflection/`. Add `--animate` to render the loop there.
 
 Use linear RGBA to keep bright light and subtle gradients in 32-bit floating
 point through compositing. RGB values can exceed 1, and alpha stays in

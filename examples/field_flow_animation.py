@@ -8,7 +8,7 @@ from sdf_ui.learning import Parameter
 
 SIZE = (480, 320)
 CENTER = (SIZE[0] / 2, SIZE[1] / 2)
-OUTPUT_DIR = Path("out/generative_art")
+OUTPUT_DIR = Path("out/examples/field_flow")
 
 
 def _flow_for_phase(phase):

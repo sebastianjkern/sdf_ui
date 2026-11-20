@@ -12,7 +12,7 @@ COLORS = [
     "#009ddc"
 ]
 
-OUTPUT_DIR = Path("out/examples")
+OUTPUT_DIR = Path("out/examples/complex_shapes")
 
 def complex_shapes_example():
     with Canvas((1080, 1080)) as ctx:

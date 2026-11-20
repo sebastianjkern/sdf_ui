@@ -3,7 +3,7 @@ from pathlib import Path
 from sdf_ui import Canvas, color, sdf
 
 TILING = 10
-OUTPUT_DIR = Path("out/examples")
+OUTPUT_DIR = Path("out/examples/impossible_city")
 
 FG_COLOR = (0, 0, 0, 1)
 BG_COLOR = (1, 1, 1, 1)

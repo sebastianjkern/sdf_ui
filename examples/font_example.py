@@ -1,9 +1,13 @@
+from pathlib import Path
+
 from sdf_ui import Canvas, color
 from sdf_ui.text import glyph
 from sdf_ui.util import hex_col
 
 
 def font_example():
+    output = Path("out/examples/font/font_glyph.png")
+    output.parent.mkdir(parents=True, exist_ok=True)
     with Canvas((1080, 1080)) as ctx:
         scale = 0.65
         offset_x = 25
@@ -23,7 +27,7 @@ def font_example():
             hex_col("#e9c46a"), (0.0, 0.0, 0.0, 0.0), inflation
         )
 
-        glyph_shape.save("font_glyph.png", canvas=ctx, cache=cache)
+        glyph_shape.save(output, canvas=ctx, cache=cache)
         bg.alpha_overlay(shadow).alpha_overlay(colored_glyph).to_rgb().show(
             canvas=ctx, cache=cache
         )

@@ -7,7 +7,7 @@ from PIL import Image, ImageDraw
 
 from sdf_ui import Canvas, sdf
 
-OUTPUT = Path("out/examples/distance_corrections.png")
+OUTPUT = Path("out/examples/distance_corrections/distance_corrections.png")
 PANEL_SIZE = (400, 460)
 
 

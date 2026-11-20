@@ -24,7 +24,7 @@ from sdf_ui import Canvas, Plot, color, sdf
 from sdf_ui.anim import timeline_position
 from sdf_ui.widgets import Panel, progress_bar
 
-OUTPUT = Path("out/learning/lagrange_intuition_short.mp4")
+OUTPUT = Path("out/examples/lagrange_intuition_short/lagrange_intuition_short.mp4")
 SIZE = (1280, 720)
 FPS = 24
 DURATION = 60.0

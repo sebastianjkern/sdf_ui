@@ -4,7 +4,7 @@ from sdf_ui import Canvas, color
 from sdf_ui.text import text
 from sdf_ui.util import hex_col
 
-OUTPUT_DIR = Path("out/examples")
+OUTPUT_DIR = Path("out/examples/text_rendering")
 
 
 def text_rendering_example():

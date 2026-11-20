@@ -68,12 +68,12 @@ From the development checkout::
 The demo creates its target field and image on the GPU, trains a circle's
 position, positive radius, and color with one field/image/geometry objective,
 and writes before/after images, metrics, and a resumable checkpoint under
-``out/learning/gpu_graph``. Training statistics include image readbacks, native
+``out/examples/gpu_graph``. Training statistics include image readbacks, native
 backward dispatches, cache hits, and program compilations.
 
 Resume with the same model and targets::
 
-    uv run python -m examples.gpu_graph --steps 50 --resume out/learning/gpu_graph/checkpoint.json
+    uv run python -m examples.gpu_graph --steps 50 --resume out/examples/gpu_graph/checkpoint.json
 
 Custom loss callbacks
 ---------------------
@@ -550,7 +550,7 @@ Benchmarking
 
 Run a synchronized wall-clock benchmark on the active WebGPU device::
 
-    uv run python -m examples.benchmark_graph --size 64 --steps 20 --output out/learning/benchmark.json
+    uv run python -m examples.benchmark_graph --size 64 --steps 20 --output out/examples/benchmark_graph/benchmark.json
 
 The report includes the GL vendor, renderer, version, image size, warmup count,
 and mean/minimum/median/maximum times. It measures full uncached forward and

@@ -10,7 +10,7 @@ from sdf_ui.learning import Parameter
 
 SIZE = (640, 420)
 CENTER = (SIZE[0] / 2, SIZE[1] / 2)
-OUTPUT_DIR = Path("out/generative_art")
+OUTPUT_DIR = Path("out/examples/starry_current")
 _PHASE_KEY = "phase"
 
 

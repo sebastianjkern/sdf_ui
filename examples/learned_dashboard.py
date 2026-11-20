@@ -505,7 +505,7 @@ class _DashboardCLI:
     def add_arguments(parser):
         parser.add_argument("--steps", type=int, default=80)
         parser.add_argument("--seed", type=int, default=7)
-        parser.add_argument("--output", type=Path, default=Path("out/learning/dashboard"))
+        parser.add_argument("--output", type=Path, default=Path("out/examples/learned_dashboard"))
         parser.add_argument("--resume", type=Path)
         parser.add_argument(
             "--initial-policy", type=Path,

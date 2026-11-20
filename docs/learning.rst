@@ -21,7 +21,8 @@ From an installed development checkout::
     uv run python -m examples.learning_ui --mode all --steps 250
 
 The command writes before/after images, learned parameter checkpoints, a
-policy-training checkpoint, and ``metrics.json`` under ``out/learning``.
+policy-training checkpoint, and ``metrics.json`` under
+``out/examples/learning_ui/``.
 Individual modes are ``geometry``, ``reward``, and ``image``. All examples run
 without a GPU. ``--output`` changes the destination directory.
 
@@ -238,7 +239,7 @@ gaps and margins, so non-overlap and viewport containment are also built into
 the parameterization for valid inputs. The policy chooses *widths*, not card
 order or row-versus-column structure.
 
-The example writes ``out/learning/dashboard/comparison.png``, individual
+The example writes ``out/examples/learned_dashboard/comparison.png``, individual
 before/after/reference images, ``metrics.json``, ``checkpoint.json``, and a
 standalone ``policy.json``. The
 comparison shows a training case and held-out cases; white bars depict measured
@@ -266,21 +267,21 @@ Evaluate the saved policy on a new, feasible single-row scenario without
 additional training::
 
     uv run python -m examples.learned_dashboard --steps 0 \
-        --resume out/learning/dashboard/checkpoint.json \
-        --scenario 150 20 15 28 --output out/learning/dashboard_custom
+        --resume out/examples/learned_dashboard/checkpoint.json \
+        --scenario 150 20 15 28 --output out/examples/learned_dashboard/custom
 
 The four numbers are viewport width followed by the three content widths in
 pixels. ``--scenario`` can be repeated. The reference rule rejects scenarios
 whose content cannot fit in one row. Loading a checkpoint restores policy and
 optimizer values; the initialization seed is only used for a fresh policy.
 To start a new optimizer from an existing exported policy instead, use
-``--initial-policy out/learning/dashboard/policy.json``. This preserves the
+``--initial-policy out/examples/learned_dashboard/policy.json``. This preserves the
 weights but starts optimizer moments and the step count from zero.
 
 To obtain bounds without constructing an WebGPU context or rendering images::
 
     uv run python -m examples.learned_dashboard \
-        --policy out/learning/dashboard/policy.json --predict 150 20 15 28
+        --policy out/examples/learned_dashboard/policy.json --predict 150 20 15 28
 
 This prints the learned x, y, width, and height of each card and any measured
 constraint violations as JSON. The

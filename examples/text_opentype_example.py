@@ -6,7 +6,7 @@ from sdf_ui import Canvas, color, sdf
 from sdf_ui.text import measure_text
 
 
-def text_opentype_example(output=Path("out/examples/text_opentype.png")):
+def text_opentype_example(output=Path("out/examples/text_opentype/text_opentype.png")):
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
 

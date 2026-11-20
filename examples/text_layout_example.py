@@ -39,7 +39,7 @@ def _paragraph_scene():
     return background.over(text)
 
 
-def text_layout_example(output=Path("out/examples/text_layout.png")):
+def text_layout_example(output=Path("out/examples/text_layout/text_layout.png")):
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     with Canvas((640, 360)) as canvas:

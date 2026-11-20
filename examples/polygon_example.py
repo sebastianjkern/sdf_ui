@@ -2,7 +2,7 @@ from pathlib import Path
 
 from sdf_ui import Canvas, sdf
 
-OUTPUT_DIR = Path("out/examples")
+OUTPUT_DIR = Path("out/examples/polygon")
 
 
 def polygon_example():

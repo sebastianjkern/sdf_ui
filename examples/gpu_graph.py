@@ -122,7 +122,7 @@ def train(output, steps=150, resume=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--steps", type=int, default=150)
-    parser.add_argument("--output", type=Path, default=Path("out/learning/gpu_graph"))
+    parser.add_argument("--output", type=Path, default=Path("out/examples/gpu_graph"))
     parser.add_argument("--resume", type=Path)
     args = parser.parse_args()
     if args.steps < 0:

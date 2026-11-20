@@ -106,7 +106,7 @@ def _banner_scene():
     ).film_grain().to_rgb()
 
 
-def github_banner_example(output="out/banner.png"):
+def github_banner_example(output="out/examples/github_banner/banner.png"):
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     with Canvas((WIDTH, HEIGHT)) as ctx:

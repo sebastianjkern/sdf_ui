@@ -3,7 +3,7 @@ from pathlib import Path
 
 from sdf_ui import Canvas, sdf
 
-OUTPUT_DIR = Path("out/examples")
+OUTPUT_DIR = Path("out/examples/arc")
 
 
 def arc_example():

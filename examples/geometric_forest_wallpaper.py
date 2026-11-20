@@ -8,7 +8,7 @@ from PIL import Image
 from sdf_ui import Canvas, color, cos, field, param, sdf, sin
 
 DEFAULT_SIZE = (3840, 2160)
-DEFAULT_OUTPUT = Path("out/wallpapers/liquid_glass_geometric_forest.png")
+DEFAULT_OUTPUT = Path("out/examples/geometric_forest/liquid_glass_geometric_forest.png")
 
 
 def geometric_forest_scene(size=DEFAULT_SIZE, animated=False):

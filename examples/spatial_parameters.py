@@ -5,7 +5,7 @@ from pathlib import Path
 
 from sdf_ui import Canvas, color, field, sdf
 
-OUTPUT = Path("out/generative_art/spatial_parameters")
+OUTPUT = Path("out/examples/spatial_parameters")
 SIZE = (720, 720)
 CENTER = (360, 360)
 SQUARE_GRID_SIZE = (700, 1010)

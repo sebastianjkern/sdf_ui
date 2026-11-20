@@ -4,7 +4,7 @@ from pathlib import Path
 
 from sdf_ui import Canvas, color, field, sdf
 
-OUTPUT_DIR = Path("out/examples")
+OUTPUT_DIR = Path("out/examples/procedural_fields")
 
 
 def _render_grid(canvas):

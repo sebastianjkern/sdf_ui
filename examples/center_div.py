@@ -17,7 +17,7 @@ from sdf_ui.learning import Adam, Parameter
 
 _CENTER_X_TEXT = 'center_x'
 
-def create_animation(steps=60, output=Path("out/center_div")):
+def create_animation(steps=60, output=Path("out/examples/center_div")):
     width, height = 640, 360
     div_half_size = (90, 56)
     div_size = (div_half_size[0] * 2, div_half_size[1] * 2)
@@ -221,7 +221,7 @@ def _dashed_rectangle(draw, box, *, fill, width, dash=8, gap=6):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--steps", type=int, default=60)
-    parser.add_argument("--output", type=Path, default=Path("out/center_div"))
+    parser.add_argument("--output", type=Path, default=Path("out/examples/center_div"))
     args = parser.parse_args()
     if args.steps <= 0:
         parser.error("--steps must be positive")

@@ -108,7 +108,7 @@ def optimize(output, steps=200, gpu=False):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--output", type=Path, default=Path("out/learning/shader_optimization")
+        "--output", type=Path, default=Path("out/examples/shader_optimization")
     )
     parser.add_argument("--steps", type=int, default=200)
     parser.add_argument(

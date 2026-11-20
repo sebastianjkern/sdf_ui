@@ -9,7 +9,7 @@ from examples.starry_current_animation import SIZE as STARRY_SIZE
 from examples.starry_current_animation import starry_current_scene
 from sdf_ui import Canvas, field, param, sdf
 
-OUTPUT = Path("out/generative_art/high_fidelity")
+OUTPUT = Path("out/examples/high_fidelity_art")
 STILL_SIZE = (960, 640)
 
 

@@ -12,7 +12,7 @@ from sdf_ui.core.expressions import _lazy_scalar, _select_positive
 SIZE = (576, 768)
 TILE_SIZES = (64, 32, 16, 8)
 MAX_DEPTH = len(TILE_SIZES) - 1
-OUTPUT = Path("out/generative_art/quadtree_mosaic.png")
+OUTPUT = Path("out/examples/quadtree_mosaic/quadtree_mosaic.png")
 
 
 def orbital_guide():

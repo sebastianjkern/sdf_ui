@@ -201,7 +201,7 @@ def build_score(layout, parameters, widths, heights, names):
 
 
 def learned_rule_art(
-    frames=72, output=Path("out/generative_art/learned_score")
+    frames=72, output=Path("out/examples/learned_score/learned_score")
 ):
     """Train compositional rules, then export a still and looping MP4."""
     output = Path(output)

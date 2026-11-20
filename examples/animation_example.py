@@ -7,7 +7,7 @@ from sdf_ui import Canvas, color, param, sdf
 from sdf_ui.learning import Parameter
 
 
-def animation_example(frames=180, output=Path("out/anim")):
+def animation_example(frames=180, output=Path("out/examples/animation")):
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
     with Canvas((640, 360)) as canvas:

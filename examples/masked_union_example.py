@@ -2,7 +2,7 @@ from pathlib import Path
 
 from sdf_ui import Canvas, sdf
 
-OUTPUT_DIR = Path("out/examples")
+OUTPUT_DIR = Path("out/examples/masked_union")
 
 def masked_union_example():
     SIZE = (1080, 1080)

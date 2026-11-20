@@ -229,7 +229,7 @@ def _city_water(train_x):
     return water, warm_water, cool_water, train_reflection
 
 def kinetic_city_animation(
-    frames=96, output=Path("out/generative_art/blue_hour_relay")
+    frames=96, output=Path("out/examples/blue_hour/blue_hour_relay")
 ):
     """Render the looping city animation and its PNG preview."""
     output = Path(output)

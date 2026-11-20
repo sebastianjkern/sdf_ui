@@ -72,4 +72,4 @@ Render a 3840 by 2560 still without regenerating the comparison::
 
     uv run python -m examples.high_fidelity_art --scale 4 --skip-reference
 
-Outputs are written to ``out/generative_art/high_fidelity/``.
+Outputs are written to ``out/examples/high_fidelity_art/``.

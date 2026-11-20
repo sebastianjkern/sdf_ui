@@ -88,7 +88,13 @@ composite stamps with dependent maps, a repeated baked design, and a grid
 of outlined squares that drift and rotate more toward the bottom. The
 squares use four interleaved grids so neighboring outlines can overlap
 across cell boundaries. The images are saved in
-``out/generative_art/spatial_parameters/``.
+``out/examples/spatial_parameters/``.
+
+Run ``uv run python -m examples.texture_sampled_arrows`` to draw a vector
+field from two grayscale PNG maps. Sample the red channel of each map with
+``at_cell()``, remap one to radians and the other to a scale factor, then pass
+both to ``repeat_grid()``. The example writes the input maps and the finished
+arrow field to ``out/examples/texture_sampled_arrows/``.
 
 Run ``uv run python -m examples.quadtree_mosaic`` for an adaptive mosaic
 of rounded squares. The example splits regions with high luminance contrast
@@ -100,4 +106,4 @@ from 0 (64-pixel tiles) to 3 (tiles as small as 8 pixels). The scene reads
 ``max_depth`` at render time, so you can reuse the scene and parameter map
 at different depths. Depth makes a discrete choice at each split.
 The default output is
-``out/generative_art/quadtree_mosaic.png``.
+``out/examples/quadtree_mosaic/quadtree_mosaic.png``.

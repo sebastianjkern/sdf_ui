@@ -7,7 +7,7 @@ from sdf_ui import Canvas, param, sdf
 
 SIZE = (800, 1240)
 FOCUS = (402, 619)
-OUTPUT = Path("out/generative_art/vanishing_signal.png")
+OUTPUT = Path("out/examples/vanishing_signal/vanishing_signal.png")
 
 
 def perspective_paths(paths, focus, *, count, far, near, width):

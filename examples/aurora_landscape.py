@@ -4,7 +4,7 @@ from pathlib import Path
 
 from sdf_ui import Canvas, color, field, sdf
 
-OUTPUT = Path("out/examples/aurora_landscape.png")
+OUTPUT = Path("out/examples/aurora_landscape/aurora_landscape.png")
 SIZE = (960, 640)
 
 

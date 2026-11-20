@@ -11,7 +11,7 @@ from sdf_ui import Canvas
 from sdf_ui.learning import Parameter
 
 SIZE = (1280, 720)
-DEFAULT_OUTPUT = Path("out/wallpapers/liquid_glass_geometric_forest.gif")
+DEFAULT_OUTPUT = Path("out/examples/geometric_forest/liquid_glass_geometric_forest.gif")
 
 
 def render_animation(

@@ -4,7 +4,7 @@ from pathlib import Path
 
 from sdf_ui import Canvas, color, sdf
 
-OUTPUT_DIR = Path("out/examples")
+OUTPUT_DIR = Path("out/examples/vortex_field")
 
 
 def _vortex_art(vortices):

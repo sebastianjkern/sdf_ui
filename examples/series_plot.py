@@ -6,7 +6,7 @@ from _chart_helpers import chart_text
 
 from sdf_ui import Canvas, Plot, color, param, sdf
 
-OUTPUT = Path("out/examples/series_plot.png")
+OUTPUT = Path("out/examples/series_plot/series_plot.png")
 MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun")
 ACTUAL = (-7 / 5, 0.6, 1.5, 2.1, 1.8, 3.3)
 FORECAST = (-4 / 5, 0.2, 1.1, 1.7, 2.3, param("june_forecast"))

@@ -5,7 +5,7 @@ from pathlib import Path
 from sdf_ui import Canvas, color, field, sdf
 
 SIZE = (1080, 1080)
-OUTPUT_DIR = Path("out/examples")
+OUTPUT_DIR = Path("out/examples/transparency")
 
 
 def _background_grid(palette):

@@ -7,8 +7,9 @@ WIDTH = 1000
 HEIGHT = 1250
 
 
-def dawn_example(output="dawn.png"):
+def dawn_example(output=Path("out/examples/dawn/dawn.png")):
     output = Path(output)
+    output.parent.mkdir(parents=True, exist_ok=True)
     cache = {}
 
     palette = [
