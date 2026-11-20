@@ -127,6 +127,9 @@ def test_convert_to_video_writes_all_frames_and_logs(monkeypatch, tmp_path):
             self.fps = fps
             self.size = size
 
+        def isOpened(self):
+            return True
+
         def write(self, frame):
             written.append(frame)
 

@@ -460,7 +460,19 @@ class DifferentiableRenderer:
         if op in {"clear", "clear_color"}:
             return self._clear(params)
         if op == "fill":
-            return self._fill(inputs[0], params)
+            from ..gpu.nodes.shading.fill.implementation import reference
+
+            return reference(
+                self,
+                {"sdf": inputs[0]},
+                {
+                    "color": self._color(params["fg_color"]),
+                    "background": self._color(params["bg_color"]),
+                    "inflate": params["inflate"],
+                    "first": params["inner"],
+                    "second": params["outer"],
+                },
+            )
         if op == "generate_mask":
             return self._generate_mask(inputs, params)
         if op == "to_rgb":

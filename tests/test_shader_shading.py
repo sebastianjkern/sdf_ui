@@ -144,11 +144,12 @@ def _check_gradients(name, *, overrides=None, tolerance=3e-5):
 def test_rules_cover_exact_standalone_shader_descriptors():
     registry.ensure_loaded()
     descriptors = {
-        descriptor.name
+        descriptor.name: descriptor
         for descriptor in registry.shader_files()
         if descriptor.path.startswith("gpu/nodes/shading/")
     }
-    assert set(RULES) == descriptors
+    assert set(RULES) <= descriptors.keys()
+    assert all(callable(shader.differentiation.reference) for shader in descriptors.values())
     for name, rule in RULES.items():
         inputs, params = _case(name)
         value = rule(

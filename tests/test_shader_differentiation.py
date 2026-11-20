@@ -113,8 +113,25 @@ def test_masked_union_accumulates_both_output_seeds():
     gradient = descriptor("masked_union").backward(
         size, inputs, {}, {"destTex": np.full(shape, 3.0), "maskTex": mask_seed}
     )
-    np.testing.assert_allclose(gradient.inputs["sdf0"], 3 - 2 * 6 * 2 / 5 * 3 / 5)
-    np.testing.assert_allclose(gradient.inputs["sdf1"], 2 * 6 * 2 / 5 * 3 / 5)
+    # The mask's normalized smoothstep coordinate is (0.4 + 0.5) / 1 = 0.9.
+    mask_gradient = 2 * 6 * 0.9 * (1 - 0.9)
+    np.testing.assert_allclose(gradient.inputs["sdf0"], 3 - mask_gradient)
+    np.testing.assert_allclose(gradient.inputs["sdf1"], mask_gradient)
+
+    eps = 1e-3
+    _, mask_plus = descriptor("masked_union").differentiation.evaluate(
+        size, {"sdf0": inputs["sdf0"] + eps, "sdf1": inputs["sdf1"]}
+    )
+    _, mask_minus = descriptor("masked_union").differentiation.evaluate(
+        size, {"sdf0": inputs["sdf0"] - eps, "sdf1": inputs["sdf1"]}
+    )
+    # d mask / d sdf0 is -6t(1 - t) = -0.54 at t = 0.9, matching the analytic
+    # contribution of mask_gradient for the seed of 2.
+    np.testing.assert_allclose(
+        -(mask_plus.numpy()[..., 0] - mask_minus.numpy()[..., 0]) / (2 * eps),
+        mask_gradient / 2,
+        atol=1e-5,
+    )
 
 
 def test_blur_vjp_is_transpose_of_actual_border_stencil():

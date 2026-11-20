@@ -463,7 +463,10 @@ class _Lowerer:
             return self._composite_output(inputs, raw)
         if name == "masked_union":
             return self.emit(
-                "masked_union", dict(zip(("sdf0", "sdf1"), inputs)), mode="RGB"
+                "masked_union",
+                dict(zip(("sdf0", "sdf1"), inputs)),
+                lambda resolve: {"edgeWidth": values(resolve)["edge_width"]},
+                mode="RGB",
             )
         if name in {"translate", "scale", "rotate", "skew"}:
             return self._composite_transform(name, inputs, values)

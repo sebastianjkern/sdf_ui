@@ -72,6 +72,9 @@ def test_shared_plan_executes_display_cpu_and_training():
     image = scene.fill("#ff0000", "#000000").to_rgb()
     plan = lower_graph({_FIELD_TEXT: scene, "image": image})
     reference = DifferentiableRenderer((8, 6), params).render_plan(plan)
+    ((reference["image"] - 0.25) ** 2).mean().backward()
+    expected_gradient = params["r"].grad.copy()
+    params["r"].zero_grad()
     with Canvas((8, 6)) as canvas:
         display = canvas.render_plan(plan, params)
         np.testing.assert_allclose(
@@ -80,13 +83,15 @@ def test_shared_plan_executes_display_cpu_and_training():
             atol=1e-5,
         )
         with canvas.compile(plan, params) as graph:
-            with graph.run() as execution:
+            with graph.run(Objective().mse("image", 0.25)) as execution:
                 np.testing.assert_allclose(
                     execution.read(_FIELD_TEXT), reference[_FIELD_TEXT].numpy(), atol=1e-5
                 )
                 np.testing.assert_allclose(
                     execution.read("image"), reference["image"].numpy(), atol=2e-4
                 )
+                execution.backward()
+                np.testing.assert_allclose(params["r"].grad, expected_gradient, atol=2e-5)
         legacy = canvas.render(image, params)
         a = np.frombuffer(display["image"].tex.read(), np.uint8).astype(int)
         b = np.frombuffer(legacy.tex.read(), np.uint8).astype(int)

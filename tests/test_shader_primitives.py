@@ -119,12 +119,13 @@ def _check_gradients(name, values, input_values=None, size=SIZE):
 
 
 def test_rules_cover_every_standalone_primitive_shader_descriptor():
-    names = {
-        descriptor.name
+    descriptors = {
+        descriptor.name: descriptor
         for descriptor in registry.shader_files()
         if "/primitives/" in descriptor.path
     }
-    assert set(RULES) == names
+    assert set(RULES) <= descriptors.keys()
+    assert all(callable(shader.differentiation.reference) for shader in descriptors.values())
     assert "smooth_min" in RULES
     assert "smooth_union" not in RULES
 

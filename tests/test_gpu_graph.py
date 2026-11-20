@@ -157,10 +157,12 @@ class TestSlopLintCasesOne:
                     run.gradient(_FIELD_TEXT), derivative * 23 / 10 / error.size, atol=2e-7
                 )
 
-        def test_masked_union_multi_output_backwards_matches_reference(self, canvas):
+        @pytest.mark.parametrize("edge_width", [0.5, 0.8])
+        def test_masked_union_multi_output_backwards_matches_reference(self, canvas, edge_width):
             p = ParameterStore([Parameter("r", 1.7)])
+            width = p.define("edge_width", edge_width)
             field, mask = sdf.circle((2.3, 2.7), param("r")).masked_union(
-                sdf.circle((5.2, 2.1), 1.8)
+                sdf.circle((5.2, 2.1), 1.8), edge_width=param("edge_width")
             )
             reference = DifferentiableRenderer((8, 6), p)
             loss = (reference.render(field) ** 2).mean() + (
@@ -168,13 +170,16 @@ class TestSlopLintCasesOne:
             ).mean() * 1 / 5
             loss.backward()
             expected = p["r"].grad.copy()
+            expected_width = width.grad.copy()
             p["r"].zero_grad()
+            width.zero_grad()
             with canvas.compile({_FIELD_TEXT: field, "mask": mask}, p) as graph:
                 assert len(graph.plan.passes) == 3
                 with graph.run(Objective().mse(_FIELD_TEXT, 0).mse("mask", 3 / 10, weight=0.2)) as run:
                     run.backward()
                     assert run.stats["backward_dispatches"] == 2
                     assert p["r"].grad == pytest.approx(expected, rel=2e-4, abs=1e-5)
+                    assert width.grad == pytest.approx(expected_width, rel=2e-4, abs=1e-5)
 
         def test_stale_parameters_and_mutated_objective_reject_backward(self, canvas):
             p, graph = setup(canvas)

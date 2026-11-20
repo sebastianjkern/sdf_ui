@@ -28,9 +28,6 @@ NEIGHBOR_SHADERS = {
     "warp_color",
 }
 _WARPS = {"warp_sdf", "warp_color"}
-# Fill uses a one-pixel finite difference for antialiasing. The gradients
-# lower to a fill internally.
-_STENCIL_RADIUS = {"fill": 1, "radial_gradient": 1, "linear_gradient": 1}
 
 
 def _negative_gain_turbulence_bound(params, bound):
@@ -99,7 +96,6 @@ def required_halo(renderer, scene):
             return halo
         children = renderer._region_children(node, registry, tiled=True)
         halo = max((visit(child) for child in children), default=0)
-        halo += _STENCIL_RADIUS.get(node.op, 0)
         if node.op in {"blur", "blur_9", "blur_13"}:
             params = resolve(node)
             radius = 6 if node.op == "blur_13" or params.get("base") == 13 else 4

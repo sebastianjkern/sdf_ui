@@ -1,9 +1,8 @@
 import numpy as np
 
-from sdf_ui import color, sdf
+from sdf_ui import Canvas, color, sdf
 from sdf_ui.core.color import ColorTexture
 from sdf_ui.core.sdf import SDFTexture
-from sdf_ui.gpu.nodes.primitives.vortex_warp.plugin import render_vortex_warp
 from sdf_ui.gpu.nodes.shading.vortex_streamlines.plugin import render_streamlines
 
 
@@ -33,25 +32,18 @@ class FakeRenderer:
         self.ctx = FakeContext()
 
 
-class FakeNode:
-    def __init__(self, texture):
-        self.tex = texture
-
-
 def test_vortex_warp_changes_the_input_sdf_and_returns_an_sdf_texture():
-    renderer = FakeRenderer()
-    yy, xx = np.mgrid[0:41, 0:41]
-    source = np.sqrt((xx - 20) ** 2 + (yy - 20) ** 2).astype(np.float32) - 10
-    source_texture = FakeTexture(source[..., None])
+    circle = sdf.circle((20, 20), 10)
+    warped = circle.vortex_warp(((20, 20, 1),), radius=10, strength=0.5)
+    with (
+        Canvas((41, 41)) as canvas,
+        canvas.render(circle) as original,
+        canvas.render(warped) as result,
+    ):
+        source = original.read()
+        field = result.read()
+        assert isinstance(result, SDFTexture)
 
-    result = render_vortex_warp(
-        renderer,
-        (FakeNode(source_texture),),
-        {"vortices": ((20, 20, 1),), "radius": 10, "strength": 0.5},
-    )
-    field = np.frombuffer(result.tex.data, dtype=np.float32).reshape(41, 41)
-
-    assert isinstance(result, SDFTexture)
     assert field[20, 30] > source[20, 30]
     assert field[20, 20] == source[20, 20]
 

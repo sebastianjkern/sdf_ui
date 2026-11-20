@@ -88,7 +88,7 @@ class _PluginAdapters:
 
     @staticmethod
     def _adapt_masked_union(renderer, plugin, inputs, params, modes):
-        return _masked_union_plugin(renderer, inputs)
+        return _masked_union_plugin(renderer, inputs, params)
 
     @staticmethod
     def _adapt_transform(renderer, plugin, inputs, params, modes):
@@ -145,8 +145,13 @@ def _output_plugin(inputs, params, input_modes):
     return inputs[0][index], input_modes[0][index]
 
 
-def _masked_union_plugin(renderer, inputs):
-    result = _shader(renderer, "masked_union", {"sdf0": inputs[0], "sdf1": inputs[1]})
+def _masked_union_plugin(renderer, inputs, params):
+    result = _shader(
+        renderer,
+        "masked_union",
+        {"sdf0": inputs[0], "sdf1": inputs[1]},
+        {"edgeWidth": params["edge_width"]},
+    )
     return result, (None, "RGB")
 
 

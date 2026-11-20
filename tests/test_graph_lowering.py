@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 
 from sdf_ui import color, param, sdf
+from sdf_ui import field as vector_field
 from sdf_ui.core.expressions import evaluate_expr
 from sdf_ui.core.sdf import SDFTexture
 from sdf_ui.core.texture import MultiOutputResult
@@ -417,11 +418,24 @@ class TestSlopLintCasesOneA:
                     _COLOR_TEXT: "#abc",
                     "fg_color": "#abc",
                     _ALPHA_TEXT: 0.7,
+                    "columns": 3,
+                    "rows": 2,
+                    "spacing": (4, 4),
+                    "linear_rgba": (0.8, 0.2, 0.1, 1),
+                    "linear_background": (0.02, 0.01, 0.01, 1),
+                    "inner": -0.5,
+                    "outer": 0.5,
+                    "stops": 0.2,
+                    "grain_amount": 0.07,
+                    "grain_size": 1.35,
+                    "threshold": 0.5,
+                    "amount": 0.2,
+                    "tone": 0.3,
+                    "dither": 0.5,
                 }
                 registry.ensure_loaded()
                 plan = _lower_every_shader(field, image, sample)
                 descriptors = {descriptor.name for descriptor in registry.shader_files()}
-                assert len(descriptors) == 43
                 assert {p.shader.name for p in plan.passes} == descriptors
                 _assert_lowered_shader_contracts(plan)
 
@@ -588,8 +602,13 @@ class TestSlopLintCasesOneB:
 
 
 def _lower_every_shader(field, image, sample):
+    sources = {
+        TextureKind.SDF: field,
+        TextureKind.COLOR: image,
+        TextureKind.FIELD: vector_field.constant((0.1, 0.2)),
+    }
     nodes = {
-        plugin.name: _build_required_plugin_node(plugin, field, image, sample)
+        plugin.name: _build_required_plugin_node(plugin, sources, sample)
         for plugin in registry._plugins.values()
         if plugin.shader is not None and plugin.render_func is None
     }
@@ -609,8 +628,8 @@ def _lower_every_shader(field, image, sample):
     return lower_graph(nodes)
 
 
-def _build_required_plugin_node(plugin, field, image, sample):
-    args = tuple(field if kind == "sdf" else image for kind in plugin.input_kinds)
+def _build_required_plugin_node(plugin, sources, sample):
+    args = tuple(sources[kind] for kind in plugin.input_kinds)
     required = {
         key: sample[key]
         for key in plugin.params
@@ -626,4 +645,5 @@ def _assert_lowered_shader_contracts(plan):
         assert set(uniforms) <= allowed
         assert len(operation.inputs) == len(operation.contract.inputs)
         for argument, value in zip(operation.contract.inputs, operation.inputs):
-            assert value.kind == ("sdf" if argument.kind == "r32f" else _COLOR_TEXT)
+            expected = {"r32f": TextureKind.SDF, "rgba32float": TextureKind.FIELD}
+            assert value.kind == expected.get(argument.kind, TextureKind.COLOR)

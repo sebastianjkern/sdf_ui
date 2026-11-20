@@ -11,6 +11,7 @@ from sdf_ui.bw_to_sdf import image_to_sdf
 from sdf_ui.gpu.nodes.primitives._text_composite import _sample_sdf
 from sdf_ui.gpu.nodes.primitives.text.plugin import (
     _cached_glyph_sdf,
+    _cached_hinted_glyph_sdf,
     _glyph_cache_size,
 )
 from sdf_ui.text import glyph, text
@@ -151,13 +152,17 @@ def test_text_renders_multiple_glyphs_from_cached_sdf_patches():
     assert distances.min() < 0
 
 
-def test_text_cache_uses_effective_render_size_buckets():
+@pytest.mark.parametrize(
+    "sizes,glyph_cache",
+    [((24, 48), _cached_hinted_glyph_sdf), ((72, 96), _cached_glyph_sdf)],
+)
+def test_text_cache_uses_effective_render_size_buckets(sizes, glyph_cache):
     font_path = PROJECT_ROOT / "src" / _SDF_UI_TEXT / _ASSETS_TEXT / _ROBOTO_REGULAR_TTF_TEXT
-    _cached_glyph_sdf.cache_clear()
+    glyph_cache.cache_clear()
 
     small = text(
         "i",
-        size=24,
+        size=sizes[0],
         ox=12,
         oy=42,
         path=str(font_path),
@@ -167,7 +172,7 @@ def test_text_cache_uses_effective_render_size_buckets():
     )
     large = text(
         "i",
-        size=48,
+        size=sizes[1],
         ox=12,
         oy=72,
         path=str(font_path),
@@ -181,7 +186,7 @@ def test_text_cache_uses_effective_render_size_buckets():
         large.render(ctx)
         small.render(ctx)
 
-    cache_info = _cached_glyph_sdf.cache_info()
+    cache_info = glyph_cache.cache_info()
     assert cache_info.hits == 1
     assert cache_info.misses == 2
     assert _glyph_cache_size(24, 2.0, 128) == 128

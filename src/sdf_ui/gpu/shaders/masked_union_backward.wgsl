@@ -452,7 +452,8 @@ fn evaluate(pos: vec2<i32>, o: ptr<function, array<D, 8>>) {
     var a: D = ld(0, pos, 0);
     var b: D = ld(1, pos, 0);
     (*o)[0] = minD(a, b);
-    var mask: D = smoothD(c(0.0), c(1.0), sub(b, (*o)[0]));
+    let width = maxD(absD(dp(0)), c(0.0001));
+    let mask = smoothD(neg(width), width, sub(b, a));
     (*o)[1] = mask;
     (*o)[2] = mask;
     (*o)[3] = mask;
@@ -494,7 +495,7 @@ fn compute_main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>, 
             }
         }
     }
-    for (var parameter: i32 = 0; (parameter < 0); parameter += 1)     {
+    for (var parameter: i32 = 0; (parameter < 1); parameter += 1)     {
         if (false)         {
             if ((lane == 0))             {
                 partials_2.partials[((i32(workgroup_id.x) * 1) + parameter)] = 0.0;

@@ -7,7 +7,6 @@ import numpy as np
 _FIELD_KEY = "field"
 _UNITS_PER_PIXEL_KEY = "units_per_pixel"
 _ORIGIN_KEY = "origin"
-_HINTED_DISTANCE_SCALE = 0.25
 
 def _composite_glyph(field, patch, x, y, scale, distance_scale, clip_rect=None):
     glyph_field = patch[_FIELD_KEY]
@@ -80,15 +79,17 @@ def _sample_sdf(values, x, y, source_to_dest):
     if source_to_dest >= 1.0:
         return _sample_bilinear(values, x, y)
 
-    source_pixels_per_dest = 1.0 / source_to_dest
-    radius = max(1, int(ceil(source_pixels_per_dest * _HINTED_DISTANCE_SCALE)))
+    half_pixel = 0.5 / source_to_dest
+    radius = ceil(half_pixel)
     sampled = _sample_bilinear(values, x, y)
     for offset_y in range(-radius, radius + 1):
         for offset_x in range(-radius, radius + 1):
             if offset_x == 0 and offset_y == 0:
                 continue
+            dx = min(max(offset_x, -half_pixel), half_pixel)
+            dy = min(max(offset_y, -half_pixel), half_pixel)
             sampled = np.minimum(
-                sampled, _sample_bilinear(values, x + offset_x, y + offset_y)
+                sampled, _sample_bilinear(values, x + dx, y + dy)
             )
     return sampled
 

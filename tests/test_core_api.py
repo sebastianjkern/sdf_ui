@@ -337,7 +337,10 @@ def test_registry_metadata_points_to_real_shader_files():
     )
 
     for descriptor in registry.shader_files():
-        assert (package_root / descriptor.path).exists(), descriptor
+        if descriptor.wgsl is not None:
+            assert "fn compute_main" in descriptor.wgsl.forward(), descriptor
+        else:
+            assert (package_root / descriptor.path).is_file(), descriptor
 
 
 def test_registry_method_names_match_texture_kinds():

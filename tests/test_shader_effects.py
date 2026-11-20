@@ -117,13 +117,15 @@ def _blur_pair(image, value, x, y, index, dx, dy, weight, axis, width, height, f
 
 def test_rules_cover_actual_standalone_descriptors():
     registry.ensure_loaded()
-    descriptors = set()
-    for plugin in registry._plugins.values():
-        if plugin.family in (PluginFamily.LAYER, PluginFamily.POSTPROCESSING):
-            if plugin.shader is not None:
-                descriptors.add(plugin.shader.name)
-            descriptors.update(shader.name for shader in plugin.extra_shaders)
-    assert descriptors == set(NAMES) == set(RULES)
+    descriptors = {
+        shader.name: shader
+        for plugin in registry._plugins.values()
+        if plugin.family in (PluginFamily.LAYER, PluginFamily.POSTPROCESSING)
+        for shader in (plugin.shader, *plugin.extra_shaders)
+        if shader is not None
+    }
+    assert {name for name, shader in descriptors.items() if shader.wgsl is None} == set(NAMES) == set(RULES)
+    assert all(callable(shader.differentiation.reference) for shader in descriptors.values())
     assert set(DEFAULTS) == set(BLURS)
     assert all(callable(rule) for rule in RULES.values())
 
