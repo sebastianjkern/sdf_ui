@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+from _chart_helpers import chart_text
+
 from sdf_ui import Canvas, Plot, color, sdf
 
 OUTPUT = Path("out/examples/mark_gallery")
@@ -13,15 +15,11 @@ BLUE = "#8dbbff"
 MUTED = "#9fb0c4"
 
 
-def _text(value, x, y, size, tint="#f4f6fb"):
-    return sdf.text(value, ox=x, oy=y, size=size).ink(tint, inflate=0.2)
-
-
 def _page(title, subtitle):
     return color.clear("#101923").over(
         sdf.rect_from_size((460, 249), (832, 388), corner_radius=20).ink("#172637"),
-        _text(title, 52, 482, 32),
-        _text(subtitle, 54, 452, 16, MUTED),
+        chart_text(title, 52, 482, 32),
+        chart_text(subtitle, 54, 452, 16, MUTED),
     )
 
 
@@ -68,11 +66,11 @@ def _scatter():
     return _page(
         "Light and growth", "Illustrative greenhouse readings · one point per plant"
     ).over(
-        _text("Sun bench", 663, 452, 16, GOLD),
-        _text("Shade bench", 755, 452, 16, TEAL),
+        chart_text("Sun bench", 663, 452, 16, GOLD),
+        chart_text("Shade bench", 755, 452, 16, TEAL),
         _axes(plot, x_ticks=range(0, 9, 2), y_ticks=range(40, 101, 15)),
-        _text("Daily light (hours)", 396, 63, 16, MUTED),
-        _text("Height (cm)", 100, 420, 14, MUTED),
+        chart_text("Daily light (hours)", 396, 63, 16, MUTED),
+        chart_text("Height (cm)", 100, 420, 14, MUTED),
         plot.scatter(shade, radius=5).ink(TEAL),
         plot.scatter(sun, radius=5).ink(GOLD),
         plot.annotate(
@@ -82,15 +80,15 @@ def _scatter():
 
 
 def _grouped_bars():
-    plot = Plot(BOX, (-0.55, 4.55), (0, 120))
+    plot = Plot(BOX, (-11 / 20, 4.55), (0, 120))
     months = ("Feb", "Mar", "Apr", "May", "Jun")
     planned = (62, 66, 83, 90, 102)
     delivered = (55, 74, 76, 98, 109)
     return _page(
         "Orders shipped", "Monthly plan and actual shipments · illustrative data"
     ).over(
-        _text("Plan", 700, 452, 16, BLUE),
-        _text("Actual", 755, 452, 16, TEAL),
+        chart_text("Plan", 700, 452, 16, BLUE),
+        chart_text("Actual", 755, 452, 16, TEAL),
         _axes(
             plot,
             x_ticks=range(len(months)),
@@ -98,18 +96,18 @@ def _grouped_bars():
             x_format=months.__getitem__,
         ),
         plot.bars(
-            ((i - 0.18, value) for i, value in enumerate(planned)), width=0.29
+            ((i - 9 / 50, value) for i, value in enumerate(planned)), width=0.29
         ).ink(BLUE),
         plot.bars(
-            ((i + 0.18, value) for i, value in enumerate(delivered)), width=0.29
+            ((i + 9 / 50, value) for i, value in enumerate(delivered)), width=0.29
         ).ink(TEAL),
     )
 
 
 def _diverging_bars():
-    plot = Plot(BOX, (-0.6, 5.6), (-3, 3))
+    plot = Plot(BOX, (-3 / 5, 5.6), (-3, 3))
     months = ("Jan", "Feb", "Mar", "Apr", "May", "Jun")
-    changes = (-1.7, 0.9, 1.6, -2.4, 2.6, 1.2)
+    changes = (-17 / 10, 0.9, 1.6, -12 / 5, 2.6, 1.2)
     layers = []
     for positive, tint in ((True, TEAL), (False, GOLD)):
         points = [
@@ -129,12 +127,12 @@ def _diverging_bars():
     return _page(
         "Net energy storage", "Monthly change in MWh · illustrative data"
     ).over(
-        _text("Added", 681, 452, 16, TEAL),
-        _text("Drawn", 755, 452, 16, GOLD),
+        chart_text("Added", 681, 452, 16, TEAL),
+        chart_text("Drawn", 755, 452, 16, GOLD),
         _axes(
             plot,
             x_ticks=range(len(months)),
-            y_ticks=(-3, -1.5, 0, 1.5, 3),
+            y_ticks=(-3, -3 / 2, 0, 1.5, 3),
             x_format=months.__getitem__,
         ),
         *layers,

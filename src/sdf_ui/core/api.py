@@ -24,6 +24,71 @@ def _half_dimensions(size):
     return width / 2, height / 2
 
 
+def _rect_with_size(factory, center, size, corner_radius, angle):
+    center = tuple(_lazy_scalar(value) for value in center)
+    return build(
+        factory,
+        center,
+        _half_dimensions(size),
+        corner_radius=corner_radius,
+        angle=angle,
+    )
+
+
+def _arrow_head(ax, ay, bx, by, radius, head_length, half_head_width):
+    dx, dy = bx - ax, by - ay
+    length_sq = dx * dx + dy * dy
+    direction = length_sq - 1 / 1_000_000
+    if isinstance(direction, Real) and direction <= 0:
+        return build("capsule", (ax, ay), (bx, by), radius)
+    length = _scalar_maximum(length_sq, 1 / 1_000_000) ** 0.5
+    ux = _select_positive(direction, dx / length, 1.0)
+    uy = _select_positive(direction, dy / length, 0.0)
+    fitted_head = _scalar_minimum(head_length, length)
+    tip_length = _select_positive(direction, fitted_head, radius / 2)
+    tip_half_width = _select_positive(
+        direction, half_head_width * (fitted_head / head_length), radius / 2
+    )
+    base_x, base_y = bx - ux * tip_length, by - uy * tip_length
+    shaft_end = (
+        _select_positive(direction, base_x, bx),
+        _select_positive(direction, base_y, by),
+    )
+    shaft = build("capsule", (ax, ay), shaft_end, radius)
+    head = build(
+        "triangle",
+        (bx, by),
+        (base_x - uy * tip_half_width, base_y + ux * tip_half_width),
+        (base_x + uy * tip_half_width, base_y - ux * tip_half_width),
+    )
+    return shaft.union(head)
+
+
+def _validate_ring_dimensions(count, line_width, gap):
+    import math
+    from numbers import Integral
+
+    if isinstance(count, bool) or not isinstance(count, Integral) or count < 1:
+        raise ValueError("concentric ring count must be a positive integer")
+    for name, value, allow_zero in (
+        ("line_width", line_width, False),
+        ("gap", gap, True),
+    ):
+        _validate_ring_measure(name, value, allow_zero, math)
+
+
+def _validate_ring_measure(name, value, allow_zero, math):
+    if not isinstance(value, Real):
+        return
+    invalid = (
+        isinstance(value, bool) or not math.isfinite(value) or value < 0
+        or (not allow_zero and value == 0)
+    )
+    if invalid:
+        qualifier = "nonnegative" if allow_zero else "positive"
+        raise ValueError(f"concentric ring {name} must be finite and {qualifier}")
+
+
 class _OperationNamespace:
     kind: str | None = None
 
@@ -92,14 +157,7 @@ class SDFNamespace(_OperationNamespace):
         continues to take half extents. Center and size values may be lazy
         expressions or trainable parameters.
         """
-        center = tuple(_lazy_scalar(value) for value in center)
-        return build(
-            "rect",
-            center,
-            _half_dimensions(size),
-            corner_radius=corner_radius,
-            angle=angle,
-        )
+        return _rect_with_size("rect", center, size, corner_radius, angle)
 
     def rounded_rect_from_size(self, center, size, corner_radius, angle=0.0):
         """Create a rounded rectangle using full width and height measurements.
@@ -108,14 +166,7 @@ class SDFNamespace(_OperationNamespace):
         factory continues to take half extents. Center, size, and corner-radius
         values may be lazy expressions or trainable parameters.
         """
-        center = tuple(_lazy_scalar(value) for value in center)
-        return build(
-            "rounded_rect",
-            center,
-            _half_dimensions(size),
-            corner_radius=corner_radius,
-            angle=angle,
-        )
+        return _rect_with_size("rounded_rect", center, size, corner_radius, angle)
 
     def star(
         self, center, outer_radius, inner_radius=None, rays=5, rotation=-math.pi / 2
@@ -127,44 +178,16 @@ class SDFNamespace(_OperationNamespace):
         positive, with ``inner_radius`` smaller than ``outer_radius``. When
         omitted, the inner radius is 45 percent of the outer radius.
         """
-        from numbers import Integral
-
-        if isinstance(rays, bool) or not isinstance(rays, Integral) or rays < 2:
-            raise ValueError("star rays must be an integer of at least 2")
-        for name, value in (
-            ("outer_radius", outer_radius),
-            ("inner_radius", inner_radius),
-        ):
-            if value is not None and isinstance(value, Real):
-                if isinstance(value, bool) or not math.isfinite(value) or value <= 0:
-                    raise ValueError(f"star {name} must be finite and positive")
-        if isinstance(rotation, Real) and (
-            isinstance(rotation, bool) or not math.isfinite(rotation)
-        ):
-            raise ValueError("star rotation must be finite")
-        if (
-            isinstance(outer_radius, Real)
-            and isinstance(inner_radius, Real)
-            and inner_radius >= outer_radius
-        ):
-            raise ValueError("star inner_radius must be smaller than outer_radius")
-
+        self._validate_star_parameters(outer_radius, inner_radius, rays, rotation)
         center_x, center_y = map(_lazy_scalar, center)
         outer_radius = _lazy_scalar(outer_radius)
         inner_radius = (
-            outer_radius * 0.45 if inner_radius is None else _lazy_scalar(inner_radius)
+            outer_radius * (45 / 100)
+            if inner_radius is None
+            else _lazy_scalar(inner_radius)
         )
         rotation = _lazy_scalar(rotation)
-        vertices = []
-        for index in range(int(rays) * 2):
-            angle = rotation + index * math.pi / int(rays)
-            radius = outer_radius if index % 2 == 0 else inner_radius
-            vertices.append(
-                (
-                    center_x + radius * cos(angle),
-                    center_y + radius * sin(angle),
-                )
-            )
+        vertices = self._star_vertices(center_x, center_y, outer_radius, inner_radius, rays, rotation)
         wedges = (
             build(
                 "triangle",
@@ -176,6 +199,50 @@ class SDFNamespace(_OperationNamespace):
         )
         return self.union_all(wedges)
 
+    @staticmethod
+    def _validate_star_parameters(outer_radius, inner_radius, rays, rotation):
+        from numbers import Integral
+
+        if isinstance(rays, bool) or not isinstance(rays, Integral) or rays < 2:
+            raise ValueError("star rays must be an integer of at least 2")
+        SDFNamespace._validate_star_radius(outer_radius, "outer_radius")
+        SDFNamespace._validate_star_radius(inner_radius, "inner_radius")
+        SDFNamespace._validate_star_rotation(rotation)
+        if (
+            isinstance(outer_radius, Real)
+            and isinstance(inner_radius, Real)
+            and inner_radius >= outer_radius
+        ):
+            raise ValueError("star inner_radius must be smaller than outer_radius")
+
+    @staticmethod
+    def _validate_star_radius(value, name):
+        if value is None or not isinstance(value, Real):
+            return
+        if isinstance(value, bool) or not math.isfinite(value) or value <= 0:
+            raise ValueError(f"star {name} must be finite and positive")
+
+    @staticmethod
+    def _validate_star_rotation(rotation):
+        if isinstance(rotation, Real) and (
+            isinstance(rotation, bool) or not math.isfinite(rotation)
+        ):
+            raise ValueError("star rotation must be finite")
+
+    @staticmethod
+    def _star_vertices(center_x, center_y, outer_radius, inner_radius, rays, rotation):
+        vertices = []
+        for index in range(int(rays) * 2):
+            angle = rotation + index * math.pi / int(rays)
+            radius = outer_radius if index % 2 == 0 else inner_radius
+            vertices.append(
+                (
+                    center_x + radius * cos(angle),
+                    center_y + radius * sin(angle),
+                )
+            )
+        return tuple(vertices)
+
     def fir_tree(self, center_x, base_y, height, width, tiers=3):
         """Build a stepped fir silhouette from triangle boughs and a trunk.
 
@@ -183,6 +250,18 @@ class SDFNamespace(_OperationNamespace):
         ``tiers`` is a fixed integer topology control of at least one. A single
         tier is a plain triangle; larger values add stepped boughs and a trunk.
         """
+        self._validate_fir_tree(tiers, height, width)
+        center_x, base_y, height, width = map(
+            _lazy_scalar, (center_x, base_y, height, width)
+        )
+        if tiers == 1:
+            return self._single_fir_tree(center_x, base_y, height, width)
+        return self.union_all(
+            self._tiered_fir_tree(center_x, base_y, height, width, int(tiers))
+        )
+
+    @staticmethod
+    def _validate_fir_tree(tiers, height, width):
         from numbers import Integral
 
         if isinstance(tiers, bool) or not isinstance(tiers, Integral) or tiers < 1:
@@ -193,41 +272,42 @@ class SDFNamespace(_OperationNamespace):
             ):
                 raise ValueError(f"fir_tree {name} must be finite and positive")
 
-        center_x, base_y, height, width = map(
-            _lazy_scalar, (center_x, base_y, height, width)
+    @staticmethod
+    def _single_fir_tree(center_x, base_y, height, width):
+        return build(
+            "triangle",
+            (center_x, base_y - height),
+            (center_x - width / 2, base_y),
+            (center_x + width / 2, base_y),
         )
-        if tiers == 1:
-            return build(
-                "triangle",
-                (center_x, base_y - height),
-                (center_x - width / 2, base_y),
-                (center_x + width / 2, base_y),
-            )
 
-        shapes = []
-        for index in range(int(tiers)):
-            top_fraction = 1.0 - 0.18 * index
-            bottom_fraction = 0.64 - 0.18 * index
-            half_width = width * (0.19 + 0.105 * index)
-            top_y = base_y - height * top_fraction
-            bottom_y = base_y - height * bottom_fraction
-            shapes.append(
-                build(
-                    "triangle",
-                    (center_x, top_y),
-                    (center_x - half_width, bottom_y),
-                    (center_x + half_width, bottom_y),
-                )
-            )
-        shapes.append(
+    @staticmethod
+    def _tiered_fir_tree(center_x, base_y, height, width, tiers):
+        boughs = [
+            SDFNamespace._fir_bough(center_x, base_y, height, width, index)
+            for index in range(tiers)
+        ]
+        boughs.append(
             build(
                 "rect",
-                (center_x, base_y - height * 0.04),
-                (width * 0.075, height * 0.15),
-                corner_radius=width * 0.02,
+                (center_x, base_y - height * 4 / 100),
+                (width * 75 / 1000, height * 15 / 100),
+                corner_radius=width * 2 / 100,
             )
         )
-        return self.union_all(shapes)
+        return boughs
+
+    @staticmethod
+    def _fir_bough(center_x, base_y, height, width, index):
+        top_y = base_y - height * (1.0 - 18 / 100 * index)
+        bottom_y = base_y - height * (64 / 100 - 18 / 100 * index)
+        half_width = width * (19 / 100 + 105 / 1000 * index)
+        return build(
+            "triangle",
+            (center_x, top_y),
+            (center_x - half_width, bottom_y),
+            (center_x + half_width, bottom_y),
+        )
 
     def isometric_cube(self, offset, cell_width, cell_height, stroke_width=2.0):
         """Build a wireframe isometric cube from differentiable segments.
@@ -255,9 +335,9 @@ class SDFNamespace(_OperationNamespace):
             (x, y),
             (x, y + cell_height),
             (x + cell_width, y + 0.5 * cell_height),
-            (x + cell_width, y + 1.5 * cell_height),
+            (x + cell_width, y + 3 / 2 * cell_height),
             (x - cell_width, y + 0.5 * cell_height),
-            (x - cell_width, y + 1.5 * cell_height),
+            (x - cell_width, y + 3 / 2 * cell_height),
             (x, y + 2 * cell_height),
         )
         edge_indices = (
@@ -296,36 +376,10 @@ class SDFNamespace(_OperationNamespace):
         radius = _lazy_scalar(width) / 2
         head_length = _lazy_scalar(head_length)
         half_head_width = (
-            0.52 * head_length if head_width is None else _lazy_scalar(head_width) / 2
+            52 / 100 * head_length if head_width is None else _lazy_scalar(head_width) / 2
         )
-        dx, dy = bx - ax, by - ay
-        length_sq = dx * dx + dy * dy
-        # At subpixel lengths use a capsule and keep a valid head inside it.
-        # This also keeps a graph compiled at positive length valid at zero.
-        direction = length_sq - 1e-6
-        if isinstance(direction, Real) and direction <= 0:
-            return build("capsule", (ax, ay), (bx, by), radius)
-        length = _scalar_maximum(length_sq, 1e-6) ** 0.5
-        ux = _select_positive(direction, dx / length, 1.0)
-        uy = _select_positive(direction, dy / length, 0.0)
-        fitted_head = _scalar_minimum(head_length, length)
-        tip_length = _select_positive(direction, fitted_head, radius / 2)
-        tip_half_width = _select_positive(
-            direction, half_head_width * (fitted_head / head_length), radius / 2
-        )
-        base_x, base_y = bx - ux * tip_length, by - uy * tip_length
-        shaft_end = (
-            _select_positive(direction, base_x, bx),
-            _select_positive(direction, base_y, by),
-        )
-        shaft = build("capsule", (ax, ay), shaft_end, radius)
-        head = build(
-            "triangle",
-            (bx, by),
-            (base_x - uy * tip_half_width, base_y + ux * tip_half_width),
-            (base_x + uy * tip_half_width, base_y - ux * tip_half_width),
-        )
-        return shaft.union(head)
+        # At subpixel lengths _arrow_head returns a round capsule.
+        return _arrow_head(ax, ay, bx, by, radius, head_length, half_head_width)
 
     def polyline(self, points, radius=0.0):
         """Create a distance field from canvas points joined by line segments.
@@ -430,25 +484,7 @@ class ColorNamespace(_OperationNamespace):
         line width, and gap remain render-time inputs. Choose a count that fits
         within the radius; the innermost ring is not clipped automatically.
         """
-        import math
-        from numbers import Integral, Real
-
-        if isinstance(count, bool) or not isinstance(count, Integral) or count < 1:
-            raise ValueError("concentric ring count must be a positive integer")
-        for name, value, allow_zero in (
-            ("line_width", line_width, False),
-            ("gap", gap, True),
-        ):
-            if isinstance(value, Real) and (
-                isinstance(value, bool)
-                or not math.isfinite(value)
-                or value < 0
-                or (not allow_zero and value == 0)
-            ):
-                qualifier = "nonnegative" if allow_zero else "positive"
-                raise ValueError(
-                    f"concentric ring {name} must be finite and {qualifier}"
-                )
+        _validate_ring_dimensions(count, line_width, gap)
 
         circle = SDFNamespace().circle(center, radius)
         transparent = _transparent_ink(tint)

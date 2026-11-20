@@ -37,9 +37,9 @@ class GPUShaderBackend:
         self.status.clear()
 
     def _check(self):
-        if self._closed:
-            raise RuntimeError("WebGPU graph backend is closed")
-        self.canvas._check_open()
+        from ._lifecycle import check_context_open
+
+        check_context_open(self._closed, "WebGPU graph backend is closed", self.canvas)
 
     @property
     def device_info(self):
@@ -247,6 +247,21 @@ class GPUShaderBackend:
     def forward(self, name, inputs=None, params=None, size=None):
         contract = self.contract(name)
         inputs = {} if inputs is None else dict(inputs)
+        size = self._validate_forward_inputs(name, contract, inputs, size)
+        outputs = tuple(
+            self.allocate(size, shape_size(argument.shape))
+            for argument in contract.outputs
+        )
+        try:
+            self._execute_forward(name, inputs, params, outputs)
+        except BaseException:
+            for image in outputs:
+                image.close()
+            raise
+        self.stats["forward_dispatches"] += 1
+        return outputs
+
+    def _validate_forward_inputs(self, name, contract, inputs, size):
         expected = {argument.name for argument in contract.inputs}
         if set(inputs) != expected:
             raise ValueError(f"Shader '{name}' input names differ from its contract")
@@ -256,31 +271,21 @@ class GPUShaderBackend:
         if len(size) != 2 or any(int(value) != value or value <= 0 for value in size):
             raise ValueError("GPU image size must be two positive integers")
         for argument in contract.inputs:
-            image = inputs[argument.name]
-            if image.closed or image.context is not self.canvas or image.size != size:
-                raise ValueError(f"Incompatible GPU input image '{argument.name}'")
-            if image.channels != shape_size(argument.shape):
-                raise ValueError(f"Incompatible GPU input image '{argument.name}'")
+            self._validate_forward_input(argument, inputs[argument.name], size)
+        return size
 
-        outputs = tuple(
-            self.allocate(size, shape_size(argument.shape))
-            for argument in contract.outputs
+    def _validate_forward_input(self, argument, image, size):
+        if image.closed or image.context is not self.canvas or image.size != size:
+            raise ValueError(f"Incompatible GPU input image '{argument.name}'")
+        if image.channels != shape_size(argument.shape):
+            raise ValueError(f"Incompatible GPU input image '{argument.name}'")
+
+    def _execute_forward(self, name, inputs, params, outputs):
+        descriptor = self.descriptors[name]
+        self.canvas.run_node_shader(
+            descriptor, outputs[0], inputs, self.uniforms(name, params),
+            extra_outputs=outputs[1:],
         )
-        try:
-            descriptor = self.descriptors[name]
-            self.canvas.run_node_shader(
-                descriptor,
-                outputs[0],
-                inputs,
-                self.uniforms(name, params),
-                extra_outputs=outputs[1:],
-            )
-        except BaseException:
-            for image in outputs:
-                image.close()
-            raise
-        self.stats["forward_dispatches"] += 1
-        return outputs
 
     def clear_status(self):
         self.status.clear()
@@ -314,14 +319,23 @@ class GPUShaderBackend:
         size=None,
     ):
         contract = self.contract(name)
-        uniforms = self.uniforms(name, params)
-        parameter_values = (
-            np.concatenate(
-                [uniforms[arg.name].reshape(-1) for arg in contract.parameters]
-            )
-            if contract.parameters
-            else np.zeros(1, dtype=np.float32)
+        uniforms, components, groups, size = self._backward_metadata(
+            name, contract, inputs, params, input_offsets, output_offsets, size
         )
+        partials, resources = self._backward_buffers(
+            name, contract, uniforms, inputs, adjoints, input_offsets,
+            output_offsets, components, groups, size,
+        )
+        self._dispatch_backward(name, resources, groups)
+        if components:
+            self._reduce_uniform_gradients(
+                partials, uniform_gradients, components, groups, result_offset
+            )
+
+    def _backward_metadata(
+        self, name, contract, inputs, params, input_offsets, output_offsets, size
+    ):
+        uniforms = self.uniforms(name, params)
         components = sum(shape_size(arg.shape) for arg in contract.parameters)
         if len(input_offsets) != len(contract.inputs) or len(output_offsets) != len(
             contract.outputs
@@ -330,6 +344,13 @@ class GPUShaderBackend:
         if size is None:
             size = next(iter(inputs.values())).size if inputs else self.canvas.size
         groups = (size[0] * size[1] + 63) // 64
+        return uniforms, components, groups, size
+
+    def _backward_buffers(
+        self, name, contract, uniforms, inputs, adjoints, input_offsets,
+        output_offsets, components, groups, size,
+    ):
+        parameter_values = _parameter_values(contract.parameters, uniforms)
         parameter_buffer = self.scratch_buffer(
             "backward_parameters", parameter_values.nbytes
         )
@@ -355,6 +376,10 @@ class GPUShaderBackend:
                 20: self.status,
             }
         )
+        return partials, resources
+
+    def _dispatch_backward(self, name, resources, groups):
+        source = self.derivative_code(name)
         pipeline = self.canvas.compute_pipeline(
             source, entry_point="compute_main", label=f"{name} backward"
         )
@@ -367,24 +392,17 @@ class GPUShaderBackend:
         )
         self.stats["backward_dispatches"] += 1
 
-        if components:
-            config = np.asarray(
-                [groups, components, result_offset, 0], dtype=np.uint32
-            ).tobytes()
-            config_buffer = self._uniform_buffer(
-                "uniform gradient reduction config", config
-            )
-            self.canvas.run_shader(
-                "reduce_uniform",
-                {
-                    0: partials,
-                    1: uniform_gradients,
-                    2: config_buffer,
-                    3: self.status,
-                },
-                group_count=((components + 63) // 64, 1, 1),
-            )
-            self.stats["reduction_dispatches"] += 1
+    def _reduce_uniform_gradients(self, partials, uniform_gradients, components, groups, result_offset):
+        config = np.asarray(
+            [groups, components, result_offset, 0], dtype=np.uint32
+        ).tobytes()
+        config_buffer = self._uniform_buffer("uniform gradient reduction config", config)
+        self.canvas.run_shader(
+            "reduce_uniform",
+            {0: partials, 1: uniform_gradients, 2: config_buffer, 3: self.status},
+            group_count=((components + 63) // 64, 1, 1),
+        )
+        self.stats["reduction_dispatches"] += 1
 
     def close(self):
         if self._closed:
@@ -397,6 +415,12 @@ class GPUShaderBackend:
             buffer.close()
         self._scratch.clear()
         self._closed = True
+
+
+def _parameter_values(parameters, uniforms):
+    if not parameters:
+        return np.zeros(1, dtype=np.float32)
+    return np.concatenate([uniforms[arg.name].reshape(-1) for arg in parameters])
 
 
 def _shader_registry():
@@ -413,7 +437,17 @@ def _pack_backward_uniforms(source, size, input_offsets, output_offsets):
     field_names = re.findall(
         r"\b(size|inputOffsets|outputOffsets|uniformBase)\s*:", match.group(1)
     )
+    offsets, cursor = _backward_uniform_layout(field_names, input_offsets, output_offsets)
     payload = bytearray(256)
+    struct.pack_into("<2i", payload, offsets["size"], *size)
+    _write_offset_arrays(payload, offsets, input_offsets, output_offsets)
+    if "uniformBase" in offsets:
+        struct.pack_into("<i", payload, offsets["uniformBase"], 0)
+    payload = payload[: (cursor + 15) // 16 * 16]
+    return bytes(payload)
+
+
+def _backward_uniform_layout(field_names, input_offsets, output_offsets):
     offsets = {}
     cursor = 0
     for name in field_names:
@@ -430,17 +464,16 @@ def _pack_backward_uniforms(source, size, input_offsets, output_offsets):
             cursor = (cursor + 3) // 4 * 4
             offsets[name] = cursor
             cursor += 4
-    struct.pack_into("<2i", payload, offsets["size"], *size)
+    return offsets, cursor
+
+
+def _write_offset_arrays(payload, offsets, input_offsets, output_offsets):
     for name, values in (
         ("inputOffsets", input_offsets),
         ("outputOffsets", output_offsets),
     ):
         for index, value in enumerate(values or (0,)):
             struct.pack_into("<i", payload, offsets[name] + index * 16, int(value))
-    if "uniformBase" in offsets:
-        struct.pack_into("<i", payload, offsets["uniformBase"], 0)
-    payload = payload[: (cursor + 15) // 16 * 16]
-    return bytes(payload)
 
 
 def _uniform_binding(source):

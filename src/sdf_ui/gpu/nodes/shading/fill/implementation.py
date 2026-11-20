@@ -11,13 +11,14 @@ from ..glsl import RGBA
 
 def reference(context, inputs, params):
     from sdf_ui.learning.render import _mix, _rgb_to_lab, _smoothstep, _tensor
+
     from ..sampling import sample
 
     distance = inputs["sdf"] - _tensor(params["inflate"])
     dx = sample(inputs["sdf"], 1, 0) - sample(inputs["sdf"], -1, 0)
     dy = sample(inputs["sdf"], 0, 1) - sample(inputs["sdf"], 0, -1)
-    edge_width = (dx.abs() + dy.abs()) * 0.25
-    edge_width = edge_width + 0.0001
+    edge_width = (dx.abs() + dy.abs()) * 1 / 4
+    edge_width = edge_width + 1 / 10_000
     lower = _tensor(params["second"]) - edge_width
     from sdf_ui.learning.autodiff import maximum
 

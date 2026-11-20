@@ -32,8 +32,8 @@ def dawn_example(output="dawn.png"):
         background = color.clear(red).cache("background")
 
         sea_sdf = sdf.rect(
-            (WIDTH * 0.50, HEIGHT * 0.249),
-            (WIDTH * 0.55, HEIGHT * 0.25),
+            (WIDTH * 0.50, HEIGHT * 249 / 1_000),
+            (WIDTH * 11 / 20, HEIGHT * 1 / 4),
             (0, 0, 0, 0),
         ).cache("sea_sdf")
 
@@ -41,7 +41,7 @@ def dawn_example(output="dawn.png"):
 
         sun_sdf = sdf.circle(
             (WIDTH * 0.50, HEIGHT * 0.50),
-            WIDTH * 0.25,
+            WIDTH * 1 / 4,
         ).cache("sun_sdf")
 
         # Equivalent to the old:
@@ -58,25 +58,7 @@ def dawn_example(output="dawn.png"):
             .cache("sun")
         )
 
-        stripe_size = (WIDTH * 0.25, 5)
-        distance = (HEIGHT * 0.50 - 40) / 20
-
-        stripe_layers = []
-        for i, y in enumerate(range(20, int(HEIGHT * 0.50) - 20, int(distance))):
-            x = WIDTH * 0.50 + (random() - 0.5) * WIDTH * 0.25
-            stripe_color = choice(palette)
-
-            stripe = (
-                sdf.rect(
-                    (x, y),
-                    stripe_size,
-                    (0, 0, 0, 0),
-                )
-                .fill(stripe_color, "#00000000")
-                .cache(f"stripe_{i}")
-            )
-
-            stripe_layers.append(stripe)
+        stripe_layers = _dawn_stripes(palette)
 
         # Film grain does not appear in the first script's new API.
         # If your installed sdf_ui version exposes it under the new API,
@@ -103,6 +85,19 @@ def dawn_example(output="dawn.png"):
                 f"{cache_info.misses} cache misses, "
                 f"{stats.elapsed_seconds:.3f}s)"
             )
+
+
+def _dawn_stripes(palette):
+    stripe_size = (WIDTH * 1 / 4, 5)
+    distance = (HEIGHT * 0.50 - 40) / 20
+    stripe_layers = []
+    for index, y in enumerate(range(20, int(HEIGHT * 0.50) - 20, int(distance))):
+        x = WIDTH * 0.50 + (random() - 0.5) * WIDTH * 1 / 4
+        stripe = sdf.rect((x, y), stripe_size, (0, 0, 0, 0)).fill(
+            choice(palette), "#00000000"
+        ).cache(f"stripe_{index}")
+        stripe_layers.append(stripe)
+    return stripe_layers
 
 
 if __name__ == "__main__":

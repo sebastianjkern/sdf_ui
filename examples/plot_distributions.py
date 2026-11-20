@@ -41,6 +41,23 @@ def _latency():
 
 
 def _forecast():
+    predictions, sensors = _forecast_data()
+    interval = aes(ymin="low", ymax="high")
+    return (
+        Plot.from_data(predictions, aes(x="hour", y="power"), ylim=(0, 6.5))
+        + geom_ribbon(interval, tint="#8fb5ff", alpha=0.27)
+        + geom_line(tint="#a4caff", width=2.6)
+        + geom_errorbar(interval, data=sensors, tint="#ffc880", width=1.5, cap=0.21)
+        + geom_point(data=sensors, tint="#ffc880", radius=4)
+        + labs(
+            title="Solar generation forecast",
+            x="Hour of day · forecast band in blue, sensor readings in gold",
+            y="Power (kW)",
+        )
+    )
+
+
+def _forecast_data():
     predictions = [
         {"hour": hour, "power": power, "low": power - error, "high": power + error}
         for hour, power, error in (
@@ -58,22 +75,10 @@ def _forecast():
         )
     ]
     sensors = [
-        {"hour": hour, "power": power, "low": power - 0.17, "high": power + 0.17}
+        {"hour": hour, "power": power, "low": power - 17 / 100, "high": power + 17 / 100}
         for hour, power in ((9, 2.05), (12, 4.7), (15, 4.25), (17, 1.55))
     ]
-    interval = aes(ymin="low", ymax="high")
-    return (
-        Plot.from_data(predictions, aes(x="hour", y="power"), ylim=(0, 6.5))
-        + geom_ribbon(interval, tint="#8fb5ff", alpha=0.27)
-        + geom_line(tint="#a4caff", width=2.6)
-        + geom_errorbar(interval, data=sensors, tint="#ffc880", width=1.5, cap=0.21)
-        + geom_point(data=sensors, tint="#ffc880", radius=4)
-        + labs(
-            title="Solar generation forecast",
-            x="Hour of day · forecast band in blue, sensor readings in gold",
-            y="Power (kW)",
-        )
-    )
+    return predictions, sensors
 
 
 def _schedule():
@@ -81,8 +86,8 @@ def _schedule():
         {
             "start": start,
             "end": end,
-            "low": lane - 0.24,
-            "high": lane + 0.24,
+            "low": lane - 6 / 25,
+            "high": lane + 6 / 25,
             "kind": kind,
         }
         for lane, start, end, kind in (

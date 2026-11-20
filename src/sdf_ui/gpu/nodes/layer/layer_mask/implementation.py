@@ -10,6 +10,17 @@ from sdf_ui.gpu.nodes.shader_expression import ShaderProgram
 from ..glsl import color_program
 
 
+def _alpha_composite(first, second, alpha):
+    from sdf_ui.learning.autodiff import maximum, stack, where
+
+    top_alpha = first[..., 3:4] * alpha
+    out_alpha = top_alpha + second[..., 3:4] * (1.0 - top_alpha)
+    premultiplied = first[..., :3] * top_alpha + second[..., :3] * second[
+        ..., 3:4
+    ] * (1.0 - top_alpha)
+    rgb = where(out_alpha > 0, premultiplied / maximum(out_alpha, 1e-8), 0.0)
+    return stack((rgb[..., 0], rgb[..., 1], rgb[..., 2], out_alpha[..., 0]), axis=-1)
+
 def reference(context, inputs, params):
     import numpy as np
 
@@ -21,25 +32,13 @@ def reference(context, inputs, params):
     mode = float(np.asarray(getattr(mode, "data", mode)))
     if mode < 0.5:
         return second * (1.0 - alpha) + first * alpha
-    if mode < 1.5:
+    if mode < 3 / 2:
         blended = first * second
-    elif mode < 2.5:
+    elif mode < 5 / 2:
         blended = 1.0 - (1.0 - first) * (1.0 - second)
-    elif mode < 3.5:
-        from sdf_ui.learning.autodiff import maximum, stack, where
-
-        top_alpha = first[..., 3:4] * alpha
-        out_alpha = top_alpha + second[..., 3:4] * (1.0 - top_alpha)
-        premultiplied = first[..., :3] * top_alpha + second[..., :3] * second[
-            ..., 3:4
-        ] * (1.0 - top_alpha)
-        rgb = premultiplied / maximum(out_alpha, 1e-8)
-
-        rgb = where(out_alpha > 0, rgb, 0.0)
-        return stack(
-            (rgb[..., 0], rgb[..., 1], rgb[..., 2], out_alpha[..., 0]), axis=-1
-        )
-    elif mode < 4.5:
+    elif mode < 7 / 2:
+        return _alpha_composite(first, second, alpha)
+    elif mode < 9 / 2:
         from sdf_ui.learning.autodiff import minimum
 
         blended = minimum(first, second)

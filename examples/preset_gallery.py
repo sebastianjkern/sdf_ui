@@ -27,73 +27,77 @@ class ExamplePreset:
 
 PRESETS = {
     "starry": ExamplePreset("starry", color.palette("starry_night"), 2.2, 4.0, 36.0),
-    "ember": ExamplePreset("ember", color.palette("ember"), -2.6, 5.5, 32.0),
+    "ember": ExamplePreset("ember", color.palette("ember"), -13 / 5, 5.5, 32.0),
     "sea_glass": ExamplePreset("sea_glass", color.palette("sea_glass"), 1.7, 3.2, 40.0),
-    "moss": ExamplePreset("moss", color.palette("moss"), -1.9, 4.5, 34.0),
+    "moss": ExamplePreset("moss", color.palette("moss"), -19 / 10, 4.5, 34.0),
 }
+
+
+def _preset_flow(preset):
+    return field.vortex(CENTER, radius=130, strength=preset.vortex_strength).add(
+        field.turbulence(
+            frequency=0.018, amplitude=preset.turbulence, octaves=3, seed=19
+        )
+    )
+
+
+def _preset_rings(preset, flow):
+    rings = color.clear((0.0, 0.0, 0.0, 0.0))
+    for index in range(4):
+        radius = 34 + index * preset.ring_spacing
+        ring = sdf.ring(CENTER, radius, 2.0 + index * 7 / 20).warp(
+            flow, strength=12.0, steps=4
+        )
+        layer = ring.fill(
+            preset.palette.sample(17 / 25 + index * 2 / 25), (0.0, 0.0, 0.0, 0.0)
+        ).transparency(0.82)
+        rings = rings.alpha_overlay(layer)
+    return rings
+
+
+def _preset_marks(preset, flow):
+    rosette = sdf.circle(CENTER, 15).repeat_grid(
+        columns=7, rows=3,
+        spacing=(preset.ring_spacing, preset.ring_spacing), center=CENTER,
+    ).warp(flow, strength=10.0, steps=4)
+    marks = rosette.fill(preset.palette.sample(0.9), (0.0, 0.0, 0.0, 0.0)).transparency(0.88)
+    core = sdf.circle(CENTER, 17).fill(preset.palette.sample(1.0), (0.0, 0.0, 0.0, 0.0))
+    halo_color = preset.palette.sample(0.94)
+    halo = color.radial_gradient(
+        CENTER, (*halo_color[:3], 0.58), (*halo_color[:3], 0.0), inner=4, outer=55
+    )
+    return marks, halo, core
 
 
 def build_preset_scene(preset: ExamplePreset):
     """Build the same geometry with the selected palette and field settings."""
-    cx, cy = CENTER
-    flow = field.vortex(CENTER, radius=130, strength=preset.vortex_strength).add(
-        field.turbulence(
-            frequency=0.018,
-            amplitude=preset.turbulence,
-            octaves=3,
-            seed=19,
-        )
+    flow = _preset_flow(preset)
+    base = color.radial_gradient(
+        CENTER, preset.palette.sample(0.56), preset.palette.sample(0.02),
+        inner=12, outer=260,
     )
-    background_base = color.radial_gradient(
-        CENTER,
-        preset.palette.sample(0.56),
-        preset.palette.sample(0.02),
-        inner=12,
-        outer=260,
-    )
-    background = background_base.warp(flow, strength=8.0, steps=4)
+    background = base.warp(flow, strength=8.0, steps=4)
+    marks = _preset_marks(preset, flow)
+    return base.alpha_overlay(background).alpha_overlay(_preset_rings(preset, flow)).over(*marks)
 
-    rings = color.clear((0.0, 0.0, 0.0, 0.0))
-    for index in range(4):
-        radius = 34 + index * preset.ring_spacing
-        ring = sdf.ring(CENTER, radius, 2.0 + index * 0.35).warp(
-            flow, strength=12.0, steps=4
-        )
-        rings = rings.alpha_overlay(
-            ring.fill(
-                preset.palette.sample(0.68 + index * 0.08),
-                (0.0, 0.0, 0.0, 0.0),
-            ).transparency(0.82)
-        )
 
-    rosette = (
-        sdf.circle(CENTER, 15)
-        .repeat_grid(
-            columns=7,
-            rows=3,
-            spacing=(preset.ring_spacing, preset.ring_spacing),
-            center=CENTER,
-        )
-        .warp(flow, strength=10.0, steps=4)
-    )
-    marks = rosette.fill(preset.palette.sample(0.9), (0.0, 0.0, 0.0, 0.0)).transparency(
-        0.88
-    )
-    core = sdf.circle(CENTER, 17).fill(preset.palette.sample(1.0), (0.0, 0.0, 0.0, 0.0))
-    halo = color.radial_gradient(
-        (cx, cy),
-        (*preset.palette.sample(0.94)[:3], 0.58),
-        (*preset.palette.sample(0.94)[:3], 0.0),
-        inner=4,
-        outer=55,
-    )
-    return (
-        background_base.alpha_overlay(background)
-        .alpha_overlay(rings)
-        .alpha_overlay(marks)
-        .alpha_overlay(halo)
-        .alpha_overlay(core)
-    )
+def _render_comparison(names, image_paths, output_dir):
+    if len(image_paths) <= 1:
+        return None
+    columns = 2
+    rows = (len(image_paths) + columns - 1) // columns
+    panel_height = SIZE[1] + 28
+    sheet = Image.new("RGB", (columns * SIZE[0], rows * panel_height), (9, 16, 34))
+    draw = ImageDraw.Draw(sheet)
+    for index, (name, path) in enumerate(zip(names, image_paths)):
+        x = (index % columns) * SIZE[0]
+        y = (index // columns) * panel_height
+        draw.text((x + 10, y + 7), name.replace("_", " ").title(), fill="#e7edf8")
+        with Image.open(path) as image:
+            sheet.paste(image.convert("RGB"), (x, y + 28))
+    comparison_path = output_dir / "comparison.png"
+    sheet.save(comparison_path)
+    return comparison_path
 
 
 def render_preset_gallery(preset_names=None, output_dir=OUTPUT_DIR):
@@ -114,25 +118,7 @@ def render_preset_gallery(preset_names=None, output_dir=OUTPUT_DIR):
             build_preset_scene(PRESETS[name]).save(path, canvas=canvas)
             image_paths.append(path)
 
-    comparison_path = None
-    if len(image_paths) > 1:
-        columns = 2
-        rows = (len(image_paths) + columns - 1) // columns
-        panel_height = SIZE[1] + 28
-        sheet = Image.new(
-            "RGB",
-            (columns * SIZE[0], rows * panel_height),
-            (9, 16, 34),
-        )
-        draw = ImageDraw.Draw(sheet)
-        for index, (name, path) in enumerate(zip(names, image_paths)):
-            x = (index % columns) * SIZE[0]
-            y = (index // columns) * panel_height
-            draw.text((x + 10, y + 7), name.replace("_", " ").title(), fill="#e7edf8")
-            with Image.open(path) as image:
-                sheet.paste(image.convert("RGB"), (x, y + 28))
-        comparison_path = output_dir / "comparison.png"
-        sheet.save(comparison_path)
+    comparison_path = _render_comparison(names, image_paths, output_dir)
 
     return tuple(image_paths), comparison_path
 

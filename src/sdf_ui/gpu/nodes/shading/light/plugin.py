@@ -1,10 +1,14 @@
-__docformat__ = "google"
+
 
 from sdf_ui.core.expressions import Expr
 from sdf_ui.gpu.nodes.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.gpu.nodes.common import color, shader
 
 from .implementation import CONTRACT, INTERFACE, PROGRAM
+
+_SHADE_BACKGROUND_TEXT = 'shade_background'
+
+__docformat__ = "google"
 
 _HEIGHT_PROFILES = {
     "smooth": 0.0,
@@ -45,8 +49,8 @@ def _uniforms(params):
         "normalStrength": params["normal_strength"],
         "bevel": params["bevel"],
         "shadeBackground": (
-            params["shade_background"] if isinstance(params["shade_background"], Expr)
-            else float(params["shade_background"])
+            params[_SHADE_BACKGROUND_TEXT] if isinstance(params[_SHADE_BACKGROUND_TEXT], Expr)
+            else float(params[_SHADE_BACKGROUND_TEXT])
         ),
         "backgroundBevel": params["background_bevel"],
         "heightProfile": _height_profile(params["height_profile"]),
@@ -75,7 +79,7 @@ def register_plugins(registry):
                 "shininess",
                 "normal_strength",
                 "bevel",
-                "shade_background",
+                _SHADE_BACKGROUND_TEXT,
                 "background_bevel",
                 "height_profile",
                 "height_gamma",
@@ -86,20 +90,20 @@ def register_plugins(registry):
             ),
             defaults={
                 "bg_color": (0.0, 0.0, 0.0, 0.0),
-                "light_dir": (-0.45, -0.65, 0.7),
+                "light_dir": (-9 / 20, -13 / 20, 0.7),
                 "ambient": 0.35,
                 "diffuse": 0.75,
                 "specular": 0.2,
                 "shininess": 24.0,
                 "normal_strength": 4.0,
                 "bevel": 8.0,
-                "shade_background": False,
+                _SHADE_BACKGROUND_TEXT: False,
                 "background_bevel": 0.0,
                 "height_profile": 0.0,
                 "height_gamma": 1.0,
                 "height": 1.0,
                 "inflate": 0.0,
-                "inner": -1.5,
+                "inner": -3 / 2,
                 "outer": 1.5,
             },
             shader=shader("light", "shading/light/shader.glsl", derivative_contract=CONTRACT, program=PROGRAM, interface=INTERFACE),

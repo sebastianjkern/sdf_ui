@@ -14,9 +14,9 @@ SQUARE_GRID_SIZE = (700, 1010)
 def halftone():
     flow = field.turbulence(frequency=0.006, amplitude=1, octaves=2, seed=31)
     density = flow.channel("x").at_cell()
-    radius = density.remap((-0.3, 0.53), (0.0, 5.6))
+    radius = density.remap((-3 / 10, 0.53), (0.0, 5.6))
     dots = sdf.circle((0, 0), radius).repeat_grid(60, 60, (12, 12), CENTER)
-    shade = flow.channel("y").at_pixel().remap((-0.75, 0.75), (0.1, 0.38))
+    shade = flow.channel("y").at_pixel().remap((-3 / 4, 0.75), (0.1, 0.38))
     ink = dots.ink_linear((0.015, shade, 0.9, 1))
     return color.clear("#ffffff").over(ink).finish(tone=0)
 
@@ -29,7 +29,7 @@ def woven_stamps():
     )
     direction = direction_map.channel("red").at_cell()
     bend = flow.channel("y").at_cell()
-    angle = direction.remap((0.1, 0.9), (-2.8, 2.8))
+    angle = direction.remap((0.1, 0.9), (-14 / 5, 2.8))
     top = sdf.rect(
         (0, 0),
         (bend.remap((-1, 1), (4, 13)), 2.6),
@@ -56,8 +56,8 @@ def ceramic_tiles():
     field_map = field.vortex(CENTER, 210, 1).add(
         field.turbulence(frequency=0.008, amplitude=0.4, seed=44)
     )
-    twist = field_map.channel("x").at_cell().remap((-0.65, 0.65), (-3, 3))
-    size = field_map.channel("y").at_cell().remap((-0.65, 0.65), (0.6, 1.3))
+    twist = field_map.channel("x").at_cell().remap((-13 / 20, 13 / 20), (-3, 3))
+    size = field_map.channel("y").at_cell().remap((-13 / 20, 13 / 20), (0.6, 1.3))
     pattern = stamp.repeat_grid(
         24,
         24,
@@ -74,15 +74,7 @@ def ceramic_tiles():
 def drifting_squares():
     width, height = SQUARE_GRID_SIZE
     spacing = 43
-    depth = sdf.half_plane((0, height - 77), (0, -1)).channel().at_cell()
-    drift = depth.remap((0, height - 135), (0, 1))
-    jitter = field.turbulence(frequency=1 / spacing, amplitude=1, octaves=1, seed=22)
-    twist = field.turbulence(frequency=1 / spacing, amplitude=1, octaves=1, seed=56)
-    offset = (
-        10 * drift * jitter.channel("x").at_cell(),
-        11 * drift * jitter.channel("y").at_cell(),
-    )
-    angle = drift * twist.channel("x").at_cell().remap((-0.6, 0.6), (-pi / 4, pi / 4))
+    offset, angle = _square_transform(height, spacing)
     square = sdf.rect(offset, (spacing / 2, spacing / 2), angle=angle)
     outline = square.stroke(1.45, "#171613")
 
@@ -95,6 +87,19 @@ def drifting_squares():
         for dy in (-spacing / 2, spacing / 2)
     )
     return color.clear("#fcfbf8").over(*layers)
+
+
+def _square_transform(height, spacing):
+    depth = sdf.half_plane((0, height - 77), (0, -1)).channel().at_cell()
+    drift = depth.remap((0, height - 135), (0, 1))
+    jitter = field.turbulence(frequency=1 / spacing, amplitude=1, octaves=1, seed=22)
+    twist = field.turbulence(frequency=1 / spacing, amplitude=1, octaves=1, seed=56)
+    offset = (
+        10 * drift * jitter.channel("x").at_cell(),
+        11 * drift * jitter.channel("y").at_cell(),
+    )
+    angle = drift * twist.channel("x").at_cell().remap((-3 / 5, 0.6), (-pi / 4, pi / 4))
+    return offset, angle
 
 
 def render(output=OUTPUT):

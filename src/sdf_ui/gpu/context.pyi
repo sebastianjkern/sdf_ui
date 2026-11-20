@@ -4,8 +4,8 @@ from contextlib import AbstractContextManager
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
-from ..core.texture import Renderer, TextureNode
 from ..core.color import ColorTexture
+from ..core.texture import Renderer, TextureNode
 from ..graph.runtime import FitResult, LossContext, RenderGraph
 from ..graph.session import TrainingSession
 from ..learning.autodiff import Tensor

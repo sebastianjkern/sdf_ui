@@ -1,11 +1,11 @@
 """Connect contextual policies to a compiled renderer and reward callback."""
 
-import json
 from collections.abc import Mapping
 from types import MappingProxyType
 
 import numpy as np
 
+from .._json_identity import serialize_identity
 from ..core.expressions import Expr
 from ..learning.autodiff import Parameter
 from ..learning.objective import Objective
@@ -52,17 +52,7 @@ def _validate_callbacks(objective, reward, action_transform):
 
 
 def _serialize_identity(identity):
-    if identity is None:
-        return None
-    try:
-        return json.dumps(
-            identity, sort_keys=True, allow_nan=False, separators=(",", ":")
-        )
-    except (TypeError, ValueError) as error:
-        raise ValueError(
-            "Environment identity must be finite JSON-serializable data"
-        ) from error
-
+    return serialize_identity(identity, "Environment")
 
 def _input_binding(value, graph):
     if not isinstance(value, Expr) or value.op != "input":
@@ -86,6 +76,18 @@ def _named_parameter_binding(value, params, parameters):
         else "parameter"
     )
     return kind, value
+
+
+def _validate_vector(value, expected, label):
+    if value.shape != (expected,) or not np.isfinite(value).all():
+        raise ValueError(f"{label} must be a finite vector matching its bindings")
+
+
+def _validated_reward(value):
+    value = np.asarray(value, dtype=float)
+    if value.shape != () or not np.isfinite(value).item():
+        raise ValueError("Reward must be a finite scalar")
+    return float(value)
 
 
 class RenderEnvironment:
@@ -123,37 +125,35 @@ class RenderEnvironment:
         self.reward = reward
         self.action_transform = action_transform
 
-    def __call__(self, observation, action):
-        self.graph.require_idle()
-        raw_action = action
+    def _validated_inputs(self, observation, action):
         action = np.asarray(
             action if self.action_transform is None else self.action_transform(action),
             dtype=float,
         )
         observation = np.asarray(observation, dtype=float)
-        if action.shape != (len(self.actions),) or not np.isfinite(action).all():
-            raise ValueError("Action must be a finite vector matching its bindings")
-        if self.observations and (
-            observation.shape != (len(self.observations),)
-            or not np.isfinite(observation).all()
-        ):
-            raise ValueError(
-                "Observation must be a finite vector matching its bindings"
-            )
+        _validate_vector(action, len(self.actions), "Action")
+        if self.observations:
+            _validate_vector(observation, len(self.observations), "Observation")
+        return observation, action
+
+    def _assign_inputs(self, observation, action):
         for name, value in zip(self.actions, action):
             self._parameters[name].assign(value)
         for name, value in zip(self.observations, observation):
             self._parameters[name].assign(value)
+
+    def __call__(self, observation, action):
+        self.graph.require_idle()
+        raw_action = action
+        observation, action = self._validated_inputs(observation, action)
+        self._assign_inputs(observation, action)
         with self.graph.run(self.objective) as execution:
-            value = (
-                -execution.loss
-                if self.reward is None
+            reward = (
+                -execution.loss if self.reward is None
                 else self.reward(observation, raw_action, execution)
             )
-            value = np.asarray(value, dtype=float)
-            if value.shape != () or not np.isfinite(value).item():
-                raise ValueError("Reward must be a finite scalar")
-            return float(value)
+            return _validated_reward(reward)
+
 
 
 class NamedValues(Mapping):

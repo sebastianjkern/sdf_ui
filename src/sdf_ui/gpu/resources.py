@@ -2,6 +2,8 @@
 
 from numbers import Integral
 
+from ._lifecycle import ContextResource
+
 
 def _integer(value, name):
     if isinstance(value, bool) or not isinstance(value, Integral):
@@ -9,19 +11,16 @@ def _integer(value, name):
     return int(value)
 
 
-class GPUBuffer:
+class GPUBuffer(ContextResource):
     """Storage buffer with explicit host transfers and lifecycle."""
+
+    _resource_name = "buffer"
 
     def __init__(self, context, buffer):
         self.context = context
         self.buffer = buffer
         self.size = buffer.size
         self.closed = False
-
-    def _check_open(self):
-        if self.closed:
-            raise RuntimeError("GPU buffer is closed")
-        self.context._check_open()
 
     def write(self, data, offset=0):
         self._check_open()

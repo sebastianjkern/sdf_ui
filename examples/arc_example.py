@@ -9,7 +9,7 @@ OUTPUT_DIR = Path("out/examples")
 def arc_example():
     with Canvas((1080, 1080)) as ctx:
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        sdf.arc((540, 540), 320, -pi * 0.15, pi * 1.15).fill(
+        sdf.arc((540, 540), 320, -pi * 3 / 20, pi * 23 / 20).fill(
             (15, 23, 42, 255),
             (248, 250, 252, 255),
             2,

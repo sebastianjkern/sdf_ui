@@ -15,11 +15,51 @@ from sdf_ui.graph import GraphTrainer
 from sdf_ui.learning import Objective, ParameterStore
 
 
+def _summarize_timings(timings):
+    return {
+        key: {
+            "mean": float(np.mean(values)), "median": float(np.median(values)),
+            "min": float(np.min(values)), "max": float(np.max(values)),
+        }
+        for key, values in timings.items()
+    }
+
+
+def _time_forward_backward(graph, canvas, objective, warmup, steps, timings):
+    for iteration in range(warmup + steps):
+        for parameter in graph.parameters:
+            parameter.zero_grad()
+        graph.clear_cache()
+        canvas.queue.on_submitted_work_done_sync()
+        start = perf_counter()
+        with graph.run(objective) as execution:
+            canvas.queue.on_submitted_work_done_sync()
+            forward = perf_counter() - start
+            start = perf_counter()
+            execution.backward()
+            canvas.queue.on_submitted_work_done_sync()
+            backward = perf_counter() - start
+        if iteration >= warmup:
+            timings["forward_loss_ms"].append(forward * 1000)
+            timings["backward_ms"].append(backward * 1000)
+
+
+def _time_training(graph, canvas, objective, warmup, steps, timings):
+    with GraphTrainer(graph, objective, lr=0.001) as trainer:
+        for iteration in range(warmup + steps):
+            canvas.queue.on_submitted_work_done_sync()
+            start = perf_counter()
+            trainer.step()
+            canvas.queue.on_submitted_work_done_sync()
+            if iteration >= warmup:
+                timings["training_step_ms"].append((perf_counter() - start) * 1000)
+
+
 def benchmark(size=64, warmup=3, steps=20):
     if size < 1 or warmup < 0 or steps < 1:
         raise ValueError("size and steps must be positive; warmup must be nonnegative")
     weights = ParameterStore()
-    radius = weights.bind("radius", size * 0.2)
+    radius = weights.bind("radius", size * 1 / 5)
     field = sdf.circle((size * 0.5, size * 0.5), radius)
     scene = field.fill("#6db59a", "#15212b").to_rgb()
     target = np.zeros((size, size, 4), dtype=np.float32)
@@ -29,44 +69,14 @@ def benchmark(size=64, warmup=3, steps=20):
     ):
         objective = Objective().mse("image", target)
         timings = {"forward_loss_ms": [], "backward_ms": [], "training_step_ms": []}
-        for iteration in range(warmup + steps):
-            for parameter in graph.parameters:
-                parameter.zero_grad()
-            graph.clear_cache()
-            canvas.queue.on_submitted_work_done_sync()
-            start = perf_counter()
-            with graph.run(objective) as execution:
-                canvas.queue.on_submitted_work_done_sync()
-                forward = perf_counter() - start
-                start = perf_counter()
-                execution.backward()
-                canvas.queue.on_submitted_work_done_sync()
-                backward = perf_counter() - start
-            if iteration >= warmup:
-                timings["forward_loss_ms"].append(forward * 1000)
-                timings["backward_ms"].append(backward * 1000)
-        with GraphTrainer(graph, objective, lr=0.001) as trainer:
-            for iteration in range(warmup + steps):
-                canvas.queue.on_submitted_work_done_sync()
-                start = perf_counter()
-                trainer.step()
-                canvas.queue.on_submitted_work_done_sync()
-                if iteration >= warmup:
-                    timings["training_step_ms"].append((perf_counter() - start) * 1000)
+        _time_forward_backward(graph, canvas, objective, warmup, steps, timings)
+        _time_training(graph, canvas, objective, warmup, steps, timings)
         return {
             "device": canvas.device_info,
             "size": [size, size],
             "warmup": warmup,
             "steps": steps,
-            "timings_ms": {
-                key: {
-                    "mean": float(np.mean(values)),
-                    "median": float(np.median(values)),
-                    "min": float(np.min(values)),
-                    "max": float(np.max(values)),
-                }
-                for key, values in timings.items()
-            },
+            "timings_ms": _summarize_timings(timings),
             "notes": "Host wall time with WebGPU queue synchronization; forward includes loss seeding, backward includes scalar gradient transfer.",
         }
 

@@ -7,7 +7,7 @@ from numbers import Integral
 from ..gpu.nodes.common import build
 from ..util import hex_col
 from .expressions import Expr
-from .texture import PostNamespace, TextureNode
+from .texture import PostNamespace, WarpableTextureNode
 
 
 def _transparent_ink(color):
@@ -24,8 +24,9 @@ class ColorSpaceMode:
     LINEAR = "LINEAR"
 
 
-class ColorTexture(TextureNode):
+class ColorTexture(WarpableTextureNode):
     kind = "color"
+    _warp_operation = "warp_color"
 
     def __init__(self, *args, mode=ColorSpaceMode.LAB, **kwargs):
         super().__init__(*args, **kwargs)
@@ -111,10 +112,6 @@ class ColorTexture(TextureNode):
     def layer_mask(self, top, mask, mode="mix"):
         """Alias for :meth:`mask` with an explicit layer-composition name."""
         return build("layer_mask", self, top, mask, mode=mode)
-
-    def warp(self, field, strength=1.0, steps=1):
-        """Resample this color layer along a floating-point vector field."""
-        return build("warp_color", self, field, strength=strength, steps=steps)
 
     def to_lab(self):
         if self.mode == ColorSpaceMode.LINEAR:

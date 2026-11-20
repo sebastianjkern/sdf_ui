@@ -7,6 +7,7 @@ from sdf_ui.gpu.nodes.primitives.text.plugin import (
     _composite_glyph,
     _justify_placements,
 )
+from tests.text_helpers import use_mock_text_shaper
 
 
 def _unit_width(text):
@@ -14,15 +15,7 @@ def _unit_width(text):
 
 
 def test_wrapping_uses_hyphen_line_break_opportunities(monkeypatch):
-    monkeypatch.setattr(
-        fonts,
-        "_shape_with_options",
-        lambda text, paths, size, missing_glyph, options: (
-            [],
-            float(_unit_width(text)),
-            text,
-        ),
-    )
+    use_mock_text_shaper(monkeypatch)
 
     lines = fonts.layout_text("hello-world", ("font",), 1, box_width=6)
 
@@ -43,15 +36,7 @@ def test_wrapping_uses_hyphen_line_break_opportunities(monkeypatch):
 def test_wrapping_keeps_cjk_punctuation_attached_to_its_preceding_character(
     monkeypatch,
 ):
-    monkeypatch.setattr(
-        fonts,
-        "_shape_with_options",
-        lambda text, paths, size, missing_glyph, options: (
-            [],
-            float(_unit_width(text)),
-            text,
-        ),
-    )
+    use_mock_text_shaper(monkeypatch)
 
     lines = fonts.layout_text("あいう、えお", ("font",), 1, box_width=2)
 
@@ -65,15 +50,7 @@ def test_wrapping_keeps_cjk_punctuation_attached_to_its_preceding_character(
 
 
 def test_emergency_wrap_does_not_split_combining_graphemes(monkeypatch):
-    monkeypatch.setattr(
-        fonts,
-        "_shape_with_options",
-        lambda text, paths, size, missing_glyph, options: (
-            [],
-            float(_unit_width(text)),
-            text,
-        ),
-    )
+    use_mock_text_shaper(monkeypatch)
 
     lines = fonts.layout_text("a\u0301bc", ("font",), 1, box_width=1)
 
@@ -87,15 +64,7 @@ def test_emergency_wrap_does_not_split_combining_graphemes(monkeypatch):
 
 
 def test_wrap_preserves_nonbreaking_space(monkeypatch):
-    monkeypatch.setattr(
-        fonts,
-        "_shape_with_options",
-        lambda text, paths, size, missing_glyph, options: (
-            [],
-            float(_unit_width(text)),
-            text,
-        ),
-    )
+    use_mock_text_shaper(monkeypatch)
 
     lines = fonts.layout_text("a\u00a0b", ("font",), 1, box_width=1)
 

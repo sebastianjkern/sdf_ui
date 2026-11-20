@@ -35,13 +35,16 @@ def _validate_fit_options(
     _validate_validation_interval(validation_interval)
 
 
-def _validate_early_stopping(patience, validation, min_delta, restore_best):
+def _validate_patience(patience, validation):
     if patience is not None and (
         isinstance(patience, bool) or not isinstance(patience, int) or patience < 1
     ):
         raise ValueError("patience must be a positive integer")
     if patience is not None and validation is None:
         raise ValueError("patience requires validation")
+
+
+def _validate_min_delta(min_delta):
     if (
         isinstance(min_delta, bool)
         or not isinstance(min_delta, Real)
@@ -49,6 +52,11 @@ def _validate_early_stopping(patience, validation, min_delta, restore_best):
         or min_delta < 0
     ):
         raise ValueError("min_delta must be a finite nonnegative number")
+
+
+def _validate_early_stopping(patience, validation, min_delta, restore_best):
+    _validate_patience(patience, validation)
+    _validate_min_delta(min_delta)
     if not isinstance(restore_best, bool):
         raise TypeError("restore_best must be a bool")
 
@@ -86,30 +94,16 @@ def _run_fit_steps(
     validation_interval,
     step,
 ):
-    history = []
-    best = math.inf
-    best_state = None
+    history, best, best_state = _initialize_fit_state(
+        trainer, steps, validation, restore_best
+    )
     stale = 0
-    if validation is not None and steps:
-        best = _read_validation_loss(validation)
-        if restore_best:
-            best_state = trainer.state_dict()
-
     for index in range(steps):
         result = trainer.step() if step is None else step()
-        should_validate = _should_validate(
-            validation, index, steps, validation_interval
-        )
+        should_validate = _should_validate(validation, index, steps, validation_interval)
         if should_validate:
             best, best_state, stale = _record_validation(
-                trainer,
-                result,
-                validation,
-                best,
-                best_state,
-                stale,
-                min_delta,
-                restore_best,
+                trainer, result, validation, best, best_state, stale, min_delta, restore_best
             )
         history.append(result)
         if callback is not None:
@@ -118,6 +112,17 @@ def _run_fit_steps(
             break
     _restore_best(trainer, best_state)
     return history
+
+
+def _initialize_fit_state(trainer, steps, validation, restore_best):
+    history = []
+    best = math.inf
+    best_state = None
+    if validation is not None and steps:
+        best = _read_validation_loss(validation)
+        if restore_best:
+            best_state = trainer.state_dict()
+    return history, best, best_state
 
 
 def _should_validate(validation, index, steps, interval):

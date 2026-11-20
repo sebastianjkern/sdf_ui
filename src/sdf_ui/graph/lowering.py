@@ -121,18 +121,22 @@ def _fixed_integer(value, name, minimum=0):
 def _validate_transform_params(name, params):
     if name == "scale":
         factor = _tensor(params["factor"]).item()
-        if not np.isfinite(factor) or abs(factor) < 1e-12:
+        if not np.isfinite(factor) or abs(factor) < _TRANSFORM_EPSILON:
             raise ValueError("scale factor must be finite and non-zero")
     if name == "skew":
         x, y = params["skew"]
         determinant = _tensor(1 - x * y).item()
-        if not np.isfinite(determinant) or abs(determinant) < 1e-12:
+        if not np.isfinite(determinant) or abs(determinant) < _TRANSFORM_EPSILON:
             raise ValueError("skew values produce a singular transform")
 
 
+_COLOR_KEY = "color"
+_FG_COLOR_KEY = "fg_color"
+_BG_COLOR_KEY = "bg_color"
+
 _COLOR_UNIFORMS = frozenset(
     {
-        "color",
+        _COLOR_KEY,
         "background",
         "fgColor",
         "bgColor",
@@ -140,6 +144,10 @@ _COLOR_UNIFORMS = frozenset(
         "line_color",
     }
 )
+_INFLATE_KEY = "inflate"
+_TRANSFORM_EPSILON = 1e-12
+_DEFAULT_FILL_INNER = -3 / 2
+_POLYGON_AREA_EPSILON = 1e-9
 
 
 class _Lowerer:
@@ -225,7 +233,7 @@ class _Lowerer:
             kind = {
                 "r32f": "sdf",
                 "rgba32float": "field",
-            }.get(argument.kind, "color")
+            }.get(argument.kind, _COLOR_KEY)
             if not isinstance(port, Port) or port.kind != kind:
                 raise ValueError(
                     f"Shader '{descriptor.name}' input '{argument.name}' requires {kind}"
@@ -239,7 +247,7 @@ class _Lowerer:
                 index,
                 output_index,
                 {"r32f": "sdf", "rgba32float": "field"}.get(
-                    argument.kind, "color"
+                    argument.kind, _COLOR_KEY
                 ),
                 (
                     None
@@ -274,10 +282,10 @@ class _Lowerer:
         def uniforms(resolve):
             p = values(resolve)
             return {
-                "color": _color(p["fg_color"]),
-                "background": _color(p.get("bg_color", (0, 0, 0, 1))),
-                "inflate": p.get("inflate", 0),
-                "first": p.get("inner", -1.5),
+                _COLOR_KEY: _color(p[_FG_COLOR_KEY]),
+                "background": _color(p.get(_BG_COLOR_KEY, (0, 0, 0, 1))),
+                _INFLATE_KEY: p.get(_INFLATE_KEY, 0),
+                "first": p.get("inner", _DEFAULT_FILL_INNER),
                 "second": p.get("outer", 0),
             }
 
@@ -331,10 +339,10 @@ class _Lowerer:
             raise ValueError(
                 "Materialized source textures require a live Canvas context"
             )
-        if node.kind not in {"sdf", "color", "field"}:
+        if node.kind not in {"sdf", _COLOR_KEY, "field"}:
             raise ValueError("Materialized graph sources must be SDF, color, or field textures")
         index = len(self.sources)
-        mode = node.mode if node.kind == "color" else None
+        mode = node.mode if node.kind == _COLOR_KEY else None
         self.sources.append(node)
         port = Port(-index - 1, 0, node.kind, mode)
         self.memo[id(node)] = port
@@ -449,33 +457,35 @@ class _Lowerer:
 
     def composite(self, plugin, inputs, raw, values):
         name = plugin.name
-        match name:
-            case "output":
-                return self._composite_output(inputs, raw)
-            case "masked_union":
-                return self.emit(
-                    "masked_union", dict(zip(("sdf0", "sdf1"), inputs)), mode="RGB"
-                )
-            case "translate" | "scale" | "rotate" | "skew":
-                return self._composite_transform(name, inputs, values)
-            case "mask" | "layer_mask" | "alpha_overlay" | "multiply":
-                return self._composite_layer(name, inputs)
-            case "fill_from_texture":
-                return self._composite_fill_texture(inputs, values)
-            case "generate_mask":
-                return self._composite_generated_mask(inputs, values)
-            case "blur" | "blur_9" | "blur_13":
-                return self._composite_blur(name, inputs, raw)
-            case "shadow":
-                return self._composite_shadow(inputs, raw, values)
-            case "radial_gradient":
-                return self._composite_radial_gradient(values)
-            case "linear_gradient":
-                return self._composite_linear_gradient(values)
-            case "convex_polygon" | "diamond" | "rhombus" | "parallelogram" | "ngon":
-                return self.polygon(name, raw, values)
-            case _:
-                raise ValueError(f"Plugin '{name}' needs an explicit shader lowering")
+        if name == "output":
+            return self._composite_output(inputs, raw)
+        if name == "masked_union":
+            return self.emit("masked_union", dict(zip(("sdf0", "sdf1"), inputs)), mode="RGB")
+        if name in {"translate", "scale", "rotate", "skew"}:
+            return self._composite_transform(name, inputs, values)
+        if name in {"mask", "layer_mask", "alpha_overlay", "multiply"}:
+            return self._composite_layer(name, inputs)
+        if name in {"fill_from_texture", "generate_mask"}:
+            return self._composite_fill_operation(name, inputs, values)
+        return self._composite_effect(name, inputs, raw, values)
+
+    def _composite_fill_operation(self, name, inputs, values):
+        if name == "fill_from_texture":
+            return self._composite_fill_texture(inputs, values)
+        return self._composite_generated_mask(inputs, values)
+
+    def _composite_effect(self, name, inputs, raw, values):
+        if name in {"blur", "blur_9", "blur_13"}:
+            return self._composite_blur(name, inputs, raw)
+        if name == "shadow":
+            return self._composite_shadow(inputs, raw, values)
+        if name == "radial_gradient":
+            return self._composite_radial_gradient(values)
+        if name == "linear_gradient":
+            return self._composite_linear_gradient(values)
+        if name in {"convex_polygon", "diamond", "rhombus", "parallelogram", "ngon"}:
+            return self.polygon(name, raw, values)
+        raise ValueError(f"Plugin '{name}' needs an explicit shader lowering")
 
     def _composite_output(self, inputs, raw):
         index = _fixed_integer(raw["index"], "output index")
@@ -512,7 +522,7 @@ class _Lowerer:
             params = values(resolve)
             return {
                 "background": _color(params["background"]),
-                "inflate": params["inflate"],
+                _INFLATE_KEY: params[_INFLATE_KEY],
             }
 
         return self.emit(
@@ -526,9 +536,9 @@ class _Lowerer:
         def fill_values(resolve):
             params = values(resolve)
             return {
-                "fg_color": params["color1"],
-                "bg_color": params["color0"],
-                "inflate": params["inflate"],
+                _FG_COLOR_KEY: params["color1"],
+                _BG_COLOR_KEY: params["color0"],
+                _INFLATE_KEY: params[_INFLATE_KEY],
             }
 
         return self.convert(self.fill(inputs[0], fill_values), "RGB")
@@ -546,9 +556,9 @@ class _Lowerer:
     def _composite_shadow(self, inputs, raw, values):
         def fill_values(resolve):
             return {
-                "fg_color": (0, 0, 0, 1),
-                "bg_color": (0, 0, 0, 0),
-                "inflate": values(resolve)["inflate"],
+                _FG_COLOR_KEY: (0, 0, 0, 1),
+                _BG_COLOR_KEY: (0, 0, 0, 0),
+                _INFLATE_KEY: values(resolve)[_INFLATE_KEY],
             }
 
         mask = self.convert(self.fill(inputs[0], fill_values), "RGB")
@@ -569,8 +579,8 @@ class _Lowerer:
         def fill_values(resolve):
             params = values(resolve)
             return {
-                "fg_color": params["color1"],
-                "bg_color": params["color2"],
+                _FG_COLOR_KEY: params["color1"],
+                _BG_COLOR_KEY: params["color2"],
                 "inner": params["inner"],
                 "outer": params["outer"],
             }
@@ -597,8 +607,8 @@ class _Lowerer:
             params = values(resolve)
             _, dx, dy = geometry(resolve)
             return {
-                "fg_color": params["color1"],
-                "bg_color": params["color2"],
+                _FG_COLOR_KEY: params["color1"],
+                _BG_COLOR_KEY: params["color2"],
                 "inner": 0,
                 "outer": (dx * dx + dy * dy).sqrt(),
             }
@@ -670,7 +680,7 @@ class _Lowerer:
             * 0.5
         )
         signed_area = area.item()
-        if abs(signed_area) < 1e-9:
+        if abs(signed_area) < _POLYGON_AREA_EPSILON:
             raise ValueError("convex_polygon points must not be collinear")
         return points, 1 if signed_area > 0 else -1
 

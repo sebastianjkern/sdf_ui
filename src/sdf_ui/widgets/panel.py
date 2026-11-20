@@ -86,6 +86,6 @@ class Panel:
             return surface
         if clip:
             content = shape.fill_from_texture(
-                content, background=_TRANSPARENT, inflate=-0.75
+                content, background=_TRANSPARENT, inflate=-3 / 4
             )
         return surface.alpha_overlay(content)

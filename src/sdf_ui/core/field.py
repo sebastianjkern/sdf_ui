@@ -39,11 +39,11 @@ class FieldNamespace:
 
     def radial(self, center, radius, strength=1.0):
         """Create a Gaussian falloff field flowing radially from a center."""
-        return build("radial_field", center=center, radius=radius, strength=strength)
+        return _build_vector_field("radial_field", center, radius, strength)
 
     def vortex(self, center, radius, strength=1.0):
         """Create a Gaussian falloff field swirling around a center."""
-        return build("vortex_field", center=center, radius=radius, strength=strength)
+        return _build_vector_field("vortex_field", center, radius, strength)
 
     def turbulence(
         self,
@@ -64,3 +64,7 @@ class FieldNamespace:
             gain=gain,
             seed=seed,
         )
+
+
+def _build_vector_field(operation, center, radius, strength):
+    return build(operation, center=center, radius=radius, strength=strength)

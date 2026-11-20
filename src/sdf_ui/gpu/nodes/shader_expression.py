@@ -1,139 +1,19 @@
 """Small typed expression IR emitting GLSL and dual-number GLSL."""
 
-import math
+
+
 import re
 from dataclasses import dataclass
 
-
-def _primal_only(source):
-    """Erase dual tangent expressions from a generated forward program.
-
-    Forward execution never observes a tangent. Replacing each dual
-    constructor's second argument and each tangent read allows the GLSL
-    compiler to remove the remaining dead derivative-only branches.
-    """
-    items = _tokenize(source)
-    source = _replace_ranges(source, _constructor_tangent_ranges(items))
-    return _replace_ranges(source, _tangent_read_ranges(_tokenize(source)))
-
-
-_TOKEN_PATTERN = re.compile(
-    r"(?P<comment>//[^\n]*|/\*[\s\S]*?\*/)|(?P<space>\s+)|"
-    r"(?P<name>[A-Za-z_]\w*)|(?P<other>.)"
+from ._shader_expression_emit import _emit_expression
+from ._shader_expression_inputs import (
+    _reverse_input_declarations,
+    _reverse_input_scatter,
+    _reverse_uniform_components,
 )
-_IDENTIFIER = re.compile(r"[A-Za-z_]\w*")
+from ._shader_expression_primal import _primal_only
 
-
-def _tokenize(source):
-    return [
-        (match.group(), match.start(), match.end())
-        for match in _TOKEN_PATTERN.finditer(source)
-        if match.lastgroup not in {"comment", "space"}
-    ]
-
-
-def _replace_ranges(source, ranges):
-    selected = []
-    for start, end in sorted(ranges):
-        if selected and start < selected[-1][1]:
-            if end > selected[-1][1]:
-                raise ValueError("Overlapping shader expression rewrites")
-            continue
-        selected.append((start, end))
-    for start, end in reversed(selected):
-        source = source[:start] + "0.0" + source[end:]
-    return source
-
-
-def _constructor_tangent_ranges(items):
-    ranges = []
-    for index, (name, _, _) in enumerate(items):
-        if name == "D" and index + 1 < len(items) and items[index + 1][0] == "(":
-            ranges.append(_constructor_tangent_range(items, index))
-    return ranges
-
-
-def _constructor_tangent_range(items, index):
-    return _scan_constructor_arguments(items[index + 2 :])
-
-
-def _scan_constructor_arguments(items):
-    depth, comma = 1, None
-    for token, start, end in items:
-        match token:
-            case "(":
-                depth += 1
-            case ")":
-                depth -= 1
-                if depth == 0:
-                    return _finish_constructor_range(comma, start)
-            case "," if depth == 1:
-                comma = _record_constructor_comma(comma, end)
-    raise ValueError("Invalid dual constructor in shared shader program")
-
-
-def _record_constructor_comma(comma, end):
-    if comma is not None:
-        raise ValueError("Invalid dual constructor in shared shader program")
-    return end
-
-
-def _finish_constructor_range(comma, start):
-    if comma is None:
-        raise ValueError("Invalid dual constructor in shared shader program")
-    return comma, start
-
-
-def _tangent_read_ranges(items):
-    ranges = []
-    index = 0
-    while index < len(items):
-        item = _tangent_read_at(items, index)
-        if item is None:
-            index += 1
-            continue
-        index, value_range = item
-        if value_range is not None:
-            ranges.append(value_range)
-    return ranges
-
-
-def _tangent_read_at(items, index):
-    token, start, _ = items[index]
-    if not _IDENTIFIER.fullmatch(token) or (index > 0 and items[index - 1][0] == "."):
-        return None
-    cursor = index + 1
-    while cursor < len(items):
-        if items[cursor][0] == "[":
-            cursor = _skip_array_index(items, cursor)
-            continue
-        if not _is_member_access(items, cursor):
-            break
-        field = items[cursor + 1][0]
-        cursor += 2
-        if field == "d":
-            return cursor, (start, items[cursor - 1][2])
-    return max(index + 1, cursor), None
-
-
-def _skip_array_index(items, cursor):
-    depth = 1
-    cursor += 1
-    while cursor < len(items) and depth:
-        depth += (items[cursor][0] == "[") - (items[cursor][0] == "]")
-        cursor += 1
-    if depth:
-        raise ValueError("Unclosed shader array index")
-    return cursor
-
-
-def _is_member_access(items, cursor):
-    return (
-        items[cursor][0] == "."
-        and cursor + 1 < len(items)
-        and _IDENTIFIER.fullmatch(items[cursor + 1][0])
-    )
-
+_FLOAT_TEXT = 'float'
 
 @dataclass(frozen=True)
 class Expression:
@@ -149,7 +29,7 @@ class Expression:
         offsets = _reverse_uniform_offsets(contract)
         root = _visit_reverse_expression(self, contract, offsets, nodes)
         if (
-            nodes[root][2] != "float"
+            nodes[root][2] != _FLOAT_TEXT
             or len(contract.outputs) != 1
             or contract.outputs[0].shape
         ):
@@ -205,62 +85,6 @@ void main(){{
 """
 
 
-def _emit_expression(op, args, dual):
-    match op:
-        case "literal":
-            return _emit_literal(args[0], dual)
-        case "position":
-            return "v2(vec2(pos))" if dual else "vec2(texelPos)"
-        case "uniform":
-            return ("U_" if dual else "") + args[0]
-        case "load":
-            return (
-                f"ld({args[0]},pos,0)" if dual else f"imageLoad(source{args[0]},pos).r"
-            )
-        case _:
-            values = tuple(arg.emit(dual=dual) for arg in args)
-            return _emit_operator(op, values, dual)
-
-
-def _emit_literal(value, dual):
-    if (
-        isinstance(value, bool)
-        or not isinstance(value, (int, float))
-        or not math.isfinite(value)
-    ):
-        raise ValueError("Shader literals must be finite numbers")
-    text = repr(float(value))
-    return f"c({text})" if dual else text
-
-
-def _emit_operator(op, values, dual):
-    if op == "length2":
-        return ("len2" if dual else "length") + f"({values[0]})"
-    if op in {"sub", "sub2"}:
-        return (
-            f"{op}({values[0]},{values[1]})" if dual else f"({values[0]} - {values[1]})"
-        )
-    if op in {"add", "mul", "div"}:
-        return _emit_binary_operator(op, values, dual)
-    if op in {"abs", "min", "max", "mix", "neg"}:
-        return _emit_function_operator(op, values, dual)
-    raise ValueError(f"Unsupported shader expression operation '{op}'")
-
-
-def _emit_binary_operator(op, values, dual):
-    if dual:
-        return ("divD" if op == "div" else op) + f"({values[0]},{values[1]})"
-    symbol = {"add": "+", "mul": "*", "div": "/"}[op]
-    return f"({values[0]} {symbol} {values[1]})"
-
-
-def _emit_function_operator(op, values, dual):
-    if not dual and op == "neg":
-        return f"(-{values[0]})"
-    names = {"abs": "absD", "min": "minD", "max": "maxD", "mix": "mixD", "neg": "neg"}
-    return (names[op] if dual else op) + "(" + ",".join(values) + ")"
-
-
 def _reverse_uniform_offsets(contract):
     offsets = {}
     offset = 0
@@ -284,34 +108,38 @@ def _visit_reverse_expression(node, contract, offsets, nodes):
 def _reverse_node_value(node, children, contract, offsets):
     match node.op:
         case "literal":
-            return "float", node.emit()
+            return _FLOAT_TEXT, node.emit()
         case "position":
             return "vec2", "vec2(pos)"
         case "load":
             return _reverse_load_value(node, contract)
         case "uniform":
             return _reverse_uniform_value(node, offsets)
-        case "sub" | "sub2":
-            kind = "float" if node.op == "sub" else "vec2"
-            return kind, f"(v{children[0]}-v{children[1]})"
-        case "add" | "mul" | "div":
-            symbol = {"add": "+", "mul": "*", "div": "/"}[node.op]
-            return "float", f"(v{children[0]}{symbol}v{children[1]})"
-        case "length2":
-            return "float", f"length(v{children[0]})"
-        case "abs" | "min" | "max" | "mix":
-            return "float", node.op + "(" + ",".join(f"v{i}" for i in children) + ")"
-        case "neg":
-            return "float", f"(-v{children[0]})"
         case _:
-            raise ValueError(f"Unsupported reverse expression '{node.op}'")
+            return _reverse_arithmetic_value(node, children)
+
+
+def _reverse_arithmetic_value(node, children):
+    if node.op in {"sub", "sub2"}:
+        kind = _FLOAT_TEXT if node.op == "sub" else "vec2"
+        return kind, f"(v{children[0]}-v{children[1]})"
+    if node.op in {"add", "mul", "div"}:
+        symbol = {"add": "+", "mul": "*", "div": "/"}[node.op]
+        return _FLOAT_TEXT, f"(v{children[0]}{symbol}v{children[1]})"
+    if node.op == "length2":
+        return _FLOAT_TEXT, f"length(v{children[0]})"
+    if node.op in {"abs", "min", "max", "mix"}:
+        return _FLOAT_TEXT, node.op + "(" + ",".join(f"v{i}" for i in children) + ")"
+    if node.op == "neg":
+        return _FLOAT_TEXT, f"(-v{children[0]})"
+    raise ValueError(f"Unsupported reverse expression '{node.op}'")
 
 
 def _reverse_load_value(node, contract):
     index = node.args[0]
     if not 0 <= index < len(contract.inputs) or contract.inputs[index].shape:
         raise ValueError("Reverse expression requires scalar image inputs")
-    return "float", f"imageLoad(source{index},pos).r"
+    return _FLOAT_TEXT, f"imageLoad(source{index},pos).r"
 
 
 def _reverse_uniform_value(node, offsets):
@@ -319,7 +147,7 @@ def _reverse_uniform_value(node, offsets):
     if shape not in ((), (2,)):
         raise ValueError("Reverse expression supports scalar and vec2 uniforms")
     if not shape:
-        return "float", f"parameterValues[uniformBase+{start}]"
+        return _FLOAT_TEXT, f"parameterValues[uniformBase+{start}]"
     value = f"vec2(parameterValues[uniformBase+{start}],parameterValues[uniformBase+{start + 1}])"
     return "vec2", value
 
@@ -348,27 +176,31 @@ def _reverse_rules(nodes, root):
 
 def _reverse_rule(op, children, index):
     match op:
-        case "sub" | "sub2":
-            return f"g{children[0]}+=g{index};g{children[1]}-=g{index};"
-        case "add":
-            return f"g{children[0]}+=g{index};g{children[1]}+=g{index};"
-        case "mul":
-            return f"g{children[0]}+=v{children[1]}*g{index};g{children[1]}+=v{children[0]}*g{index};"
-        case "div":
-            return f"g{children[0]}+=g{index}/v{children[1]};g{children[1]}-=g{index}*v{children[0]}/(v{children[1]}*v{children[1]});"
-        case "length2":
-            return f"if(v{index}>0.0)g{children[0]}+=g{index}*v{children[0]}/v{index};"
-        case "neg":
-            return f"g{children[0]}-=g{index};"
-        case "abs":
-            return f"g{children[0]}+=g{index}*sign(v{children[0]});"
         case "min" | "max":
             return _reverse_minmax_rule(op, children, index)
         case "mix":
             a, b, weight = children
             return f"g{a}+=(1.0-v{weight})*g{index};g{b}+=v{weight}*g{index};g{weight}+=(v{b}-v{a})*g{index};"
         case _:
-            return ""
+            return _reverse_arithmetic_rule(op, children, index)
+
+
+def _reverse_arithmetic_rule(op, children, index):
+    if op in {"sub", "sub2"}:
+        return f"g{children[0]}+=g{index};g{children[1]}-=g{index};"
+    if op == "add":
+        return f"g{children[0]}+=g{index};g{children[1]}+=g{index};"
+    if op == "mul":
+        return f"g{children[0]}+=v{children[1]}*g{index};g{children[1]}+=v{children[0]}*g{index};"
+    if op == "div":
+        return f"g{children[0]}+=g{index}/v{children[1]};g{children[1]}-=g{index}*v{children[0]}/(v{children[1]}*v{children[1]});"
+    if op == "length2":
+        return f"if(v{index}>0.0)g{children[0]}+=g{index}*v{children[0]}/v{index};"
+    if op == "neg":
+        return f"g{children[0]}-=g{index};"
+    if op == "abs":
+        return f"g{children[0]}+=g{index}*sign(v{children[0]});"
+    return ""
 
 
 def _reverse_minmax_rule(op, children, index):
@@ -379,52 +211,6 @@ def _reverse_minmax_rule(op, children, index):
         f"else if(v{right}{relation}v{left})g{right}+=g{index};"
         f"else{{g{left}+=0.5*g{index};g{right}+=0.5*g{index};}}"
     )
-
-
-def _reverse_uniform_components(contract, nodes):
-    components = []
-    for argument in contract.parameters:
-        matches = _matching_uniform_nodes(nodes, argument.name)
-        if argument.shape == ():
-            components.append("+".join(f"g{i}" for i in matches) or "0.0")
-        elif argument.shape == (2,):
-            components.extend(
-                "+".join(f"g{i}.{axis}" for i in matches) or "0.0" for axis in "xy"
-            )
-        else:
-            raise ValueError("Reverse expression supports scalar and vec2 uniforms")
-    return components
-
-
-def _matching_uniform_nodes(nodes, name):
-    return [
-        index
-        for index, (node, _, _, _) in enumerate(nodes)
-        if node.op == "uniform" and node.args[0] == name
-    ]
-
-
-def _reverse_input_declarations(contract):
-    return "\n".join(
-        f"layout(r32f,binding={index}) readonly uniform image2D source{index};"
-        for index in range(len(contract.inputs))
-    )
-
-
-def _reverse_input_scatter(contract, nodes):
-    scatter = []
-    for index in range(len(contract.inputs)):
-        matches = [
-            node_index
-            for node_index, (node, _, _, _) in enumerate(nodes)
-            if node.op == "load" and node.args[0] == index
-        ]
-        if matches:
-            total = "+".join(f"g{node_index}" for node_index in matches)
-            scatter.append(
-                f"atomicAdjoint(inputOffsets[{index}]+pixel,upstream*({total}));"
-            )
-    return scatter
 
 
 @dataclass(frozen=True)
@@ -501,7 +287,7 @@ def _shader_parameter_declarations(contract, original_source):
         initializer = (
             "" if match is None or match.group(1) is None else " = " + match.group(1)
         )
-        array = arg.kind == "float" and len(arg.shape) == 1
+        array = arg.kind == _FLOAT_TEXT and len(arg.shape) == 1
         suffix = f"[{arg.shape[0]}]" if array else ""
         declarations.append(f"uniform {arg.kind} {arg.name}{suffix}{initializer};")
         macros.append(_shader_parameter_macro(arg, array))
@@ -511,7 +297,7 @@ def _shader_parameter_declarations(contract, original_source):
 def _shader_parameter_macro(arg, array):
     if array:
         return f"#define U_{arg.name}(i) c({arg.name}[i])"
-    if arg.kind == "float":
+    if arg.kind == _FLOAT_TEXT:
         expression = f"c({arg.name})"
     elif arg.kind in {"int", "bool"}:
         expression = f"c(float({arg.name}))"

@@ -21,7 +21,32 @@ from ..core.expressions import Expr, evaluate_expr
 from ..core.texture import MultiOutputResult, TextureNode
 from ..gpu.nodes.registry import registry
 from ..util import hex_col
-from .autodiff import Tensor, as_tensor, maximum, minimum, stack, where
+from .autodiff import (
+    Tensor,
+    _tensor_container,
+    as_tensor,
+    maximum,
+    minimum,
+    stack,
+    where,
+)
+
+_SRGB_BREAKPOINT = 0.04045
+_SRGB_OFFSET = 0.055
+_SRGB_SCALE = 1.055
+_SRGB_GAMMA = 2.4
+_SRGB_LINEAR_SCALE = 12.92
+_LAB_BREAKPOINT = 0.008856
+_LAB_LINEAR_SCALE = 7.787
+_LAB_INVERSE_BREAKPOINT = 0.206897
+_LAB_RGB_X = 1.5372
+_LAB_RGB_Y = 0.4986
+_LAB_RGB_Z = 0.9689
+_LAB_RGB_Y_SCALE = 0.2040
+_SRGB_LINEAR_BREAKPOINT = 0.0031308
+_PIXEL_INTERPOLATION_SCALE = 1.5
+_FILL_EDGE_EPSILON = 0.0001
+_TRANSFORM_MINIMUM_SCALE = 1e-12
 
 
 class UnsupportedGradientError(ValueError):
@@ -29,10 +54,7 @@ class UnsupportedGradientError(ValueError):
 
 
 def _tensor(value):
-    # np.asarray on a container of Tensors would silently detach its leaves.
-    if isinstance(value, (tuple, list)):
-        return stack(tuple(_tensor(item) for item in value))
-    return as_tensor(value)
+    return _tensor_container(value)
 
 
 def _clip(value, low, high):
@@ -73,9 +95,9 @@ def _rgba(rgb, alpha):
 def _rgb_to_lab(color):
     rgb = color[..., :3]
     linear = where(
-        rgb.data > 0.04045,
-        (maximum((rgb + 0.055) / 1.055, 1e-30)) ** 2.4,
-        rgb / 12.92,
+        rgb.data > _SRGB_BREAKPOINT,
+        (maximum((rgb + _SRGB_OFFSET) / _SRGB_SCALE, 1e-30)) ** _SRGB_GAMMA,
+        rgb / _SRGB_LINEAR_SCALE,
     )
     xyz = _matrix(
         linear,
@@ -86,9 +108,9 @@ def _rgb_to_lab(color):
         ),
     ) / np.array((0.95047, 1.0, 1.08883))
     curved = where(
-        xyz.data > 0.008856,
+        xyz.data > _LAB_BREAKPOINT,
         maximum(xyz, 1e-30) ** (1.0 / 3.0),
-        7.787 * xyz + 16.0 / 116.0,
+        _LAB_LINEAR_SCALE * xyz + 16.0 / 116.0,
     )
     return stack(
         (
@@ -107,22 +129,22 @@ def _lab_to_rgb(color):
     fz = fy - 254.0 * (color[..., 2] - 0.5) / 200.0
     curved = stack((fx, fy, fz), axis=-1)
     xyz = where(
-        curved.data > 0.206897,
+        curved.data > _LAB_INVERSE_BREAKPOINT,
         curved**3,
-        (curved - 16.0 / 116.0) / 7.787,
+        (curved - 16.0 / 116.0) / _LAB_LINEAR_SCALE,
     ) * np.array((0.95047, 1.0, 1.08883))
     linear = _matrix(
         xyz,
         (
-            (3.2406, -1.5372, -0.4986),
-            (-0.9689, 1.8758, 0.0415),
-            (0.0557, -0.2040, 1.0570),
+            (3.2406, -_LAB_RGB_X, -_LAB_RGB_Y),
+            (-_LAB_RGB_Z, 1.8758, 0.0415),
+            (0.0557, -_LAB_RGB_Y_SCALE, 1.0570),
         ),
     )
     rgb = where(
-        linear.data > 0.0031308,
-        1.055 * maximum(linear, 1e-30) ** (1.0 / 2.4) - 0.055,
-        12.92 * linear,
+        linear.data > _SRGB_LINEAR_BREAKPOINT,
+        _SRGB_SCALE * maximum(linear, 1e-30) ** (1.0 / _SRGB_GAMMA) - _SRGB_OFFSET,
+        _SRGB_LINEAR_SCALE * linear,
     )
     return _rgba(rgb, color[..., 3])
 
@@ -335,6 +357,9 @@ class DifferentiableRenderer:
         result, mode = self._evaluate_node_operation(
             node, plugin, inputs, params, input_modes, mode
         )
+        return self._store_eval_result(node, key, result, mode, memo, modes)
+
+    def _store_eval_result(self, node, key, result, mode, memo, modes):
         if node.kind == "multi_output":
             if not isinstance(result, tuple) or not all(
                 isinstance(value, Tensor) for value in result
@@ -405,8 +430,8 @@ class DifferentiableRenderer:
 
     def _fill(self, distance, params):
         weight = _smoothstep(
-            _tensor(params.get("inner", -1.5)),
-            _tensor(params.get("outer", 0.0)) + 0.0001,
+            _tensor(params.get("inner", -_PIXEL_INTERPOLATION_SCALE)),
+            _tensor(params.get("outer", 0.0)) + _FILL_EDGE_EPSILON,
             distance - _tensor(params.get("inflate", 0.0)),
         )[..., None]
         return _mix(
@@ -416,11 +441,38 @@ class DifferentiableRenderer:
         )
 
     def _builtin(self, op, inputs, params, modes):
+        if op in {"circle", "disc", "rect", "rounded_rect"}:
+            return self._builtin_geometry(op, params)
+        if op in {"union", "intersection", "subtract", "smooth_union", "interpolate", "abs"}:
+            return self._builtin_distance(op, inputs, params)
+        if op in {"translate", "scale", "rotate"}:
+            return self._transform(op, inputs[0], params)
+        return self._builtin_color(op, inputs, params, modes)
+
+    def _builtin_color(self, op, inputs, params, modes):
+        if op in {"clear", "clear_color"}:
+            return self._clear(params)
+        if op == "fill":
+            return self._fill(inputs[0], params)
+        if op == "generate_mask":
+            return self._generate_mask(inputs, params)
+        if op == "to_rgb":
+            return _lab_to_rgb(inputs[0])
+        if op == "to_lab":
+            return _rgb_to_lab(inputs[0])
+        if op == "transparency":
+            return self._transparency(inputs[0], params)
+        if op in {"multiply", "alpha_overlay"}:
+            return self._layer_operation(op, inputs, modes)
+        raise UnsupportedGradientError(f"Unsupported gradient operation '{op}'")
+
+    def _builtin_geometry(self, op, params):
+        if op in {"circle", "disc"}:
+            return self._circle(params)
+        return self._rectangle(params)
+
+    def _builtin_distance(self, op, inputs, params):
         match op:
-            case "circle" | "disc":
-                return self._circle(params)
-            case "rect" | "rounded_rect":
-                return self._rectangle(params)
             case "union":
                 return minimum(*inputs)
             case "intersection":
@@ -433,26 +485,10 @@ class DifferentiableRenderer:
                 return _mix(inputs[0], inputs[1], _tensor(params["t"]))
             case "abs":
                 return inputs[0].abs()
-            case "translate" | "scale" | "rotate":
-                return self._transform(op, inputs[0], params)
-            case "clear" | "clear_color":
-                return self._clear(params)
-            case "fill":
-                return self._fill(inputs[0], params)
-            case "generate_mask":
-                return self._generate_mask(inputs, params)
-            case "to_rgb":
-                return _lab_to_rgb(inputs[0])
-            case "to_lab":
-                return _rgb_to_lab(inputs[0])
-            case "transparency":
-                return _rgba(
-                    inputs[0][..., :3], inputs[0][..., 3] * _tensor(params["alpha"])
-                )
-            case "multiply" | "alpha_overlay":
-                return self._layer_operation(op, inputs, modes)
-            case _:
-                raise UnsupportedGradientError(f"Unsupported gradient operation '{op}'")
+
+    @staticmethod
+    def _transparency(value, params):
+        return _rgba(value[..., :3], value[..., 3] * _tensor(params["alpha"]))
 
     def _circle(self, params):
         center = _tensor(params["center"])
@@ -478,8 +514,8 @@ class DifferentiableRenderer:
     def _corner_radius(params, u, v):
         radius = _tensor(params.get("corner_radius", 0.0))
         if radius.shape == (4,):
-            hx = _smoothstep(0.0, 0.0001, u)
-            hy = _smoothstep(0.0, 0.0001, v)
+            hx = _smoothstep(0.0, _FILL_EDGE_EPSILON, u)
+            hy = _smoothstep(0.0, _FILL_EDGE_EPSILON, v)
             return _mix(
                 _mix(radius[0], radius[2], hx), _mix(radius[1], radius[3], hx), hy
             )
@@ -533,6 +569,10 @@ class DifferentiableRenderer:
         return _rgba(rgb, alpha)
 
     def _transform(self, op, source, params):
+        x, y, distance_scale = self._transform_coordinates(op, params)
+        return self._sample_transform(source, x, y) * distance_scale
+
+    def _transform_coordinates(self, op, params):
         distance_scale = 1.0
         if op == "translate":
             offset = _tensor(params["offset"])
@@ -545,7 +585,7 @@ class DifferentiableRenderer:
                 if (
                     factor.shape != ()
                     or not np.isfinite(factor.data)
-                    or abs(factor.data) < 1e-12
+                    or abs(factor.data) < _TRANSFORM_MINIMUM_SCALE
                 ):
                     raise ValueError("scale factor must be finite and non-zero")
                 x, y = x / factor, y / factor
@@ -558,19 +598,19 @@ class DifferentiableRenderer:
                 )
             x, y = x + center[0], y + center[1]
         x, y = _clip(x, 0.0, self.size[0] - 1), _clip(y, 0.0, self.size[1] - 1)
+        return x, y, distance_scale
+
+    def _sample_transform(self, source, x, y):
         x0, y0 = np.floor(x.data).astype(int), np.floor(y.data).astype(int)
         x1, y1 = (
             np.minimum(x0 + 1, self.size[0] - 1),
             np.minimum(y0 + 1, self.size[1] - 1),
         )
         tx, ty = x - x0, y - y0
-        return (
-            _mix(
-                _mix(source[y0, x0], source[y0, x1], tx),
-                _mix(source[y1, x0], source[y1, x1], tx),
-                ty,
-            )
-            * distance_scale
+        return _mix(
+            _mix(source[y0, x0], source[y0, x1], tx),
+            _mix(source[y1, x0], source[y1, x1], tx),
+            ty,
         )
 
     def save(self, scene, path):

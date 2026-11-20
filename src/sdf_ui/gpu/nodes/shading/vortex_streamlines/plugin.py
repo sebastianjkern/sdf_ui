@@ -4,7 +4,11 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
 from sdf_ui.core.color import ColorSpaceMode, ColorTexture
-from sdf_ui.gpu.nodes._vortex import normalize_vortices, validate_radius, vortex_velocity
+from sdf_ui.gpu.nodes._vortex import (
+    normalize_vortices,
+    validate_radius,
+    vortex_velocity,
+)
 from sdf_ui.gpu.nodes.base import Plugin, PluginFamily, TextureKind
 
 
@@ -29,7 +33,7 @@ def _trace(seed_x, seed_y, direction, vortices, radius, step_size, steps, bounds
             vortices, radius,
         )
         speed = float(np.hypot(vx, vy))
-        if speed < 0.018:
+        if speed < 9 / 500:
             break
         x += direction * float(vx) / speed * step_size
         y += direction * float(vy) / speed * step_size
@@ -39,7 +43,7 @@ def _trace(seed_x, seed_y, direction, vortices, radius, step_size, steps, bounds
     return points
 
 
-def render_streamlines(renderer, inputs, params):
+def _validate_streamline_params(params):
     vortices = normalize_vortices(params["vortices"])
     radius = validate_radius(params["radius"])
     spacing = float(params["spacing"])
@@ -49,31 +53,46 @@ def render_streamlines(renderer, inputs, params):
         raise ValueError("streamline spacing must be finite and at least 12")
     if not np.isfinite(step_size) or step_size <= 0 or not 1 <= steps <= 2000:
         raise ValueError("step_size must be positive and steps must be from 1 to 2000")
+    return vortices, radius, spacing, step_size, steps
 
-    width, height = renderer.ctx.size
-    scale = 2
-    size = (width * scale, height * scale)
-    glow = Image.new("RGBA", size)
-    glow_draw = ImageDraw.Draw(glow)
-    crisp = Image.new("RGBA", size)
-    crisp_draw = ImageDraw.Draw(crisp)
-    line_color = _rgba8(params["color"])
-    glow_color = _rgba8(params["glow_color"])
+
+def _draw_streamlines(drawers, colors, vortices, radius, spacing, step_size, steps, bounds, scale):
+    glow_draw, crisp_draw = drawers
+    glow_color, line_color = colors
+    width, height = bounds
     seed_step = max(16.0, spacing)
-
     for seed_y in np.arange(seed_step / 2, height, seed_step):
         for seed_x in np.arange(seed_step / 2, width, seed_step):
-            forward = _trace(seed_x, seed_y, 1, vortices, radius, step_size, steps, (width, height))
-            backward = _trace(seed_x, seed_y, -1, vortices, radius, step_size, steps, (width, height))
+            forward = _trace(seed_x, seed_y, 1, vortices, radius, step_size, steps, bounds)
+            backward = _trace(seed_x, seed_y, -1, vortices, radius, step_size, steps, bounds)
             points = list(reversed(backward[1:])) + forward
-            if len(points) < 4:
-                continue
-            scaled = [(round(x * scale), round(y * scale)) for x, y in points]
-            glow_draw.line(scaled, fill=glow_color, width=5 * scale, joint="curve")
-            crisp_draw.line(scaled, fill=line_color, width=scale, joint="curve")
+            if len(points) >= 4:
+                scaled = [(round(x * scale), round(y * scale)) for x, y in points]
+                glow_draw.line(scaled, fill=glow_color, width=5 * scale, joint="curve")
+                crisp_draw.line(scaled, fill=line_color, width=scale, joint="curve")
 
+
+def _streamline_image(renderer, vortices, radius, spacing, step_size, steps, color, glow_color):
+    width, height = renderer.ctx.size
+    scale = 2
+    canvas_size = (width * scale, height * scale)
+    glow = Image.new("RGBA", canvas_size)
+    crisp = Image.new("RGBA", canvas_size)
+    _draw_streamlines(
+        (ImageDraw.Draw(glow), ImageDraw.Draw(crisp)),
+        (_rgba8(glow_color), _rgba8(color)),
+        vortices, radius, spacing, step_size, steps, (width, height), scale,
+    )
     glow = glow.filter(ImageFilter.GaussianBlur(radius=3 * scale))
-    image = Image.alpha_composite(glow, crisp).resize((width, height), Image.Resampling.LANCZOS)
+    return Image.alpha_composite(glow, crisp).resize(
+        (width, height), Image.Resampling.LANCZOS
+    )
+
+
+def render_streamlines(renderer, inputs, params):
+    """Rasterize antialiased streamlines with a soft halo."""
+    values = _validate_streamline_params(params)
+    image = _streamline_image(renderer, *values, params["color"], params["glow_color"])
     texture = renderer.ctx.rgba8()
     texture.write(np.asarray(image, dtype=np.uint8).tobytes())
     return ColorTexture(tex=texture, context=renderer.ctx, mode=ColorSpaceMode.RGB)

@@ -1,5 +1,7 @@
 """Sector shader's uniform interface and differentiable implementation."""
 
+
+
 from sdf_ui.gpu.nodes.base import ImageBinding, ShaderInterface, Uniform
 from sdf_ui.gpu.nodes.differentiation import (
     ShaderArgument,
@@ -12,6 +14,7 @@ from ..angular import angles
 from ..segment_math import GLSL as SEGMENT_GLSL
 from ..segment_math import MIN3_GLSL, minimum_candidates, segment
 
+_FLOAT_TEXT = 'float'
 
 def reference(context, inputs, params):
     from sdf_ui.learning.autodiff import where
@@ -32,13 +35,13 @@ def reference(context, inputs, params):
 
 INTERFACE = ShaderInterface(
     ImageBinding("destTex", 0, write=True),
-    uniforms=(Uniform("center", "vec2"), Uniform("radius", "float"),
-              Uniform("start_angle", "float"), Uniform("end_angle", "float")),
+    uniforms=(Uniform("center", "vec2"), Uniform("radius", _FLOAT_TEXT),
+              Uniform("start_angle", _FLOAT_TEXT), Uniform("end_angle", _FLOAT_TEXT)),
 )
 CONTRACT = ShaderDifferentiation(
     "sector", "gpu/nodes/primitives/sector/shader.glsl", (),
-    (ShaderArgument("center", (2,), "vec2"), ShaderArgument("radius", (), "float"),
-     ShaderArgument("start_angle", (), "float"), ShaderArgument("end_angle", (), "float")),
+    (ShaderArgument("center", (2,), "vec2"), ShaderArgument("radius", (), _FLOAT_TEXT),
+     ShaderArgument("start_angle", (), _FLOAT_TEXT), ShaderArgument("end_angle", (), _FLOAT_TEXT)),
     (ShaderArgument("destTex", (), "r32f"),),
     notes="Piecewise derivatives; min/max ties split adjoints equally.", reference=reference,
 )

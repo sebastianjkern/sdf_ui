@@ -17,6 +17,11 @@ from sdf_ui.text import glyph, text
 from sdf_ui.util import hex_col
 from tests.helpers import PROJECT_ROOT, render, rgba_array
 
+_ROBOTO_REGULAR_TTF_TEXT = 'Roboto-Regular.ttf'
+
+_ASSETS_TEXT = 'assets'
+
+_SDF_UI_TEXT = 'sdf_ui'
 
 def test_image_to_sdf_renders_a_simple_bi_level_image(tmp_path):
     image_path = tmp_path / "input.png"
@@ -61,7 +66,7 @@ def test_default_font_renders_glyph_and_text():
 
 
 def test_glyph_renders_using_the_bundled_font():
-    font_path = PROJECT_ROOT / "src" / "sdf_ui" / "assets" / "Roboto-Regular.ttf"
+    font_path = PROJECT_ROOT / "src" / _SDF_UI_TEXT / _ASSETS_TEXT / _ROBOTO_REGULAR_TTF_TEXT
     scene = glyph("i", 0.65, 25, 25, path=str(font_path))
 
     with Canvas((128, 128)) as ctx:
@@ -72,7 +77,7 @@ def test_glyph_renders_using_the_bundled_font():
 
 
 def test_glyph_generates_a_filled_signed_field_with_counters():
-    font_path = PROJECT_ROOT / "src" / "sdf_ui" / "assets" / "Roboto-Regular.ttf"
+    font_path = PROJECT_ROOT / "src" / _SDF_UI_TEXT / _ASSETS_TEXT / _ROBOTO_REGULAR_TTF_TEXT
     scene = glyph("o", 0.08, 20, 15, path=str(font_path))
 
     with Canvas((128, 128)) as ctx:
@@ -88,7 +93,7 @@ def test_glyph_generates_a_filled_signed_field_with_counters():
 
 
 def test_glyph_fill_preserves_transparent_hex_background():
-    font_path = PROJECT_ROOT / "src" / "sdf_ui" / "assets" / "Roboto-Regular.ttf"
+    font_path = PROJECT_ROOT / "src" / _SDF_UI_TEXT / _ASSETS_TEXT / _ROBOTO_REGULAR_TTF_TEXT
     scene = glyph("o", 0.08, 20, 15, path=str(font_path)).fill("#e9c46a", "#00000000")
 
     with Canvas((128, 128)) as ctx:
@@ -102,7 +107,7 @@ def test_glyph_fill_preserves_transparent_hex_background():
 
 
 def test_glyph_fill_normalizes_255_tuple_colors():
-    font_path = PROJECT_ROOT / "src" / "sdf_ui" / "assets" / "Roboto-Regular.ttf"
+    font_path = PROJECT_ROOT / "src" / _SDF_UI_TEXT / _ASSETS_TEXT / _ROBOTO_REGULAR_TTF_TEXT
     scene = glyph("o", 0.08, 20, 15, path=str(font_path)).fill(
         (233, 196, 106, 255), (0, 0, 0, 0)
     )
@@ -121,7 +126,7 @@ def test_glyph_fill_normalizes_255_tuple_colors():
 
 
 def test_text_renders_multiple_glyphs_from_cached_sdf_patches():
-    font_path = PROJECT_ROOT / "src" / "sdf_ui" / "assets" / "Roboto-Regular.ttf"
+    font_path = PROJECT_ROOT / "src" / _SDF_UI_TEXT / _ASSETS_TEXT / _ROBOTO_REGULAR_TTF_TEXT
     _cached_glyph_sdf.cache_clear()
     scene = text(
         "ii",
@@ -147,7 +152,7 @@ def test_text_renders_multiple_glyphs_from_cached_sdf_patches():
 
 
 def test_text_cache_uses_effective_render_size_buckets():
-    font_path = PROJECT_ROOT / "src" / "sdf_ui" / "assets" / "Roboto-Regular.ttf"
+    font_path = PROJECT_ROOT / "src" / _SDF_UI_TEXT / _ASSETS_TEXT / _ROBOTO_REGULAR_TTF_TEXT
     _cached_glyph_sdf.cache_clear()
 
     small = text(
@@ -195,7 +200,7 @@ def test_text_sdf_downsampling_preserves_thin_negative_features():
 
 
 def test_text_newlines_layout_subsequent_lines_below_the_first_line():
-    font_path = PROJECT_ROOT / "src" / "sdf_ui" / "assets" / "Roboto-Regular.ttf"
+    font_path = PROJECT_ROOT / "src" / _SDF_UI_TEXT / _ASSETS_TEXT / _ROBOTO_REGULAR_TTF_TEXT
     scene = text(
         "I\nWWWW",
         size=46,

@@ -9,7 +9,7 @@ def light_example():
     with Canvas((1080, 1080)) as ctx:
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         background = "#071117"
-        light_dir = (-0.55, -0.75, 0.8)
+        light_dir = (-11 / 20, -3 / 4, 0.8)
 
         large_disc = sdf.circle(("38%x", "50%y"), "22%min").light(
             fg_color="#47d5ff",

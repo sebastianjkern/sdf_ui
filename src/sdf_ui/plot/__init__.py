@@ -6,6 +6,9 @@ from ._plot_data import (
     PlotSpec,
     aes,
     facet_wrap,
+    labs,
+)
+from ._plot_data_geoms import (
     geom_bar,
     geom_col,
     geom_errorbar,
@@ -15,7 +18,6 @@ from ._plot_data import (
     geom_point,
     geom_rect,
     geom_ribbon,
-    labs,
 )
 from ._plot_geometries import Geometry
 from ._plot_viewport import Box as Box

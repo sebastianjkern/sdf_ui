@@ -1,17 +1,12 @@
 import unittest
 
 from sdf_ui import Canvas, sdf
-from sdf_ui.gpu.nodes.registry import registry
-from tests.helpers import rgba_array
+from tests.helpers import assert_public_plugin, rgba_array
 
 
 class HalfPlanePluginTests(unittest.TestCase):
     def test_half_plane_is_registered_and_public(self):
-        registry.ensure_loaded()
-
-        self.assertIn("half_plane", registry.public_names())
-        self.assertIn("half_plane", registry.method_names_for("sdf"))
-        self.assertEqual(registry.get("half_plane").family, "primitive")
+        assert_public_plugin(self, "half_plane", aliases=())
 
     def test_half_plane_renders_two_distinct_halves(self):
         with Canvas((64, 64)) as ctx:

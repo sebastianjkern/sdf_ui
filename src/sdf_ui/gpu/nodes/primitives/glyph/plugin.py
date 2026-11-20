@@ -3,6 +3,7 @@ from sdf_ui.fonts import default_font_path
 __docformat__ = "google"
 
 from functools import lru_cache
+
 import numpy as np
 import ttfquery
 from fontTools.pens.basePen import BasePen
@@ -113,7 +114,7 @@ class _SampledOutlinePen(BasePen):
 def _point_line_distance(point, start, end):
     dx, dy = end[0] - start[0], end[1] - start[1]
     length = (dx * dx + dy * dy) ** 0.5
-    if length < 1e-9:
+    if length < 1 / 1_000_000_000:
         return ((point[0] - start[0]) ** 2 + (point[1] - start[1]) ** 2) ** 0.5
     return (
         abs(dy * point[0] - dx * point[1] + end[0] * start[1] - end[1] * start[0])
@@ -139,7 +140,9 @@ def _flatten_cubic(start, control1, control2, end, quality, depth=0):
     )
     if depth >= 12 or flatness <= tolerance:
         return (end,)
-    mid = lambda a, b: ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
+    def mid(a, b):
+        return (a[0] + b[0]) / 2, (a[1] + b[1]) / 2
+
     a, b, c = mid(start, control1), mid(control1, control2), mid(control2, end)
     d, e = mid(a, b), mid(b, c)
     f = mid(d, e)

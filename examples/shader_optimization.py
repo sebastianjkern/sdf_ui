@@ -16,78 +16,90 @@ from sdf_ui.learning import (
 )
 
 
-def optimize(output, steps=200, gpu=False):
-    output = Path(output)
-    output.mkdir(parents=True, exist_ok=True)
-    parameters = ParameterStore()
-    parameters.define("x", 12.0)
-    parameters.define("y", 12.0)
-    parameters.define("radius", 4.0)
+def _ring_scene(parameters):
     radius = param("radius").softplus()
     scene = sdf.ring((param("x"), param("y")), radius, thickness=3.0)
     display = scene.fill("#72c497", "#17212b").to_rgb()
     layout = Layout(
-        [
-            Element(
-                "ring",
-                Bounds(
-                    param("x") - radius, param("y") - radius, radius * 2, radius * 2
-                ),
-            )
-        ],
+        [Element("ring", Bounds(
+            param("x") - radius, param("y") - radius, radius * 2, radius * 2
+        ))],
         (48, 40),
     )
-    renderer = DifferentiableRenderer(layout.size, params=parameters)
-    target = sdf.ring((23, 20), 8, thickness=3)
-    target_field = renderer.render(target).detach()
-    target_pixels = renderer.render(target.fill("#72c497", "#17212b").to_rgb()).detach()
+    return scene, display, layout
 
-    def objective():
+
+def _target_images(renderer):
+    target = sdf.ring((23, 20), 8, thickness=3)
+    field = renderer.render(target).detach()
+    pixels = renderer.render(target.fill("#72c497", "#17212b").to_rgb()).detach()
+    return field, pixels
+
+
+def _objective(renderer, scene, display, layout, parameters, targets):
+    target_field, target_pixels = targets
+
+    def loss():
         field = renderer.render(scene)
         pixels = renderer.render(display)
-        return (
-            ((field - target_field) ** 2).mean() * 0.01
-            + ((pixels - target_pixels) ** 2).mean()
-            + layout.offscreen_loss(parameters) * 0.001
+        geometry = (
+            layout.offscreen_loss(parameters) / 1_000
             + layout.alignment_loss(
                 ["ring"], axis="center_y", target=20, params=parameters
-            )
-            * 0.01
+            ) / 100
         )
+        return ((field - target_field) ** 2).mean() / 100 + (
+            (pixels - target_pixels) ** 2
+        ).mean() + geometry
 
-    renderer.save(display, output / "before.png")
-    initial = objective().item()
+    return loss
+
+
+def _fit(parameters, loss, steps):
     optimizer = Adam(parameters.parameters(), lr=0.15)
+    initial = loss().item()
     for _ in range(steps):
         optimizer.zero_grad()
-        loss = objective()
-        loss.backward()
+        value = loss()
+        value.backward()
         optimizer.step()
-    final = objective().item()
+    return initial, loss().item()
+
+
+def _local_radius_gradient():
+    import numpy as np
+
+    shader = registry.get("ring").shader
+    local = shader.backward(
+        (48, 40), {},
+        {"center": [23.0, 20.0], "radius": 8.0, "thickness": 3.0},
+        np.ones((40, 48)),
+    )
+    return float(local.parameters["radius"])
+
+
+def optimize(output, steps=200, gpu=False):
+    output = Path(output)
+    output.mkdir(parents=True, exist_ok=True)
+    parameters = ParameterStore()
+    for name, value in (("x", 12.0), ("y", 12.0), ("radius", 4.0)):
+        parameters.define(name, value)
+    scene, display, layout = _ring_scene(parameters)
+    renderer = DifferentiableRenderer(layout.size, params=parameters)
+    targets = _target_images(renderer)
+    loss = _objective(renderer, scene, display, layout, parameters, targets)
+    renderer.save(display, output / "before.png")
+    initial, final = _fit(parameters, loss, steps)
     renderer.save(display, output / "after.png")
     parameters.save(output / "parameters.json")
     if gpu:
         with Canvas((48, 40)) as canvas:
             display.save(output / "gpu_after.png", canvas=canvas, params=parameters)
-    shader = registry.get("ring").shader
-    # A local backward pass is also available independently of a render graph.
-    import numpy as np
-
-    local = shader.backward(
-        (48, 40),
-        {},
-        {
-            "center": [23.0, 20.0],
-            "radius": 8.0,
-            "thickness": 3.0,
-        },
-        np.ones((40, 48)),
-    )
     report = {
         "initial_loss": initial,
         "final_loss": final,
         "parameters": parameters.state_dict()["parameters"],
-        "local_radius_gradient": float(local.parameters["radius"]),
+        "local_radius_gradient": _local_radius_gradient(),
     }
     (output / "metrics.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     return report

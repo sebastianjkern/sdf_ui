@@ -137,7 +137,7 @@ def reward_demo(output, steps):
 
     def reward(obs, action):
         snapshot = make_layout(obs, action).snapshot()
-        placement = float(np.sum((action - np.array([0.06, 0.38, 0.70])) ** 2))
+        placement = float(np.sum((action - np.array([0.06, 0.38, 7 / 10])) ** 2))
         return -placement - (snapshot.overlap_area + snapshot.offscreen_area) / (
             snapshot.size[0] * 28
         )
@@ -170,7 +170,7 @@ def reward_demo(output, steps):
         orientation, optimizer=Adam(orientation.parameters(), lr=0.02), seed=4
     )
     discrete_trainer.train(
-        lambda obs, action: 1.0 if action == int(obs[0] < 0.7) else -1.0,
+        lambda obs, action: 1.0 if action == int(obs[0] < 7 / 10) else -1.0,
         lambda rng: np.array([rng.uniform(0.4, 1.2)]),
         steps=steps,
         batch_size=32,
@@ -178,7 +178,7 @@ def reward_demo(output, steps):
     widths = np.array([0.45, 0.55, 0.65, 0.8, 1.0, 1.15])
     accuracy = np.mean(
         [
-            orientation.deterministic_action([width]) == int(width < 0.7)
+            orientation.deterministic_action([width]) == int(width < 7 / 10)
             for width in widths
         ]
     )

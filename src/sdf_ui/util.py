@@ -73,4 +73,4 @@ def collinear(x1, y1, x2, y2, x3, y3):
     """
     area = abs(x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2))
 
-    return area <= 0.000000001
+    return area <= 1 / 1_000_000_000

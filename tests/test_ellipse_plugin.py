@@ -1,17 +1,12 @@
 import unittest
 
 from sdf_ui import Canvas, sdf
-from sdf_ui.gpu.nodes.registry import registry
-from tests.helpers import rgba_array
+from tests.helpers import assert_public_plugin, rgba_array
 
 
 class EllipsePluginTests(unittest.TestCase):
     def test_ellipse_is_registered_and_public(self):
-        registry.ensure_loaded()
-
-        self.assertIn("ellipse", registry.public_names())
-        self.assertIn("ellipse", registry.method_names_for("sdf"))
-        self.assertEqual(registry.get("ellipse").family, "primitive")
+        assert_public_plugin(self, "ellipse", aliases=())
 
     def test_ellipse_renders_a_visible_shape(self):
         with Canvas((96, 96)) as ctx:

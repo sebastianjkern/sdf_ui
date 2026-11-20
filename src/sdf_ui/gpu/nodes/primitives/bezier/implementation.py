@@ -8,11 +8,10 @@ from sdf_ui.gpu.nodes.differentiation import (
 from sdf_ui.gpu.nodes.shader_expression import ShaderProgram
 
 
-def reference(context, inputs, params):
+def _curve_parameters(params):
     import numpy as np
 
-    from sdf_ui.learning.autodiff import stack, where
-    from sdf_ui.learning.render import _length, _tensor
+    from sdf_ui.learning.render import _tensor
 
     a, b, c = (_tensor(params[name]) for name in ("a", "b", "c"))
     b = b + np.where((2.0 * b - a - c).data == 0.0, 1e-4, 0.0)
@@ -21,6 +20,13 @@ def reference(context, inputs, params):
     if chord[0] * control[1] - chord[1] * control[0] == 0:
         raise ValueError("bezier requires non-collinear adjusted control points")
     linear, quadratic = 2.0 * (bv - av), av - 2.0 * bv + cv
+    return a, b, c, linear, quadratic
+
+
+def _root_candidates(context, a, linear, quadratic):
+    import numpy as np
+
+    av = a.data
     delta = np.stack((context.x.data - av[0], context.y.data - av[1]), axis=-1)
     leading = 2.0 * np.dot(quadratic, quadratic)
     second = 3.0 * np.dot(linear, quadratic)
@@ -29,22 +35,45 @@ def reference(context, inputs, params):
     candidates = np.empty(context.x.shape + (3,))
     for index in np.ndindex(context.x.shape):
         roots = np.roots((leading, second, third[index], fourth[index]))
-        real = np.sort(roots.real[np.abs(roots.imag) <= 1e-9])
+        real = np.sort(roots.real[np.abs(roots.imag) <= 1 / 1_000_000_000])
         candidates[index] = np.clip(np.resize(real, 3), 0.0, 1.0)
     candidates.sort(axis=-1)
+    return candidates
+
+
+def _candidate_distances(context, candidates, a, b, c):
+
+    from sdf_ui.learning.autodiff import stack
+    from sdf_ui.learning.render import _length
+
     distances = []
-    for i in range(3):
-        t = candidates[..., i]
-        q = a * (1.0 - t[..., None]) ** 2 + 2.0 * b * (t * (1.0 - t))[..., None]
-        q = q + c * (t * t)[..., None]
-        distances.append(_length(context.x - q[..., 0], context.y - q[..., 1]))
-    values = stack(distances, axis=-1)
+    for index in range(3):
+        t = candidates[..., index]
+        point = a * (1.0 - t[..., None]) ** 2 + 2.0 * b * (t * (1.0 - t))[..., None]
+        point = point + c * (t * t)[..., None]
+        distances.append(_length(context.x - point[..., 0], context.y - point[..., 1]))
+    return stack(distances, axis=-1)
+
+
+def _active_root_mean(values, candidates):
+    import numpy as np
+
+    from sdf_ui.learning.autodiff import where
+
     unique = np.concatenate(
-        (np.ones(context.x.shape + (1,), dtype=bool), np.diff(candidates) != 0.0), axis=-1
+        (np.ones(candidates.shape[:-1] + (1,), dtype=bool),
+         np.diff(candidates) != 0.0), axis=-1,
     )
     data = values.data
     active = unique & (data == data.min(axis=-1, keepdims=True))
     return where(active, values, 0.0).sum(axis=-1) / active.sum(axis=-1)
+
+
+def reference(context, inputs, params):
+    a, b, c, linear, quadratic = _curve_parameters(params)
+    roots = _root_candidates(context, a, linear, quadratic)
+    distances = _candidate_distances(context, roots, a, b, c)
+    return _active_root_mean(distances, roots)
 
 
 INTERFACE = ShaderInterface(

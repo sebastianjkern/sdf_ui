@@ -4,15 +4,7 @@ from functools import reduce
 
 from sdf_ui.gpu.nodes.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.gpu.nodes.common import lower_composite
-
-
-def _polygon_area(points):
-    area = 0.0
-    for index, point in enumerate(points):
-        x0, y0 = point
-        x1, y1 = points[(index + 1) % len(points)]
-        area += x0 * y1 - x1 * y0
-    return area * 0.5
+from sdf_ui.gpu.nodes.common import polygon_signed_area as _polygon_area
 
 
 def render_convex_polygon(renderer, inputs, params):
@@ -23,7 +15,7 @@ def render_convex_polygon(renderer, inputs, params):
         raise ValueError("convex_polygon requires at least 3 points")
 
     area = _polygon_area(points)
-    if abs(area) < 1e-9:
+    if abs(area) < 1 / 1_000_000_000:
         raise ValueError("convex_polygon points must not be collinear")
 
     winding = 1.0 if area > 0 else -1.0

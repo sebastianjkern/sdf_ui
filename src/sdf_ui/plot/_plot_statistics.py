@@ -9,6 +9,8 @@ from typing import Any
 
 from ._plot_sampling import _ordered_range
 
+_DEGENERATE_DOMAIN_MARGIN = 0.05
+
 
 @dataclass(frozen=True)
 class Histogram:
@@ -37,7 +39,7 @@ class Histogram:
             return ()
         low, high = min(values), max(values)
         if low == high:
-            margin = max(0.5, abs(low) * 0.05)
+            margin = max(0.5, abs(low) * _DEGENERATE_DOMAIN_MARGIN)
             low, high = low - margin, high + margin
         low, high = _ordered_range((low, high), "histogram domain")
         edges = tuple(

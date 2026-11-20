@@ -19,7 +19,7 @@ def animation_example(frames=180, output=Path("out/anim")):
             "center_x",
             0.0,
             animate=lambda progress: (
-                640 * (0.35 + 0.25 * math.sin(progress * 2 * math.pi))
+                640 * (7 / 20 + 1 / 4 * math.sin(progress * 2 * math.pi))
             ),
         )
         disc2 = sdf.circle(

@@ -18,7 +18,7 @@ from sdf_ui.learning.policy import (
 
 def test_gaussian_sample_detaches_action_and_has_correct_score_gradient():
     policy = GaussianPolicy(2, 2, seed=3, initial_std=[0.2, 0.4])
-    observation = np.array([0.3, -0.7])
+    observation = np.array([0.3, -7 / 10])
     mean = policy.deterministic_action(observation)
     action, log_prob = policy.sample(observation, np.random.default_rng(8))
     saved_action = action.copy()
@@ -39,7 +39,7 @@ def test_seeded_sampling_and_deterministic_actions(policy_type):
     first = policy_type(2, 3, seed=17)
     second = policy_type(2, 3, seed=17)
     rng1, rng2 = np.random.default_rng(13), np.random.default_rng(13)
-    observation = [0.2, -0.8]
+    observation = [0.2, -4 / 5]
     expected = first.deterministic_action(observation)
     for _ in range(5):
         action1, logp1 = first.sample(observation, rng1)
@@ -73,10 +73,10 @@ def _target_centers(observation):
     width, height = observation
     return np.array(
         [
-            0.23 + 0.12 * width,
-            0.5 + 0.15 * height,
-            0.77 - 0.10 * width,
-            0.5 - 0.12 * height,
+            23 / 100 + 3 / 25 * width,
+            0.5 + 3 / 20 * height,
+            77 / 100 - 1 / 10 * width,
+            0.5 - 3 / 25 * height,
         ]
     )
 
@@ -89,7 +89,7 @@ def _blackbox_layout_reward(observation, action):
     target = _target_centers(observation)
     squared_error = float(np.sum((centers - target) ** 2))
     separation = np.linalg.norm(centers[:2] - centers[2:])
-    overlap = max(0, 0.25 - separation) ** 2
+    overlap = max(0, 1 / 4 - separation) ** 2
     outside = np.maximum(0, -centers) + np.maximum(0, centers - 1)
     return float(-squared_error - 2 * overlap - np.sum(outside**2))
 
@@ -117,7 +117,7 @@ def test_gaussian_improves_contextual_button_placement_blackbox_reward(seed):
     )
     after = evaluate()
     assert after > before + 0.5
-    assert after > -0.03
+    assert after > -3 / 100
     assert np.mean([step["mean_reward"] for step in history[-10:]]) > np.mean(
         [step["mean_reward"] for step in history[:10]]
     )
@@ -146,7 +146,7 @@ def test_categorical_improves_contextual_row_column_grid_selection():
         [policy.probabilities(obs)[index] for index, obs in enumerate(contexts)]
     )
     assert after > before + 0.5
-    assert after > 0.95
+    assert after > 19 / 20
     assert [policy.deterministic_action(obs) for obs in contexts] == [0, 1, 2]
 
 
@@ -168,28 +168,27 @@ def test_discounted_returns_and_update_use_terminal_reward_credit():
     assert episode.total_reward == 8
     returns = np.array([2, 4, 8])
     advantages = (returns - returns.mean()) / returns.std()
-    expected_gradient = -np.mean(
-        [
-            (
-                (
-                    transition.action
-                    - policy.deterministic_action(transition.observation)
-                )
-                / policy.std**2
-            )
-            * advantage
-            for transition, advantage in zip(episode.transitions, advantages)
-        ],
-        axis=0,
-    )
+    expected_gradient = _terminal_reward_gradient(policy, episode, advantages)
     old_bias = policy.b2.numpy()
     metrics = trainer.update([episode])
-    np.testing.assert_allclose(policy.b2.numpy(), old_bias - 0.02 * expected_gradient)
+    np.testing.assert_allclose(policy.b2.numpy(), old_bias - 1 / 50 * expected_gradient)
     assert metrics["mean_return"] == pytest.approx(14 / 3)
     assert metrics["mean_reward"] == 8
     assert metrics["transitions"] == 3
     with pytest.raises(ValueError, match="current policy"):
         trainer.update([episode])
+
+
+def _terminal_reward_gradient(policy, episode, advantages):
+    terms = [
+        (
+            (transition.action - policy.deterministic_action(transition.observation))
+            / policy.std**2
+        )
+        * advantage
+        for transition, advantage in zip(episode.transitions, advantages)
+    ]
+    return -np.mean(terms, axis=0)
 
 
 def test_episodic_training_learns_from_delayed_blackbox_reward():
@@ -204,8 +203,8 @@ def test_episodic_training_learns_from_delayed_blackbox_reward():
         return [0, float((first == 0) + (second == 1))]
 
     trainer.train_episodes(rollout, steps=65, batch_size=16)
-    assert policy.probabilities(contexts[0])[0] > 0.9
-    assert policy.probabilities(contexts[1])[1] > 0.9
+    assert policy.probabilities(contexts[0])[0] > 9 / 10
+    assert policy.probabilities(contexts[1])[1] > 9 / 10
 
 
 @pytest.mark.parametrize("policy_type", [GaussianPolicy, CategoricalPolicy])
@@ -239,7 +238,7 @@ def test_json_checkpoint_resumes_rng_optimizer_and_training_exactly(
 
 
 def test_policy_checkpoint_validation_is_atomic_and_copies_state():
-    policy = GaussianPolicy(2, 2, initial_std=[0.1, 0.3])
+    policy = GaussianPolicy(2, 2, initial_std=[1 / 10, 0.3])
     saved = policy.state_dict()
     wrong_shape = deepcopy(saved)
     wrong_shape["weights"]["b2"] = [1]
@@ -277,7 +276,7 @@ def test_invalid_observations_rejected(policy_type, observation):
         policy.deterministic_action(observation)
 
 
-@pytest.mark.parametrize("std", [0, -0.1, np.nan, np.inf, [0.1], [[0.1, 0.2]]])
+@pytest.mark.parametrize("std", [0, -1 / 10, np.nan, np.inf, [1 / 10], [[1 / 10, 0.2]]])
 def test_invalid_std_rejected(std):
     with pytest.raises(ValueError, match="std"):
         GaussianPolicy(2, 2, initial_std=std)
@@ -328,7 +327,7 @@ def test_optimizer_must_own_exact_policy_parameters(optimizer_type):
         PolicyGradientTrainer(policy, optimizer_type(policy.parameters()[:2]))
 
 
-@pytest.mark.parametrize("gamma", [-0.1, 1.1, np.nan, np.inf])
+@pytest.mark.parametrize("gamma", [-1 / 10, 1.1, np.nan, np.inf])
 def test_invalid_discount_rejected(gamma):
     with pytest.raises(ValueError, match="gamma"):
         PolicyGradientTrainer(GaussianPolicy(1, 1), gamma=gamma)

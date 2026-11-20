@@ -3,6 +3,7 @@
 import json
 import marshal
 from dataclasses import dataclass, replace
+from functools import partialmethod
 from hashlib import sha256
 
 import numpy as np
@@ -56,6 +57,25 @@ def _fixed_array(value, label, *, nonnegative=False):
     return np.frombuffer(array.tobytes(), dtype=np.float32).reshape(array.shape)
 
 
+def _validate_pixel_options(output, kind, delta, normalization):
+    if kind not in {"mse", "mae", "huber"}:
+        raise ValueError("Pixel loss kind must be mse, mae, or huber")
+    if normalization not in {"all", "mask"}:
+        raise ValueError("normalization must be 'all' or 'mask'")
+    if not isinstance(output, str) or not output:
+        raise ValueError("Pixel loss output must be a named graph root")
+    if not np.isscalar(delta) or not np.isfinite(delta) or delta <= 0:
+        raise ValueError("Huber delta must be finite and positive")
+
+
+def _prepare_pixel_arrays(target, mask):
+    if not isinstance(target, Image):
+        target = _fixed_array(target, "Loss target")
+    if mask is not None and not isinstance(mask, Image):
+        mask = _fixed_array(mask, "Loss mask", nonnegative=True)
+    return target, mask
+
+
 class Objective:
     """An additive objective with normalized GPU pixel and CPU scalar losses.
 
@@ -107,18 +127,8 @@ class Objective:
         mask=None,
         normalization="all",
     ):
-        if kind not in {"mse", "mae", "huber"}:
-            raise ValueError("Pixel loss kind must be mse, mae, or huber")
-        if normalization not in {"all", "mask"}:
-            raise ValueError("normalization must be 'all' or 'mask'")
-        if not isinstance(output, str) or not output:
-            raise ValueError("Pixel loss output must be a named graph root")
-        if not np.isscalar(delta) or not np.isfinite(delta) or delta <= 0:
-            raise ValueError("Huber delta must be finite and positive")
-        if not isinstance(target, Image):
-            target = _fixed_array(target, "Loss target")
-        if mask is not None and not isinstance(mask, Image):
-            mask = _fixed_array(mask, "Loss mask", nonnegative=True)
+        _validate_pixel_options(output, kind, delta, normalization)
+        target, mask = _prepare_pixel_arrays(target, mask)
         name = self._name(name, f"{kind}:{output}:{len(self.pixel_losses)}")
         self._pixel_losses.append(
             PixelLoss(
@@ -135,31 +145,19 @@ class Objective:
         self._version += 1
         return self
 
-    def mse(
-        self, output, target, *, weight=1.0, name=None, mask=None, normalization="all"
-    ):
+    def _pointwise(self, output, target, *, kind, weight=1.0, name=None, mask=None, normalization="all"):
         return self.pixel(
             output,
             target,
-            kind="mse",
+            kind=kind,
             weight=weight,
             name=name,
             mask=mask,
             normalization=normalization,
         )
 
-    def mae(
-        self, output, target, *, weight=1.0, name=None, mask=None, normalization="all"
-    ):
-        return self.pixel(
-            output,
-            target,
-            kind="mae",
-            weight=weight,
-            name=name,
-            mask=mask,
-            normalization=normalization,
-        )
+    mse = partialmethod(_pointwise, kind="mse")
+    mae = partialmethod(_pointwise, kind="mae")
 
     def huber(
         self,

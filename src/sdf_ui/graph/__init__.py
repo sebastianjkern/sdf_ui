@@ -1,7 +1,11 @@
 """Shared graph compilation, execution and inspection."""
 
+
+
 from importlib import import_module
 from typing import TYPE_CHECKING
+
+_RUNTIME_TEXT = 'runtime'
 
 if TYPE_CHECKING:
     from .dataset import (
@@ -41,13 +45,13 @@ _EXPORTS = {
     "GraphPlan": "lowering",
     "Port": "lowering",
     "lower_graph": "lowering",
-    "RenderGraph": "runtime",
-    "GraphExecution": "runtime",
-    "GraphTrainer": "runtime",
+    "RenderGraph": _RUNTIME_TEXT,
+    "GraphExecution": _RUNTIME_TEXT,
+    "GraphTrainer": _RUNTIME_TEXT,
     "inspect_graph": "inspection",
-    "FitResult": "runtime",
-    "LossContext": "runtime",
-    "LossLayer": "runtime",
+    "FitResult": _RUNTIME_TEXT,
+    "LossContext": _RUNTIME_TEXT,
+    "LossLayer": _RUNTIME_TEXT,
 }
 __all__ = list(_EXPORTS)
 

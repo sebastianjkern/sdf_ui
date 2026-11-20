@@ -1,3 +1,4 @@
+
 from dataclasses import replace
 
 import numpy as np
@@ -19,11 +20,12 @@ from sdf_ui.plot import (
     geom_ribbon,
 )
 
+_PANEL_TEXT = 'panel'
 
 def test_custom_layer_inherits_mappings_and_shares_scales_across_facets():
     data = [
-        {"panel": "East", "kind": "a", "day": "Mon", "temperature": 18},
-        {"panel": "West", "kind": "b", "day": "Tue", "temperature": 27},
+        {_PANEL_TEXT: "East", "kind": "a", "day": "Mon", "temperature": 18},
+        {_PANEL_TEXT: "West", "kind": "b", "day": "Tue", "temperature": 27},
     ]
     observed = []
 
@@ -37,7 +39,7 @@ def test_custom_layer_inherits_mappings_and_shares_scales_across_facets():
         data=[dict(row, reading=row["temperature"]) for row in data],
     )
     chart = (
-        Plot.from_data(data, aes(x="day", color="kind")) + custom + facet_wrap("panel")
+        Plot.from_data(data, aes(x="day", color="kind")) + custom + facet_wrap(_PANEL_TEXT)
     )
     chart.build((0, 0, 720, 400))
 
@@ -72,7 +74,7 @@ def test_count_geometry_counts_by_category_and_group_before_fitting_scales():
     (Plot.from_data(data, aes(x="day", color="kind")) + layer).build((0, 0, 480, 320))
     first, second = observed
     assert first[0].y_range == second[0].y_range == pytest.approx((0, 2.12))
-    assert first[1] == ({"x": -0.2, "y": 2}, {"x": 0.8, "y": 1})
+    assert first[1] == ({"x": -1 / 5, "y": 2}, {"x": 0.8, "y": 1})
     assert second[1] == ({"x": 0.2, "y": 1},)
 
 
@@ -132,14 +134,14 @@ def test_histogram_uses_shared_bins_and_counts_the_rightmost_edge():
     layer = geom_histogram(bins=2)
     layer = replace(layer, geometry=replace(layer.geometry, draw=record))
     rows = [
-        {"panel": panel, "value": value}
+        {_PANEL_TEXT: panel, "value": value}
         for panel, values in (("A", (0, 1, 2)), ("B", (3, 4)))
         for value in values
     ]
-    plot = Plot.from_data(rows, aes(x="value")) + layer + facet_wrap("panel")
+    plot = Plot.from_data(rows, aes(x="value")) + layer + facet_wrap(_PANEL_TEXT)
     plot.build((0, 0, 600, 250))
 
-    assert observed[0][0] == observed[1][0] == pytest.approx((-0.24, 4.24))
+    assert observed[0][0] == observed[1][0] == pytest.approx((-6 / 25, 4.24))
     assert observed[0][1] == (
         {"xmin": 0, "xmax": 2, "ymin": 0, "ymax": 2},
         {"xmin": 2, "xmax": 4, "ymin": 0, "ymax": 1},

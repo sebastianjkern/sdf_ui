@@ -8,27 +8,37 @@ from sdf_ui.gpu.nodes.common import shader
 from .implementation import CONTRACT, INTERFACE, PROGRAM
 
 
-def _uniforms(params):
-    import math
+def _positive_integer(params, name):
+    value = params[name]
+    if isinstance(value, bool) or int(value) != value or value < 1:
+        raise ValueError(f"{name} must be a positive integer")
+    return float(value)
 
+
+def _spacing(params):
     import numpy as np
 
-    columns, rows = params["columns"], params["rows"]
-    if isinstance(columns, bool) or int(columns) != columns or columns < 1:
-        raise ValueError("columns must be a positive integer")
-    if isinstance(rows, bool) or int(rows) != rows or rows < 1:
-        raise ValueError("rows must be a positive integer")
     spacing = np.asarray(params["spacing"], dtype=np.float32)
     if spacing.shape != (2,) or not np.isfinite(spacing).all() or np.any(spacing <= 0):
         raise ValueError("spacing must contain two finite positive values")
+    return spacing
+
+
+def _center(params):
+    import math
+
     center = params["center"]
     if len(center) != 2 or not all(math.isfinite(float(value)) for value in center):
         raise ValueError("center must contain two finite values")
+    return center
+
+
+def _uniforms(params):
     return {
-        "columns": float(columns),
-        "rows": float(rows),
-        "spacing": spacing,
-        "center": center,
+        "columns": _positive_integer(params, "columns"),
+        "rows": _positive_integer(params, "rows"),
+        "spacing": _spacing(params),
+        "center": _center(params),
     }
 
 

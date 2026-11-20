@@ -1,5 +1,7 @@
 """Every registered shader has an executable and auditable derivative contract."""
 
+
+
 from pathlib import Path
 
 import numpy as np
@@ -9,6 +11,13 @@ from sdf_ui.gpu.nodes.base import ShaderFile
 from sdf_ui.gpu.nodes.registry import registry
 from sdf_ui.learning import Parameter
 
+_CIRCLE_TEXT = 'circle'
+
+_OFFSET_TEXT = 'offset'
+
+_ORIGTEX_TEXT = 'origTex'
+
+_RADIUS_TEXT = 'radius'
 
 def descriptor(name):
     return {shader.name: shader for shader in registry.shader_files()}[name]
@@ -21,69 +30,76 @@ def test_all_shader_files_have_contracts_and_executable_rules():
         str(path.relative_to(root)) for path in (root / "gpu/nodes").rglob("*.glsl")
     } == {shader.path for shader in shaders.values() if shader.wgsl is None}
     for name, shader in shaders.items():
-        contract = shader.differentiation
-        assert contract is not None, name
-        assert contract.name == name and contract.path == shader.path
-        assert contract.outputs and contract.notes
-        assert shader.interface is not None, name
-        if shader.wgsl is not None:
-            assert "fn compute_main" in shader.wgsl.forward()
-            assert "fn compute_main" in shader.wgsl.backward
-        elif shader.program is None:
-            assert (root / f"gpu/shaders/{name}.wgsl").is_file(), name
-        assert callable(contract.reference), name
-        assert [
-            item.name
-            for item in (shader.interface.output, *shader.interface.extra_outputs)
-        ] == [item.name for item in contract.outputs]
-        assert [item.name for item in shader.interface.inputs] == [
-            item.name for item in contract.inputs
-        ]
-        assert [item.name for item in shader.interface.uniforms] == [
-            item.name for item in contract.parameters
-        ]
-        assert [
-            item.unit
-            for item in (
-                shader.interface.output,
-                *shader.interface.extra_outputs,
-                *shader.interface.inputs,
-            )
-        ] == list(range(len(contract.outputs) + len(contract.inputs)))
-        assert set(contract.zero_gradient_parameters) <= {
-            p.name for p in contract.parameters
-        }
+        _assert_shader_contract(name, shader, root)
+
+
+def _assert_shader_contract(name, shader, root):
+    contract = shader.differentiation
+    assert contract is not None, name
+    assert contract.name == name and contract.path == shader.path
+    assert contract.outputs and contract.notes
+    assert shader.interface is not None, name
+    _assert_shader_executable(shader, name, root)
+    assert callable(contract.reference), name
+    assert [
+        item.name for item in (shader.interface.output, *shader.interface.extra_outputs)
+    ] == [item.name for item in contract.outputs]
+    assert [item.name for item in shader.interface.inputs] == [
+        item.name for item in contract.inputs
+    ]
+    assert [item.name for item in shader.interface.uniforms] == [
+        item.name for item in contract.parameters
+    ]
+    assert [
+        item.unit
+        for item in (
+            shader.interface.output,
+            *shader.interface.extra_outputs,
+            *shader.interface.inputs,
+        )
+    ] == list(range(len(contract.outputs) + len(contract.inputs)))
+    assert set(contract.zero_gradient_parameters) <= {
+        parameter.name for parameter in contract.parameters
+    }
+
+
+def _assert_shader_executable(shader, name, root):
+    if shader.wgsl is not None:
+        assert "fn compute_main" in shader.wgsl.forward()
+        assert "fn compute_main" in shader.wgsl.backward
+    elif shader.program is None:
+        assert (root / f"gpu/shaders/{name}.wgsl").is_file(), name
 
 
 def test_circle_backward_reduces_pixels_and_does_not_mutate_callers():
-    shader = descriptor("circle")
-    radius = Parameter("radius", 2.3)
+    shader = descriptor(_CIRCLE_TEXT)
+    radius = Parameter(_RADIUS_TEXT, 2.3)
     radius.grad = np.array(7.0)
     size = (7, 5)
     upstream = np.arange(35.0).reshape(5, 7) / 35
-    params = {"offset": [2.3, 1.7], "radius": radius}
+    params = {_OFFSET_TEXT: [2.3, 1.7], _RADIUS_TEXT: radius}
     gradients = shader.backward(size, {}, params, upstream)
     y, x = np.indices((5, 7))
-    dx, dy = x - 2.3, y - 1.7
+    dx, dy = x - 23 / 10, y - 17 / 10
     norm = np.hypot(dx, dy)
     np.testing.assert_allclose(
-        gradients.parameters["offset"],
+        gradients.parameters[_OFFSET_TEXT],
         [-np.sum(upstream * dx / norm), -np.sum(upstream * dy / norm)],
     )
-    assert gradients.parameters["radius"] == pytest.approx(-upstream.sum())
+    assert gradients.parameters[_RADIUS_TEXT] == pytest.approx(-upstream.sum())
     assert radius.grad == 7
     assert gradients.inputs == {}
     with pytest.raises(TypeError):
-        gradients.parameters["radius"] = 1
+        gradients.parameters[_RADIUS_TEXT] = 1
     with pytest.raises(ValueError):
-        gradients.parameters["offset"][0] = 1
+        gradients.parameters[_OFFSET_TEXT][0] = 1
 
 
 def test_contract_evaluation_preserves_existing_parameter_graph():
-    radius = Parameter("radius", 3.0)
+    radius = Parameter(_RADIUS_TEXT, 3.0)
     derived = radius * 2
-    field = descriptor("circle").differentiation.evaluate(
-        (4, 3), {}, {"offset": [1.3, 1.6], "radius": derived}
+    field = descriptor(_CIRCLE_TEXT).differentiation.evaluate(
+        (4, 3), {}, {_OFFSET_TEXT: [1.3, 1.6], _RADIUS_TEXT: derived}
     )
     field.mean().backward()
     assert radius.grad == pytest.approx(-2)
@@ -91,14 +107,14 @@ def test_contract_evaluation_preserves_existing_parameter_graph():
 
 def test_masked_union_accumulates_both_output_seeds():
     size, shape = (3, 2), (2, 3)
-    inputs = {"sdf0": np.full(shape, -0.3), "sdf1": np.full(shape, 0.1)}
+    inputs = {"sdf0": np.full(shape, -3 / 10), "sdf1": np.full(shape, 0.1)}
     mask_seed = np.zeros(shape + (4,))
     mask_seed[..., 0] = 2
     gradient = descriptor("masked_union").backward(
         size, inputs, {}, {"destTex": np.full(shape, 3.0), "maskTex": mask_seed}
     )
-    np.testing.assert_allclose(gradient.inputs["sdf0"], 3 - 2 * 6 * 0.4 * 0.6)
-    np.testing.assert_allclose(gradient.inputs["sdf1"], 2 * 6 * 0.4 * 0.6)
+    np.testing.assert_allclose(gradient.inputs["sdf0"], 3 - 2 * 6 * 2 / 5 * 3 / 5)
+    np.testing.assert_allclose(gradient.inputs["sdf1"], 2 * 6 * 2 / 5 * 3 / 5)
 
 
 def test_blur_vjp_is_transpose_of_actual_border_stencil():
@@ -106,21 +122,21 @@ def test_blur_vjp_is_transpose_of_actual_border_stencil():
     size, shape = (4, 3), (3, 4, 4)
     original, upstream = rng.normal(size=shape), rng.normal(size=shape)
     shader = descriptor("blur_hor_9")
-    output = shader.differentiation.evaluate(size, {"origTex": original})
-    gradients = shader.backward(size, {"origTex": original}, {}, upstream)
+    output = shader.differentiation.evaluate(size, {_ORIGTEX_TEXT: original})
+    gradients = shader.backward(size, {_ORIGTEX_TEXT: original}, {}, upstream)
     assert np.sum(output.numpy() * upstream) == pytest.approx(
-        np.sum(original * gradients.inputs["origTex"]), abs=1e-12
+        np.sum(original * gradients.inputs[_ORIGTEX_TEXT]), abs=1e-12
     )
-    np.testing.assert_array_equal(gradients.parameters["offset"], 0)
-    assert "offset" in shader.differentiation.zero_gradient_parameters
+    np.testing.assert_array_equal(gradients.parameters[_OFFSET_TEXT], 0)
+    assert _OFFSET_TEXT in shader.differentiation.zero_gradient_parameters
     assert shader.differentiation.sampling == "asymmetric_reflected_zero_outside"
 
 
 @pytest.mark.parametrize("name,expected", [("dither_1bit", 0), ("dithering", 1)])
 def test_hard_threshold_and_additive_dither_have_distinct_gradients(name, expected):
-    inputs = {"origTex": np.full((2, 3, 4), 0.514)}
+    inputs = {_ORIGTEX_TEXT: np.full((2, 3, 4), 0.514)}
     gradients = descriptor(name).backward((3, 2), inputs, {}, np.ones((2, 3, 4)))
-    np.testing.assert_array_equal(gradients.inputs["origTex"], expected)
+    np.testing.assert_array_equal(gradients.inputs[_ORIGTEX_TEXT], expected)
     if name == "dither_1bit":
         assert descriptor(name).differentiation.behavior == "zero_almost_everywhere"
 
@@ -136,22 +152,22 @@ def test_fixed_noise_has_no_trainable_shader_arguments(name):
 
 
 def test_shader_file_exposes_only_its_explicit_differentiation_contract():
-    shader = next(item for item in registry.shader_files() if item.name == "circle")
-    assert shader.differentiation is descriptor("circle").differentiation
+    shader = next(item for item in registry.shader_files() if item.name == _CIRCLE_TEXT)
+    assert shader.differentiation is descriptor(_CIRCLE_TEXT).differentiation
     unknown = ShaderFile("custom", "custom.glsl")
     assert unknown.differentiation is None
     with pytest.raises(ValueError, match="no differentiation"):
         unknown.backward((3, 2), {}, {}, np.ones((2, 3)))
     # Names and paths do not infer contracts: ownership must be explicit.
     assert (
-        ShaderFile("circle", "gpu/nodes/primitives/rect/shader.glsl").differentiation
+        ShaderFile(_CIRCLE_TEXT, "gpu/nodes/primitives/rect/shader.glsl").differentiation
         is None
     )
 
 
 def test_ports_and_uniform_shapes_are_validated_before_backward():
-    contract = descriptor("circle").differentiation
-    for params in ({"offset": [1.0]}, {"typo": 3.0}):
+    contract = descriptor(_CIRCLE_TEXT).differentiation
+    for params in ({_OFFSET_TEXT: [1.0]}, {"typo": 3.0}):
         with pytest.raises(ValueError):
             contract.vjp((3, 2), {}, params, np.ones((2, 3)))
     with pytest.raises(ValueError, match="shape"):

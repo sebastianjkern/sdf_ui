@@ -24,6 +24,12 @@ repos:
         entry: uv run --locked python -m mypy src build_tools
         language: system
         pass_filenames: false
+      - id: slop
+        name: slop lint
+        entry: uv run --locked slop lint --output quiet
+        language: system
+        pass_filenames: false
+        always_run: true
       - id: api-stubs
         name: check generated API stubs
         entry: uv run --locked python build_tools/generate_api_stubs.py --check

@@ -11,6 +11,7 @@ from sdf_ui.learning import Parameter
 SIZE = (640, 420)
 CENTER = (SIZE[0] / 2, SIZE[1] / 2)
 OUTPUT_DIR = Path("out/generative_art")
+_PHASE_KEY = "phase"
 
 
 def _village():
@@ -37,23 +38,13 @@ def _village():
         )
         houses.append(body)
         roofs.append(roof)
-        for window_x in (x + width * 0.30, x + width * 0.68):
-            windows.append(sdf.rect((window_x, base_y + height * 0.58), (4, 8), 1))
+        for window_x in (x + width * 3 / 10, x + width * 17 / 25):
+            windows.append(sdf.rect((window_x, base_y + height * 29 / 50), (4, 8), 1))
 
-    church = sdf.rect((555, 346), (32, 72), 2)
-    church_roof = sdf.triangle(
-        (536, 310), (555, 282), (574, 310)
-    )
-    church_spire = sdf.rect((555, 273), (3, 20))
+    church, church_roof, church_spire, church_windows = _village_church()
     houses.append(church)
     roofs.extend((church_roof, church_spire))
-    windows.extend(
-        (
-            sdf.rect((555, 340), (6, 15), 2),
-            sdf.rect((545, 368), (5, 9), 1),
-            sdf.rect((565, 368), (5, 9), 1),
-        )
-    )
+    windows.extend(church_windows)
 
     return (
         sdf.union_all(houses),
@@ -62,9 +53,35 @@ def _village():
     )
 
 
+def _village_church():
+    church = sdf.rect((555, 346), (32, 72), 2)
+    roof = sdf.triangle((536, 310), (555, 282), (574, 310))
+    spire = sdf.rect((555, 273), (3, 20))
+    windows = (
+        sdf.rect((555, 340), (6, 15), 2),
+        sdf.rect((545, 368), (5, 9), 1),
+        sdf.rect((565, 368), (5, 9), 1),
+    )
+    return church, roof, spire, windows
+
+
 def starry_current_scene(*, linear=False):
     """Build an original village-and-cypress scene under moving sky currents."""
-    phase = param("phase")
+    phase = param(_PHASE_KEY)
+    flow, main_center, cx, cy = _make_current_field(phase)
+    sky_base, sky = _make_painted_sky(main_center, flow)
+    brushes = _make_brush_layers(flow, cx, cy)
+    celestial = _make_celestial_layers(flow)
+    moon = _make_moon_layer()
+    hills = _make_hill_layers()
+    village = _make_village_layers()
+    cypress = _make_cypress_layers()
+    return _compose_starry_scene(
+        linear, sky_base, sky, flow, brushes, celestial, moon, hills, village, cypress
+    )
+
+
+def _make_current_field(phase):
     cx, cy = CENTER
     main_center = (475 + 24 * cos(phase), 118 + 16 * sin(phase))
 
@@ -75,12 +92,15 @@ def starry_current_scene(*, linear=False):
     flow = flow.add(
         field.turbulence(
             frequency=0.011,
-            amplitude=1.5 + 0.2 * sin(phase * 2),
+            amplitude=3 / 2 + 1 / 5 * sin(phase * 2),
             octaves=4,
             seed=41,
         )
     )
+    return flow, main_center, cx, cy
 
+
+def _make_painted_sky(main_center, flow):
     sky_base = color.radial_gradient(
         main_center,
         (0.105, 0.22, 0.49, 1.0),
@@ -98,47 +118,56 @@ def starry_current_scene(*, linear=False):
     cloud_mask = color.perlin_noise().warp(flow, strength=28.0, steps=20)
     sky_clouds = sky_base.mask(cloud_palette, cloud_mask, mode="mix")
     sky = sky_clouds.warp(flow, strength=48.0, steps=28)
+    return sky_base, sky
 
-    # Repeated short ellipses act like painted brush marks; the animated flow
-    # bends each row into broad, interlocking currents.
-    brush_marks = sdf.ellipse((cx, cy), (17, 3.2)).repeat_grid(
-        columns=28,
-        rows=23,
-        spacing=(24, 18),
-        center=CENTER,
-    )
-    brushed_sky = brush_marks.warp(flow, strength=62.0, steps=32)
-    brush_color = brushed_sky.fill("#356fb6", (0.0, 0.0, 0.0, 0.0))
-    highlight_marks = sdf.ellipse((cx + 11, cy + 8), (10, 1.5)).repeat_grid(
-        columns=24,
-        rows=20,
-        spacing=(28, 18),
-        center=(cx + 11, cy + 8),
-    )
-    highlights = highlight_marks.warp(flow, strength=60.0, steps=32).fill(
-        "#82c4df", (0.0, 0.0, 0.0, 0.0)
-    ).transparency(0.64)
-    shadow_marks = sdf.ellipse((cx - 10, cy - 4), (12, 3.8)).repeat_grid(
-        columns=15,
-        rows=12,
-        spacing=(48, 32),
-        center=(cx - 10, cy - 4),
-    )
-    shadows = shadow_marks.warp(flow, strength=58.0, steps=32).fill(
-        "#18366f", (0.0, 0.0, 0.0, 0.0)
-    ).transparency(0.42)
-    cross_marks = sdf.ellipse((cx, cy), (12, 2.5)).repeat_grid(
-        columns=18,
-        rows=14,
-        spacing=(38, 29),
-        center=CENTER,
-    ).rotate(-0.22, center=CENTER)
-    cross_strokes = cross_marks.warp(flow, strength=58.0, steps=32).fill(
-        "#4a82ba", (0.0, 0.0, 0.0, 0.0)
-    ).transparency(0.72)
+
+def _make_brush_layers(flow, cx, cy):
+    brush_color = _base_brush(flow, cx, cy)
+    highlights = _highlight_brush(flow, cx, cy)
+    shadows = _shadow_brush(flow, cx, cy)
+    cross_strokes = _cross_brush(flow, cx, cy)
     flow_lines = flow.contours(spacing=18, line_width=0.7).transparency(0.2)
     sky_glaze = color.clear((0.012, 0.028, 0.11, 0.24))
+    return sky_glaze, flow_lines, shadows, cross_strokes, brush_color, highlights
 
+
+def _base_brush(flow, cx, cy):
+    marks = sdf.ellipse((cx, cy), (17, 3.2)).repeat_grid(
+        columns=28, rows=23, spacing=(24, 18), center=CENTER,
+    )
+    return marks.warp(flow, strength=62.0, steps=32).fill(
+        "#356fb6", (0.0, 0.0, 0.0, 0.0)
+    )
+
+
+def _highlight_brush(flow, cx, cy):
+    marks = sdf.ellipse((cx + 11, cy + 8), (10, 1.5)).repeat_grid(
+        columns=24, rows=20, spacing=(28, 18), center=(cx + 11, cy + 8),
+    )
+    return marks.warp(flow, strength=60.0, steps=32).fill(
+        "#82c4df", (0.0, 0.0, 0.0, 0.0)
+    ).transparency(0.64)
+
+
+def _shadow_brush(flow, cx, cy):
+    marks = sdf.ellipse((cx - 10, cy - 4), (12, 3.8)).repeat_grid(
+        columns=15, rows=12, spacing=(48, 32), center=(cx - 10, cy - 4),
+    )
+    return marks.warp(flow, strength=58.0, steps=32).fill(
+        "#18366f", (0.0, 0.0, 0.0, 0.0)
+    ).transparency(0.42)
+
+
+def _cross_brush(flow, cx, cy):
+    marks = sdf.ellipse((cx, cy), (12, 2.5)).repeat_grid(
+        columns=18, rows=14, spacing=(38, 29), center=CENTER,
+    ).rotate(-11 / 50, center=CENTER)
+    return marks.warp(flow, strength=58.0, steps=32).fill(
+        "#4a82ba", (0.0, 0.0, 0.0, 0.0)
+    ).transparency(0.72)
+
+
+def _make_celestial_layers(flow):
     celestial_points = (
         ((483, 110), 22, "#ffe59a"),
         ((291, 83), 14, "#f7cf72"),
@@ -154,22 +183,28 @@ def starry_current_scene(*, linear=False):
             (1.0, 0.69, 0.28, 0.52),
             (0.12, 0.24, 0.52, 0.0),
             inner=1,
-            outer=radius * 2.4,
+            outer=radius * 12 / 5,
         )
         glows = glows.alpha_overlay(glow)
         star = sdf.star(
-            center, radius, radius * 0.34, rays=8, rotation=-math.pi / 2
+            center, radius, radius * 17 / 50, rays=8, rotation=-math.pi / 2
         ).union(
-            sdf.circle(center, radius * 0.30)
+            sdf.circle(center, radius * 3 / 10)
         )
         stars = star if stars is None else stars.union(star)
     stars = stars.warp(flow, strength=2.1, steps=2)
     star_layer = stars.fill("#fff1bd", (0.0, 0.0, 0.0, 0.0))
+    return glows, stars, star_layer
 
+
+def _make_moon_layer():
     moon_center = (570, 64)
     moon = sdf.circle(moon_center, 30).subtract(sdf.circle((583, 54), 28))
     moon_layer = moon.fill("#fff1c2", (0.0, 0.0, 0.0, 0.0))
+    return moon, moon_layer
 
+
+def _make_hill_layers():
     back_hill = sdf.polygon(
         ((0, 292), (72, 278), (142, 298), (220, 267), (290, 293),
          (374, 270), (452, 295), (528, 266), (594, 287), (640, 261),
@@ -186,12 +221,18 @@ def starry_current_scene(*, linear=False):
     back_layer = back_hill.fill("#1d3c74", (0.0, 0.0, 0.0, 0.0))
     middle_layer = middle_hill.fill("#142d5c", (0.0, 0.0, 0.0, 0.0))
     foreground_layer = foreground_hill.fill("#0b1d3d", (0.0, 0.0, 0.0, 0.0))
+    return back_layer, middle_layer, foreground_layer
 
+
+def _make_village_layers():
     village, roof_shapes, window_shapes = _village()
     village_layer = village.fill("#0b1b36", (0.0, 0.0, 0.0, 0.0))
     roof_layer = roof_shapes.fill("#172d51", (0.0, 0.0, 0.0, 0.0))
     window_layer = window_shapes.fill("#ffd574", (0.0, 0.0, 0.0, 0.0))
+    return village_layer, roof_layer, window_layer, window_shapes
 
+
+def _make_cypress_layers():
     cypress = sdf.polygon(
         (
             (92, 420), (111, 390), (99, 359), (121, 333), (113, 301),
@@ -206,31 +247,60 @@ def starry_current_scene(*, linear=False):
     cypress_glint = sdf.segment((207, 395), (202, 73), 2.0).fill(
         "#1b4961", (0.0, 0.0, 0.0, 0.0)
     )
+    return cypress_layer, cypress_glint
 
+
+def _compose_starry_scene(linear, sky_base, sky, flow, brushes, celestial,
+                          moon, hills, village, cypress):
+    sky_glaze, flow_lines, shadows, cross_strokes, brush_color, highlights = brushes
+    glows, stars, star_layer = celestial
+    moon, moon_layer = moon
+    back_layer, middle_layer, foreground_layer = hills
+    village_layer, roof_layer, window_layer, window_shapes = village
+    cypress_layer, cypress_glint = cypress
     if linear:
-        # Keep the painted textures and give the emissive shapes actual
-        # highlight headroom before compositing and finishing in linear light.
-        return sky_base.to_linear().over(
-            sky, sky_glaze, flow_lines, shadows, cross_strokes, brush_color,
-            highlights, glows, stars.ink_linear((3.5, 2.6, 0.9, 1.0)),
-            moon.ink_linear((2.4, 1.85, 0.8, 1.0)), back_layer, middle_layer,
-            foreground_layer, village_layer, roof_layer,
-            window_shapes.ink_linear((2.2, 1.15, 0.3, 1.0)),
-            cypress_layer, cypress_glint,
-        ).film_grain()
+        return _compose_linear_scene(
+            sky_base, sky, sky_glaze, flow_lines, shadows, cross_strokes,
+            brush_color, highlights, glows, stars, moon, back_layer,
+            middle_layer, foreground_layer, village_layer, roof_layer,
+            window_shapes, cypress_layer, cypress_glint,
+        )
+    return _compose_rgb_scene(
+        sky_base, sky, sky_glaze, flow_lines, shadows, cross_strokes,
+        brush_color, highlights, glows, star_layer, moon_layer, back_layer,
+        middle_layer, foreground_layer, village_layer, roof_layer,
+        window_layer, cypress_layer, cypress_glint,
+    )
 
+
+def _compose_linear_scene(sky_base, sky, sky_glaze, flow_lines, shadows,
+                          cross_strokes, brush_color, highlights, glows, stars,
+                          moon, back_layer, middle_layer, foreground_layer,
+                          village_layer, roof_layer, window_shapes,
+                          cypress_layer, cypress_glint):
+    return sky_base.to_linear().over(
+        sky, sky_glaze, flow_lines, shadows, cross_strokes, brush_color,
+        highlights, glows, stars.ink_linear((3.5, 2.6, 0.9, 1.0)),
+        moon.ink_linear((2.4, 1.85, 0.8, 1.0)), back_layer, middle_layer,
+        foreground_layer, village_layer, roof_layer,
+        window_shapes.ink_linear((2.2, 1.15, 3 / 10, 1.0)),
+        cypress_layer, cypress_glint,
+    ).film_grain()
+
+
+def _compose_rgb_scene(sky_base, sky, sky_glaze, flow_lines, shadows,
+                       cross_strokes, brush_color, highlights, glows, star_layer,
+                       moon_layer, back_layer, middle_layer, foreground_layer,
+                       village_layer, roof_layer, window_layer, cypress_layer,
+                       cypress_glint):
     scene = sky_base.alpha_overlay(sky).alpha_overlay(sky_glaze).alpha_overlay(flow_lines)
     scene = scene.alpha_overlay(shadows).alpha_overlay(cross_strokes)
-    scene = scene.alpha_overlay(brush_color)
-    scene = scene.alpha_overlay(highlights)
-    scene = scene.alpha_overlay(glows).alpha_overlay(star_layer)
-    scene = scene.alpha_overlay(moon_layer)
+    scene = scene.alpha_overlay(brush_color).alpha_overlay(highlights)
+    scene = scene.alpha_overlay(glows).alpha_overlay(star_layer).alpha_overlay(moon_layer)
     scene = scene.alpha_overlay(back_layer).alpha_overlay(middle_layer)
     scene = scene.alpha_overlay(foreground_layer).alpha_overlay(village_layer)
-    scene = scene.alpha_overlay(roof_layer)
-    scene = scene.alpha_overlay(window_layer).alpha_overlay(cypress_layer)
-    return scene.alpha_overlay(cypress_glint).film_grain().to_rgb()
-
+    scene = scene.alpha_overlay(roof_layer).alpha_overlay(window_layer)
+    return scene.alpha_overlay(cypress_layer).alpha_overlay(cypress_glint).film_grain().to_rgb()
 
 def starry_current_animation(
     frames=48, output=OUTPUT_DIR / "starry_current"

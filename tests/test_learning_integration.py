@@ -1,5 +1,7 @@
 """Learning values remain usable by the existing expression/GPU APIs."""
 
+
+
 from types import SimpleNamespace
 
 import numpy as np
@@ -13,11 +15,14 @@ from sdf_ui.learning.layout import Bounds, Element
 from sdf_ui.learning.optimizers import Adam
 from sdf_ui.learning.parameters import ParameterStore
 
+_ANGLE_TEXT = 'angle'
+
+_RADIUS_TEXT = 'radius'
 
 def test_reusable_expression_rebuilds_tape_after_parameter_update():
     parameters = ParameterStore()
-    radius = parameters.define("radius", 2.0)
-    expression = (param("radius") + 1.0) ** 2
+    radius = parameters.define(_RADIUS_TEXT, 2.0)
+    expression = (param(_RADIUS_TEXT) + 1.0) ** 2
     optimizer = Adam(parameters.parameters(), lr=0.1)
     context = SimpleNamespace(size=(32, 32))
     first = evaluate_expr(expression, context, parameters, track_grad=True).item()
@@ -32,20 +37,20 @@ def test_reusable_expression_rebuilds_tape_after_parameter_update():
 
 
 def test_expression_gradients_and_gpu_uniform_resolution():
-    value = Parameter("angle", 0.4)
+    value = Parameter(_ANGLE_TEXT, 0.4)
     context = SimpleNamespace(
         size=(20, 10),
-        percent=lambda x: x * 0.2,
-        percent_x=lambda x: x * 0.2,
-        percent_y=lambda x: x * 0.1,
-        percent_of_min=lambda x: x * 0.1,
+        percent=lambda x: x * 1 / 5,
+        percent_x=lambda x: x * 1 / 5,
+        percent_y=lambda x: x * 1 / 10,
+        percent_of_min=lambda x: x * 1 / 10,
     )
-    expression = sin(param("angle")) + cos(param("angle")) + percent_x(50)
-    output = evaluate_expr(expression, context, {"angle": value}, track_grad=True)
+    expression = sin(param(_ANGLE_TEXT)) + cos(param(_ANGLE_TEXT)) + percent_x(50)
+    output = evaluate_expr(expression, context, {_ANGLE_TEXT: value}, track_grad=True)
     output.backward()
     np.testing.assert_allclose(value.grad, np.cos(0.4) - np.sin(0.4))
-    renderer = Renderer(context, params={"angle": value})
-    assert renderer._resolve((param("angle"), value)) == (0.4, 0.4)
+    renderer = Renderer(context, params={_ANGLE_TEXT: value})
+    assert renderer._resolve((param(_ANGLE_TEXT), value)) == (0.4, 0.4)
 
 
 @pytest.mark.parametrize("operation", ["relu", "softplus", "sigmoid", "tanh", "sqrt"])
@@ -83,16 +88,16 @@ def test_parameter_store_checkpoint_validation_is_atomic(tmp_path):
 
 
 def test_gpu_render_accepts_updated_trainable_parameters_and_float_backend():
-    radius = Parameter("radius", 3.0)
-    scene = sdf.circle((8, 8), param("radius"))
+    radius = Parameter(_RADIUS_TEXT, 3.0)
+    scene = sdf.circle((8, 8), param(_RADIUS_TEXT))
     with Canvas((16, 16)) as canvas:
-        first = canvas.render(scene, params={"radius": radius})
+        first = canvas.render(scene, params={_RADIUS_TEXT: radius})
         first_values = np.frombuffer(first.tex.read(), dtype=np.float32).copy()
         radius.assign(5.0)
-        second = canvas.render(scene, params={"radius": radius})
+        second = canvas.render(scene, params={_RADIUS_TEXT: radius})
         second_values = np.frombuffer(second.tex.read(), dtype=np.float32)
         np.testing.assert_allclose(second_values, first_values - 2.0, atol=0.03)
-        floating = canvas.differentiate(scene, params={"radius": radius})
+        floating = canvas.differentiate(scene, params={_RADIUS_TEXT: radius})
         floating.mean().backward()
         assert radius.grad == pytest.approx(-1.0)
 

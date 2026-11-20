@@ -36,7 +36,8 @@ dev = [
     "ruff",
     "mypy",
     "pre-commit",
-    "sphinx>=8.0"
+    "sphinx>=8.0",
+    "agent-slop-lint",
 ]
 
 [project.urls]
@@ -77,3 +78,6 @@ ignore_missing_imports = true
 show_error_codes = true
 warn_unused_configs = true
 exclude = '^(build|dist|docs/_build|docs/_autosummary|\.venv|\.pytest|\.pytest_cache|__pycache__)/'
+
+[tool.uv.sources]
+agent-slop-lint = { git = "https://github.com/JordanGunn/agent-slop-lint.git", rev = "dev" }

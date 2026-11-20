@@ -8,10 +8,7 @@ import struct
 from numbers import Integral
 
 
-def normalize_rect(rect, canvas_size):
-    """Validate an ``(x, y, width, height)`` rectangle in canvas pixels."""
-    if rect is None:
-        return None
+def _rectangle_values(rect):
     try:
         values = tuple(rect)
     except TypeError as error:
@@ -20,20 +17,25 @@ def normalize_rect(rect, canvas_size):
         isinstance(value, bool) or not isinstance(value, Integral) for value in values
     ):
         raise TypeError("evaluation_rect must contain four integers")
-    x, y, width, height = map(int, values)
+    return tuple(map(int, values))
+
+
+def _check_rectangle_bounds(rect, canvas_size):
+    x, y, width, height = rect
     canvas_width, canvas_height = canvas_size
-    if (
-        x < 0
-        or y < 0
-        or width <= 0
-        or height <= 0
-        or x + width > canvas_width
-        or y + height > canvas_height
-    ):
-        raise ValueError(
-            "evaluation_rect must be a positive rectangle inside the canvas"
-        )
-    return x, y, width, height
+    if min(x, y) < 0 or min(width, height) <= 0:
+        raise ValueError("evaluation_rect must be a positive rectangle inside the canvas")
+    if x + width > canvas_width or y + height > canvas_height:
+        raise ValueError("evaluation_rect must be a positive rectangle inside the canvas")
+
+
+def normalize_rect(rect, canvas_size):
+    """Validate an ``(x, y, width, height)`` rectangle in canvas pixels."""
+    if rect is None:
+        return None
+    values = _rectangle_values(rect)
+    _check_rectangle_bounds(values, canvas_size)
+    return values
 
 
 def rect_groups(code, rect):
@@ -95,7 +97,7 @@ def _rewrite_texture_calls(code, function, image_name, origin_name):
         if start < 0:
             return code
         open_paren = start + len(function)
-        close_paren = _matching_paren(code, open_paren)
+        close_paren = _matching_delimiter(code, open_paren, "(", ")", "Malformed WGSL function call")
         args = _split_arguments(code[open_paren + 1 : close_paren])
         if args and args[0].strip() == image_name and len(args) >= 2:
             coordinate = args[1].strip()
@@ -107,16 +109,16 @@ def _rewrite_texture_calls(code, function, image_name, origin_name):
             search_from = close_paren + 1
 
 
-def _matching_paren(code, open_paren):
+def _matching_delimiter(code, open_delimiter, opening, closing, error):
     depth = 0
-    for index in range(open_paren, len(code)):
-        if code[index] == "(":
+    for index in range(open_delimiter, len(code)):
+        if code[index] == opening:
             depth += 1
-        elif code[index] == ")":
+        elif code[index] == closing:
             depth -= 1
             if depth == 0:
                 return index
-    raise ValueError("Malformed WGSL function call")
+    raise ValueError(error)
 
 
 def _split_arguments(source):
@@ -144,7 +146,7 @@ def _offset_entry_point(code):
         raise ValueError("Region evaluation requires a compute_main entry point")
     open_brace = match.end() - 1
     invocation = match.group(1)
-    close_brace = _matching_brace(code, open_brace)
+    close_brace = _matching_delimiter(code, open_brace, "{", "}", "Malformed WGSL function body")
     body = code[open_brace + 1 : close_brace]
     body = re.sub(
         rf"\b{invocation}\.xy\b",
@@ -165,15 +167,3 @@ def _offset_entry_point(code):
     guard += f"{invocation}.y >= _sdfRegion.outputExtent.y) {{ return; }}\n"
     body = guard + body
     return code[: open_brace + 1] + body + code[close_brace:]
-
-
-def _matching_brace(code, open_brace):
-    depth = 0
-    for index in range(open_brace, len(code)):
-        if code[index] == "{":
-            depth += 1
-        elif code[index] == "}":
-            depth -= 1
-            if depth == 0:
-                return index
-    raise ValueError("Malformed WGSL function body")

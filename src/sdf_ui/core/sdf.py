@@ -4,11 +4,12 @@ __docformat__ = "google"
 
 from ..gpu.nodes.common import build
 from .color import _transparent_ink
-from .texture import TextureNode
+from .texture import WarpableTextureNode
 
 
-class SDFTexture(TextureNode):
+class SDFTexture(WarpableTextureNode):
     kind = "sdf"
+    _warp_operation = "warp_sdf"
 
     def fill(
         self,
@@ -33,7 +34,7 @@ class SDFTexture(TextureNode):
             fg_color=fg_color,
             bg_color=bg_color,
             inflate=inflate,
-            inner=(-0.5 if is_text else -1.5) if inner is None else inner,
+            inner=(-0.5 if is_text else -3 / 2) if inner is None else inner,
             outer=outer,
         )
 
@@ -70,10 +71,6 @@ class SDFTexture(TextureNode):
     def fill_linear(self, rgba, background, *, inner=0.0, outer=1.0):
         """Interpolate two linear RGBA colors over a signed distance interval."""
         return build("hdr_fill", self, rgba, background, inner, outer)
-
-    def warp(self, field, strength=1.0, steps=1):
-        """Resample this SDF along a floating-point vector field."""
-        return build("warp_sdf", self, field, strength=strength, steps=steps)
 
     def domain_warp(self, field, strength=1.0):
         """Displace this shape's domain with a vector field."""

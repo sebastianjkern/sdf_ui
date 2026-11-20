@@ -8,6 +8,24 @@ from sdf_ui.core.sdf import SDFTexture
 from sdf_ui.gpu.nodes.base import Plugin, PluginFamily, TextureKind
 
 
+def _jump_flood(ctx, seed_a, seed_b, jump_buffer, width, height):
+    jump = 1 << (max(width, height).bit_length() - 1)
+    current, destination = seed_a, seed_b
+    while jump >= 1:
+        ctx.write_buffer(jump_buffer, 0, struct.pack("<I", jump))
+        ctx.run_shader(
+            "redistance_jump", {0: current, 1: destination, 2: jump_buffer},
+            color_format="rgba32f",
+        )
+        current, destination = destination, current
+        jump >>= 1
+    ctx.write_buffer(jump_buffer, 0, struct.pack("<I", 1))
+    ctx.run_shader(
+        "redistance_jump", {0: current, 1: destination, 2: jump_buffer},
+        color_format="rgba32f",
+    )
+    return destination
+
 def render_redistance(renderer, inputs, params):
     ctx = renderer.ctx
     source = inputs[0].tex
@@ -30,26 +48,7 @@ def render_redistance(renderer, inputs, params):
             color_format="rgba32f",
         )
 
-        jump = 1 << (max(width, height).bit_length() - 1)
-        current, destination = seed_a, seed_b
-        while jump >= 1:
-            ctx.write_buffer(jump_buffer, 0, struct.pack("<I", jump))
-            ctx.run_shader(
-                "redistance_jump",
-                {0: current, 1: destination, 2: jump_buffer},
-                color_format="rgba32f",
-            )
-            current, destination = destination, current
-            jump >>= 1
-
-        # One extra unit-jump pass reduces propagation errors at nearby fronts.
-        ctx.write_buffer(jump_buffer, 0, struct.pack("<I", 1))
-        ctx.run_shader(
-            "redistance_jump",
-            {0: current, 1: destination, 2: jump_buffer},
-            color_format="rgba32f",
-        )
-        current = destination
+        current = _jump_flood(ctx, seed_a, seed_b, jump_buffer, width, height)
 
         ctx.run_shader(
             "redistance_finalize",

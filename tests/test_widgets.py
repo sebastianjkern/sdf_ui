@@ -91,27 +91,12 @@ def test_widget_geometry_can_share_layout_losses_and_native_pixel_gradients():
     )
     size = (40, 30)
     plot = Plot((4, 4, 32, 20), (0, 8), (0, 5))
-
-    def scene(label, width, progress, tip, offset, leader_width):
-        panel = Panel((3, 5, width, 14), padding=(2, 3), radius=2)
-        return panel, {
-            "panel": panel.shape(),
-            "progress": progress_bar((4, 22, 30, 5), progress),
-            "arrow": sdf.arrow((7, 12), (tip, 15), head_length=7),
-            "annotation": plot.annotate(
-                (2, 2),
-                label,
-                label_origin=(8, 8),
-                offset=(offset, 6),
-                leader_width=leader_width,
-            ),
-        }
-
     with (
         Canvas(size) as canvas,
         canvas.render(sdf.text("A", size=12, ox=8, oy=8)) as label,
     ):
-        panel, live = scene(
+        panel, live = _widget_scene(
+            plot,
             label,
             param("width"),
             param("progress"),
@@ -119,7 +104,7 @@ def test_widget_geometry_can_share_layout_losses_and_native_pixel_gradients():
             param("offset"),
             param("leader_width"),
         )
-        _, target = scene(label, 19, 0.68, 22, 9, 3.5)
+        _, target = _widget_scene(plot, label, 19, 0.68, 22, 9, 3.5)
         layout = Layout(
             [
                 Element(
@@ -142,10 +127,34 @@ def test_widget_geometry_can_share_layout_losses_and_native_pixel_gradients():
             objective.geometry(lambda: layout.minimum_size_loss(params), weight=0.1)
             with graph.run(objective) as run:
                 gradients = run.backward()
-                assert run.stats["image_readbacks"] == 0
-            for name in params:
-                assert float(gradients[name]) != pytest.approx(0, abs=1e-6)
-                assert np.isfinite(gradients[name])
-            with GraphTrainer(graph, objective, lr=0.08) as trainer:
-                history = trainer.fit(4)
-            assert history[-1]["loss"] < history[0]["loss"]
+                _assert_native_widget_gradients(run, gradients, params)
+            _assert_widget_training(graph, objective)
+
+
+def _widget_scene(plot, label, width, progress, tip, offset, leader_width):
+    panel = Panel((3, 5, width, 14), padding=(2, 3), radius=2)
+    return panel, {
+        "panel": panel.shape(),
+        "progress": progress_bar((4, 22, 30, 5), progress),
+        "arrow": sdf.arrow((7, 12), (tip, 15), head_length=7),
+        "annotation": plot.annotate(
+            (2, 2),
+            label,
+            label_origin=(8, 8),
+            offset=(offset, 6),
+            leader_width=leader_width,
+        ),
+    }
+
+
+def _assert_native_widget_gradients(run, gradients, params):
+    assert run.stats["image_readbacks"] == 0
+    for name in params:
+        assert float(gradients[name]) != pytest.approx(0, abs=1e-6)
+        assert np.isfinite(gradients[name])
+
+
+def _assert_widget_training(graph, objective):
+    with GraphTrainer(graph, objective, lr=0.08) as trainer:
+        history = trainer.fit(4)
+    assert history[-1]["loss"] < history[0]["loss"]

@@ -110,22 +110,32 @@ def _sample_path(function, domain, project, low, high, tolerance, samples, break
 
     def clipped_segments():
         for index, (a, b) in enumerate(zip(cuts, cuts[1:])):
-            # Take one-sided samples at explicitly marked discontinuities.
-            lo = a if index == 0 else math.nextafter(a, b)
-            hi = b if index == len(cuts) - 2 else math.nextafter(b, a)
-            if lo >= hi:
-                continue
-            previous_t = lo
-            previous_p = sample(lo)
-            for i in range(1, samples + 1):
-                t = hi if i == samples else lo + (hi - lo) * (i / samples)
-                point = sample(t)
-                for p0, p1 in _adaptive_segments(
-                    sample, previous_t, previous_p, t, point, tolerance
-                ):
-                    clipped = _clip_segment(p0, p1, low, high)
-                    if clipped is not None:
-                        yield clipped
-                previous_t, previous_p = t, point
+            yield from _clipped_interval(
+                sample, a, b, index, len(cuts), low, high, tolerance, samples
+            )
 
     return _path_points(clipped_segments())
+
+
+def _clipped_interval(sample, start, end, index, cut_count, low, high, tolerance, samples):
+    # Take one-sided samples at explicitly marked discontinuities.
+    lo = start if index == 0 else math.nextafter(start, end)
+    hi = end if index == cut_count - 2 else math.nextafter(end, start)
+    if lo >= hi:
+        return
+    previous_t, previous_p = lo, sample(lo)
+    for step in range(1, samples + 1):
+        current_t = hi if step == samples else lo + (hi - lo) * (step / samples)
+        current_p = sample(current_t)
+        yield from _clipped_adaptive_segments(
+            sample, previous_t, previous_p, current_t, current_p,
+            low, high, tolerance,
+        )
+        previous_t, previous_p = current_t, current_p
+
+
+def _clipped_adaptive_segments(sample, t0, p0, t1, p1, low, high, tolerance):
+    for start, end in _adaptive_segments(sample, t0, p0, t1, p1, tolerance):
+        clipped = _clip_segment(start, end, low, high)
+        if clipped is not None:
+            yield clipped

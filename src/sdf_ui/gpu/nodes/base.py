@@ -187,38 +187,46 @@ class Plugin:
     def bind(self, args, kwargs):
         kwargs = dict(kwargs)
         input_names = self.method_input_names()
+        inputs = self._bind_inputs(args, kwargs, input_names)
+        params = self._bind_params(args[len(self.input_kinds):], kwargs)
+        params = {**(self.defaults or {}), **params}
+        self._validate_required_params(params)
+        return tuple(inputs), params
+
+    def _bind_inputs(self, args, kwargs, input_names):
         inputs = []
         for index in range(len(self.input_kinds)):
             name = input_names[index - 1] if index > 0 and input_names else None
-            if index < len(args):
-                if name is not None and name in kwargs:
-                    raise TypeError(f"{self.name} got multiple values for '{name}'")
-                inputs.append(args[index])
-            elif name is not None and name in kwargs:
-                inputs.append(kwargs.pop(name))
-            elif index == 0 or name is None:
-                raise TypeError(
-                    f"{self.name} expects at least {len(self.input_kinds)} input argument(s)"
-                )
-            else:
-                unknown = next(
-                    (
-                        key
-                        for key in kwargs
-                        if key not in self.params and key not in input_names
-                    ),
-                    None,
-                )
-                if unknown is not None:
-                    message = unknown_name_message(
-                        f"{self.name} got an unexpected argument",
-                        unknown,
-                        (*input_names, *self.params),
-                    )
-                    raise TypeError(message)
-                raise TypeError(f"{self.name} missing required input argument '{name}'")
+            inputs.append(self._bind_one_input(index, name, args, kwargs, input_names))
+        return inputs
 
-        param_args = args[len(self.input_kinds) :]
+    def _bind_one_input(self, index, name, args, kwargs, input_names):
+        if index < len(args):
+            if name is not None and name in kwargs:
+                raise TypeError(f"{self.name} got multiple values for '{name}'")
+            return args[index]
+        if name is not None and name in kwargs:
+            return kwargs.pop(name)
+        if index == 0 or name is None:
+            raise TypeError(
+                f"{self.name} expects at least {len(self.input_kinds)} input argument(s)"
+            )
+        self._raise_missing_input(name, kwargs, input_names)
+
+    def _raise_missing_input(self, name, kwargs, input_names):
+        unknown = next(
+            (key for key in kwargs if key not in self.params and key not in input_names),
+            None,
+        )
+        if unknown is not None:
+            message = unknown_name_message(
+                f"{self.name} got an unexpected argument", unknown,
+                (*input_names, *self.params),
+            )
+            raise TypeError(message)
+        raise TypeError(f"{self.name} missing required input argument '{name}'")
+
+    def _bind_params(self, param_args, kwargs):
         if len(param_args) > len(self.params):
             raise TypeError(f"{self.name} got too many positional arguments")
 
@@ -232,14 +240,13 @@ class Plugin:
             if key in params:
                 raise TypeError(f"{self.name} got multiple values for '{key}'")
             params[key] = value
+        return params
 
-        params = {**(self.defaults or {}), **params}
+    def _validate_required_params(self, params):
         missing = tuple(param for param in self.params if param not in params)
         if missing:
             names = ", ".join(missing)
             raise TypeError(f"{self.name} missing required parameter(s): {names}")
-
-        return tuple(inputs), params
 
     def render(self, renderer, inputs, params):
         if self.render_func is not None:
@@ -260,6 +267,15 @@ class Plugin:
     ):
         from sdf_ui.core.field import FieldTexture
 
+        self._validate_gpu_interface(ctx, inputs)
+        mode = self._result_mode(inputs)
+        texture = self._create_output_texture(ctx, mode, ColorSpaceMode)
+        self._dispatch_gpu_render(ctx, inputs, params, texture)
+        return self._wrap_gpu_result(
+            ctx, texture, mode, ColorSpaceMode, ColorTexture, SDFTexture, FieldTexture
+        )
+
+    def _validate_gpu_interface(self, ctx, inputs):
         if self.shader.wgsl is None and not ctx.supports_shader(self.shader.name):
             raise NotImplementedError(
                 f"WebGPU shader '{self.shader.name}' has not been ported to WGSL"
@@ -271,20 +287,21 @@ class Plugin:
             )
         if len(interface.inputs) != len(inputs):
             raise ValueError(f"Shader '{self.shader.name}' has invalid input count")
+        return interface
 
-        mode = self.mode
-        if mode is None and inputs and hasattr(inputs[0], "mode"):
-            mode = inputs[0].mode
+    def _result_mode(self, inputs):
+        return self.mode if self.mode is not None or not inputs or not hasattr(inputs[0], "mode") else inputs[0].mode
+
+    def _create_output_texture(self, ctx, mode, ColorSpaceMode):
         if self.result == TextureKind.SDF:
-            texture = ctx.r32f()
-        elif self.result == TextureKind.COLOR:
-            texture = ctx.rgba32f() if mode == ColorSpaceMode.LINEAR else ctx.rgba8()
-        elif self.result == TextureKind.FIELD:
-            texture = ctx.rgba32f()
-        else:
-            raise ValueError(
-                f"Plugin '{self.name}' cannot render result '{self.result}' on WebGPU"
-            )
+            return ctx.r32f()
+        if self.result == TextureKind.COLOR:
+            return ctx.rgba32f() if mode == ColorSpaceMode.LINEAR else ctx.rgba8()
+        if self.result == TextureKind.FIELD:
+            return ctx.rgba32f()
+        raise ValueError(f"Plugin '{self.name}' cannot render result '{self.result}' on WebGPU")
+
+    def _dispatch_gpu_render(self, ctx, inputs, params, texture):
         try:
             uniforms = {} if self.make_uniforms is None else self.make_uniforms(params)
             images = tuple(item.tex for item in inputs)
@@ -293,6 +310,9 @@ class Plugin:
             texture.close()
             raise
 
+    def _wrap_gpu_result(
+        self, ctx, texture, mode, ColorSpaceMode, ColorTexture, SDFTexture, FieldTexture
+    ):
         if self.result == TextureKind.SDF:
             return SDFTexture(tex=texture, context=ctx)
         if self.result == TextureKind.FIELD:

@@ -39,6 +39,7 @@ HELD_OUT = (
     ("test_wide", 180, (14, 30, 20)),
 )
 VALIDATION = ("validation", 156, (24, 16, 24))
+_WIDTH_KEY = "width"
 
 
 @dataclass
@@ -75,7 +76,7 @@ def predict(policy, width, content):
     reference_widths(width, content)
     action = policy.deterministic_action([width / 160, *(v / 32 for v in content)])
     shares = [
-        max(float(value), 0) + math.log1p(math.exp(-abs(float(value)))) + 0.01
+        max(float(value), 0) + math.log1p(math.exp(-abs(float(value)))) + 1 / 100
         for value in action
     ]
     available = width - 2 * MARGIN - 2 * GAP
@@ -133,10 +134,21 @@ def make_scene(bounds, content):
 
 def setup_case(canvas, stack, policy, spec):
     name, width, content = spec
+    case = _make_case_scene_data(policy, name, width, content)
+    graph, visual, reference = _compile_case_graphs(canvas, stack, case)
+    layout = make_layout(width, content, case["learned_boxes"], inputs=graph.inputs)
+    objective = _make_case_objective(canvas, stack, case, layout)
+    return Scenario(
+        name, width, content, graph, visual, reference, layout,
+        GraphCase(graph, objective, name),
+    )
+
+
+def _make_case_scene_data(policy, name, width, content):
     viewport = input_value("viewport")
     lengths = tuple(input_value(f"content_{i}") for i in range(3))
     logits = policy.mean_expressions([viewport / 160, *(v / 32 for v in lengths)])
-    shares = tuple(value.softplus() + 0.01 for value in logits)
+    shares = tuple(value.softplus() + 1 / 100 for value in logits)
     available = viewport - 2 * MARGIN - 2 * GAP
     widths = tuple(
         MIN_BASE + (available - 3 * MIN_BASE) * share / sum(shares) for share in shares
@@ -152,21 +164,33 @@ def setup_case(canvas, stack, policy, spec):
     highlight = fields[0].fill("#357db1", "#111c2a").to_rgb()
     target_highlight = reference_fields[0].fill("#357db1", "#111c2a").to_rgb()
     roots = {**dict(zip(NAMES, fields)), "highlight": highlight}
+    return {
+        "name": name, _WIDTH_KEY: width, "content": content,
+        "fields": fields, "scene": scene, "reference_fields": reference_fields,
+        "reference_scene": reference_scene, "inputs": inputs, "roots": roots,
+        "highlight": target_highlight, "learned_boxes": learned_boxes,
+    }
+
+
+def _compile_case_graphs(canvas, stack, case):
     graph = stack.enter_context(
-        canvas.compile(roots, size=(width, HEIGHT), inputs=inputs)
+        canvas.compile(case["roots"], size=(case[_WIDTH_KEY], HEIGHT), inputs=case["inputs"])
     )
     visual = stack.enter_context(
-        canvas.compile({"image": scene}, size=(width, HEIGHT), inputs=inputs)
+        canvas.compile({"image": case["scene"]}, size=(case[_WIDTH_KEY], HEIGHT), inputs=case["inputs"])
     )
     reference = stack.enter_context(
-        canvas.compile({"image": reference_scene}, size=(width, HEIGHT))
+        canvas.compile({"image": case["reference_scene"]}, size=(case[_WIDTH_KEY], HEIGHT))
     )
-    layout = make_layout(width, lengths, learned_boxes, inputs=graph.inputs)
+    return graph, visual, reference
+
+
+def _make_case_objective(canvas, stack, case, layout):
     objective = Objective()
-    for label, field in zip(NAMES, reference_fields):
-        target = stack.enter_context(canvas.capture(field, size=(width, HEIGHT)))
-        objective.mse(label, target, weight=1 / width**2, name=f"shape:{label}")
-    target = stack.enter_context(canvas.capture(target_highlight, size=(width, HEIGHT)))
+    for label, field in zip(NAMES, case["reference_fields"]):
+        target = stack.enter_context(canvas.capture(field, size=(case[_WIDTH_KEY], HEIGHT)))
+        objective.mse(label, target, weight=1 / case[_WIDTH_KEY]**2, name=f"shape:{label}")
+    target = stack.enter_context(canvas.capture(case["highlight"], size=(case[_WIDTH_KEY], HEIGHT)))
     objective.mse("highlight", target, weight=0.15, name="appearance")
 
     def constraints():
@@ -176,7 +200,7 @@ def setup_case(canvas, stack, policy, spec):
             + layout.containment_loss()
             + layout.offscreen_loss()
             + layout.overlap_loss()
-        ) / width**2
+        ) / case[_WIDTH_KEY]**2
 
     objective.geometry(
         constraints,
@@ -185,22 +209,13 @@ def setup_case(canvas, stack, policy, spec):
         identity={
             "kind": "dashboard",
             "version": 1,
-            "width": width,
-            "content": list(content),
+            _WIDTH_KEY: case[_WIDTH_KEY],
+            "content": list(case["content"]),
             "margin": MARGIN,
             "gap": GAP,
         },
     )
-    return Scenario(
-        name,
-        width,
-        content,
-        graph,
-        visual,
-        reference,
-        layout,
-        GraphCase(graph, objective, name),
-    )
+    return objective
 
 
 def metrics(scenario):
@@ -286,246 +301,332 @@ def run(
     min_delta=1e-5,
     initial_policy=None,
 ):
-    if isinstance(steps, bool) or not isinstance(steps, int) or steps < 0:
-        raise ValueError("steps must be a nonnegative integer")
-    if progress is not None and not callable(progress):
-        raise TypeError("progress must be callable")
-    if resume is not None and initial_policy is not None:
-        raise ValueError("Choose either a trainer checkpoint or initial policy weights")
-    custom = []
-    for index, spec in enumerate(scenarios or (), 1):
-        if len(spec) != 4 or any(
-            isinstance(v, bool) or not isinstance(v, int) or v <= 0 for v in spec
-        ):
-            raise ValueError(
-                "Custom scenarios require a positive viewport width and three positive content widths"
-            )
-        width, *content = spec
-        reference_widths(width, content)
-        custom.append((f"custom_{index}", width, tuple(content)))
+    _validate_run_options(steps, resume, progress, initial_policy)
+    custom = _custom_scenario_specs(scenarios)
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
-    policy = GaussianPolicy(obs_dim=4, action_dim=3, hidden_dim=8, seed=seed)
-    if initial_policy is not None:
-        policy.load_state_dict(
-            json.loads(Path(initial_policy).read_text(encoding="utf-8"))
-        )
+    policy = _load_initial_policy(seed, initial_policy)
     with Canvas((192, HEIGHT)) as canvas, ExitStack() as stack:
+        return _run_dashboard(
+            canvas, stack, policy, output, steps, seed, resume, initial_policy, progress, patience,
+            validation_interval, min_delta, custom,
+        )
+
+
+class _DashboardRun:
+    @staticmethod
+    def _validate_run_options(steps, resume, progress, initial_policy):
+        if isinstance(steps, bool) or not isinstance(steps, int) or steps < 0:
+            raise ValueError("steps must be a nonnegative integer")
+        if progress is not None and not callable(progress):
+            raise TypeError("progress must be callable")
+        if resume is not None and initial_policy is not None:
+            raise ValueError("Choose either a trainer checkpoint or initial policy weights")
+
+
+    @staticmethod
+    def _custom_scenario_specs(scenarios):
+        custom = []
+        for index, spec in enumerate(scenarios or (), 1):
+            if len(spec) != 4 or any(
+                isinstance(value, bool) or not isinstance(value, int) or value <= 0
+                for value in spec
+            ):
+                raise ValueError(
+                    "Custom scenarios require a positive viewport width and three positive content widths"
+                )
+            width, *content = spec
+            reference_widths(width, content)
+            custom.append((f"custom_{index}", width, tuple(content)))
+        return custom
+
+
+    @staticmethod
+    def _load_initial_policy(seed, initial_policy):
+        policy = GaussianPolicy(obs_dim=4, action_dim=3, hidden_dim=8, seed=seed)
+        if initial_policy is not None:
+            policy.load_state_dict(json.loads(Path(initial_policy).read_text(encoding="utf-8")))
+        return policy
+
+
+    @staticmethod
+    def _run_dashboard(
+        canvas, stack, policy, output, steps, seed, resume, initial_policy, progress, patience,
+        validation_interval, min_delta, custom,
+    ):
         validation_specs = (VALIDATION,) if patience is not None else ()
         scenarios = [
             setup_case(canvas, stack, policy, spec)
             for spec in (*TRAIN, *validation_specs, *HELD_OUT, *custom)
         ]
-        training = scenarios[: len(TRAIN)]
-        validation_cases = scenarios[len(TRAIN) : len(TRAIN) + len(validation_specs)]
-        held_out = scenarios[len(TRAIN) + len(validation_specs) :]
-        with GraphDatasetTrainer(
-            [scenario.case for scenario in training], lr=0.025
-        ) as trainer:
-            if resume:
-                try:
-                    trainer.load(resume)
-                except ValueError as error:
-                    raise ValueError(
-                        f"Cannot resume trainer checkpoint: {error}. "
-                        "To keep exported policy weights with a new optimizer, "
-                        "use --initial-policy with policy.json."
-                    ) from error
-            before = {scenario.name: metrics(scenario) for scenario in scenarios}
-            for scenario in scenarios:
-                save_preview(scenario, output / f"{scenario.name}_before.png")
-                save_preview(
-                    scenario, output / f"{scenario.name}_reference.png", reference=True
-                )
-            readbacks = sum(s.graph.backend.stats["image_readbacks"] for s in training)
-            history = trainer.fit(
-                steps,
-                callback=progress,
-                validation=(
-                    lambda: trainer.evaluate(
-                        [scenario.case for scenario in validation_cases]
-                    )
-                )
-                if validation_cases
-                else None,
-                patience=patience,
-                min_delta=min_delta,
-                validation_interval=validation_interval,
+        groups = _partition_scenarios(scenarios, len(validation_specs))
+        training, validation_cases, held_out = groups
+        with GraphDatasetTrainer([scenario.case for scenario in training], lr=0.025) as trainer:
+            _resume_trainer(trainer, resume)
+            return _train_dashboard(
+                canvas, stack, trainer, policy, output, scenarios, training,
+                validation_cases, held_out, steps, progress, patience,
+                validation_interval, min_delta, seed, resume, initial_policy,
             )
-            training_readbacks = (
-                sum(s.graph.backend.stats["image_readbacks"] for s in training)
-                - readbacks
-            )
-            after = {scenario.name: metrics(scenario) for scenario in scenarios}
-            for scenario in scenarios:
-                save_preview(scenario, output / f"{scenario.name}_after.png")
-            held_out_score = trainer.evaluate([scenario.case for scenario in held_out])
-            trainer.save(output / "checkpoint.json")
-            (output / "policy.json").write_text(
-                json.dumps(policy.state_dict(), indent=2), encoding="utf-8"
-            )
-            report = {
-                "description": "Synthetic content-aware dashboard; references use minimum content width plus equal spare space.",
-                "initialization_seed": seed
-                if resume is None and initial_policy is None
-                else None,
-                "resumed_from": None if resume is None else str(resume),
-                "initial_policy": None
-                if initial_policy is None
-                else str(initial_policy),
-                "steps": trainer.steps,
-                "training_steps_requested": steps,
-                "training_steps_this_run": len(history),
-                "training_cases": [scenario.name for scenario in training],
-                "validation_cases": [scenario.name for scenario in validation_cases],
-                "held_out_cases": [scenario.name for scenario in held_out],
-                "before": before,
-                "after": after,
-                "held_out_evaluation": held_out_score,
-                "training_image_readbacks": training_readbacks,
-                "first_training_loss": history[0]["loss"] if history else None,
-                "last_training_loss": history[-1]["loss"] if history else None,
-                "device": canvas.device_info,
-            }
-            (output / "metrics.json").write_text(
-                json.dumps(report, indent=2), encoding="utf-8"
-            )
-            comparison([training[0], *validation_cases, *held_out], output)
-            return report
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--steps", type=int, default=80)
-    parser.add_argument("--seed", type=int, default=7)
-    parser.add_argument("--output", type=Path, default=Path("out/learning/dashboard"))
-    parser.add_argument("--resume", type=Path)
-    parser.add_argument(
-        "--initial-policy",
-        type=Path,
-        help="Start a new optimizer from exported policy weights",
-    )
-    parser.add_argument(
-        "--patience",
-        type=int,
-        help="Enable validation-based early stopping after this many non-improving evaluations",
-    )
-    parser.add_argument("--validation-interval", type=int, default=5)
-    parser.add_argument("--min-delta", type=float, default=1e-5)
-    parser.add_argument(
-        "--policy", type=Path, help="Load an exported policy for CPU-only prediction"
-    )
-    parser.add_argument(
-        "--predict",
-        type=int,
-        nargs=4,
-        metavar=("WIDTH", "A", "B", "C"),
-        help="Print bounds for a new scenario without rendering; requires --policy",
-    )
-    parser.add_argument(
-        "--scenario",
-        type=int,
-        nargs=4,
-        action="append",
-        metavar=("WIDTH", "A", "B", "C"),
-        help="Add a held-out viewport and three measured content widths; may be repeated",
-    )
-    args = parser.parse_args()
-    if args.policy is not None or args.predict is not None:
+    @staticmethod
+    def _partition_scenarios(scenarios, validation_count):
+        training_end = len(TRAIN)
+        validation_end = training_end + validation_count
+        return scenarios[:training_end], scenarios[training_end:validation_end], scenarios[validation_end:]
+
+
+    @staticmethod
+    def _resume_trainer(trainer, resume):
+        if resume is None:
+            return
+        try:
+            trainer.load(resume)
+        except ValueError as error:
+            raise ValueError(
+                f"Cannot resume trainer checkpoint: {error}. To keep exported policy weights "
+                "with a new optimizer, use --initial-policy with policy.json."
+            ) from error
+
+
+    @staticmethod
+    def _train_dashboard(
+        canvas, stack, trainer, policy, output, scenarios, training,
+        validation_cases, held_out, steps, progress, patience,
+        validation_interval, min_delta, seed, resume, initial_policy,
+    ):
+        before, initial_readbacks = _save_initial_previews(scenarios, output, training)
+        history = trainer.fit(
+            steps,
+            callback=progress,
+            validation=_validation_callback(trainer, validation_cases),
+            patience=patience,
+            min_delta=min_delta,
+            validation_interval=validation_interval,
+        )
+        training_readbacks = _training_readback_delta(training, initial_readbacks)
+        return _finish_dashboard(
+            canvas, stack, trainer, policy, output, scenarios, training,
+            validation_cases, held_out, history, before, training_readbacks,
+            steps, seed, resume, initial_policy,
+        )
+
+
+    @staticmethod
+    def _save_initial_previews(scenarios, output, training):
+        before = {scenario.name: metrics(scenario) for scenario in scenarios}
+        for scenario in scenarios:
+            save_preview(scenario, output / f"{scenario.name}_before.png")
+            save_preview(scenario, output / f"{scenario.name}_reference.png", reference=True)
+        readbacks = sum(scenario.graph.backend.stats["image_readbacks"] for scenario in training)
+        return before, readbacks
+
+
+    @staticmethod
+    def _validation_callback(trainer, validation_cases):
+        if not validation_cases:
+            return None
+        return lambda: trainer.evaluate([scenario.case for scenario in validation_cases])
+
+
+    @staticmethod
+    def _training_readback_delta(training, initial_readbacks):
+        total = sum(scenario.graph.backend.stats["image_readbacks"] for scenario in training)
+        return total - initial_readbacks
+
+
+    @staticmethod
+    def _finish_dashboard(
+        canvas, stack, trainer, policy, output, scenarios, training,
+        validation_cases, held_out, history, before, training_readbacks,
+        steps, seed, resume, initial_policy,
+    ):
+        after = {scenario.name: metrics(scenario) for scenario in scenarios}
+        for scenario in scenarios:
+            save_preview(scenario, output / f"{scenario.name}_after.png")
+        held_out_score = trainer.evaluate([scenario.case for scenario in held_out])
+        trainer.save(output / "checkpoint.json")
+        (output / "policy.json").write_text(
+            json.dumps(policy.state_dict(), indent=2), encoding="utf-8"
+        )
+        report = _dashboard_report(
+            canvas, trainer, scenarios, training, validation_cases, held_out,
+            before, after, held_out_score, history, training_readbacks, steps,
+            seed, resume, initial_policy,
+        )
+        (output / "metrics.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+        comparison([training[0], *validation_cases, *held_out], output)
+        return report
+
+
+    @staticmethod
+    def _dashboard_report(
+        canvas, trainer, scenarios, training, validation_cases, held_out,
+        before, after, held_out_score, history, training_readbacks, steps,
+        seed, resume, initial_policy,
+    ):
+        return {
+            "description": "Synthetic content-aware dashboard; references use minimum content width plus equal spare space.",
+            "initialization_seed": seed if resume is None and initial_policy is None else None,
+            "resumed_from": None if resume is None else str(resume),
+            "initial_policy": None if initial_policy is None else str(initial_policy),
+            "steps": trainer.steps,
+            "training_steps_requested": steps,
+            "training_steps_this_run": len(history),
+            "training_cases": [scenario.name for scenario in training],
+            "validation_cases": [scenario.name for scenario in validation_cases],
+            "held_out_cases": [scenario.name for scenario in held_out],
+            "before": before,
+            "after": after,
+            "held_out_evaluation": held_out_score,
+            "training_image_readbacks": training_readbacks,
+            "first_training_loss": history[0]["loss"] if history else None,
+            "last_training_loss": history[-1]["loss"] if history else None,
+            "device": canvas.device_info,
+        }
+
+_validate_run_options = _DashboardRun._validate_run_options
+_custom_scenario_specs = _DashboardRun._custom_scenario_specs
+_load_initial_policy = _DashboardRun._load_initial_policy
+_run_dashboard = _DashboardRun._run_dashboard
+_partition_scenarios = _DashboardRun._partition_scenarios
+_resume_trainer = _DashboardRun._resume_trainer
+_train_dashboard = _DashboardRun._train_dashboard
+_save_initial_previews = _DashboardRun._save_initial_previews
+_validation_callback = _DashboardRun._validation_callback
+_training_readback_delta = _DashboardRun._training_readback_delta
+_finish_dashboard = _DashboardRun._finish_dashboard
+_dashboard_report = _DashboardRun._dashboard_report
+
+
+class _DashboardCLI:
+    @staticmethod
+    def add_arguments(parser):
+        parser.add_argument("--steps", type=int, default=80)
+        parser.add_argument("--seed", type=int, default=7)
+        parser.add_argument("--output", type=Path, default=Path("out/learning/dashboard"))
+        parser.add_argument("--resume", type=Path)
+        parser.add_argument(
+            "--initial-policy", type=Path,
+            help="Start a new optimizer from exported policy weights",
+        )
+        parser.add_argument(
+            "--patience", type=int,
+            help="Enable validation-based early stopping after this many non-improving evaluations",
+        )
+        parser.add_argument("--validation-interval", type=int, default=5)
+        parser.add_argument("--min-delta", type=float, default=1e-5)
+        parser.add_argument(
+            "--policy", type=Path, help="Load an exported policy for CPU-only prediction"
+        )
+        parser.add_argument(
+            "--predict", type=int, nargs=4, metavar=("WIDTH", "A", "B", "C"),
+            help="Print bounds for a new scenario without rendering; requires --policy",
+        )
+        parser.add_argument(
+            "--scenario", type=int, nargs=4, action="append",
+            metavar=("WIDTH", "A", "B", "C"),
+            help="Add a held-out viewport and three measured content widths; may be repeated",
+        )
+
+    @staticmethod
+    def _handle_prediction(args, parser):
+        if args.policy is None and args.predict is None:
+            return False
         if args.policy is None or args.predict is None:
             parser.error("--policy and --predict must be supplied together")
         if args.resume is not None or args.scenario or args.initial_policy is not None:
-            parser.error(
-                "--policy/--predict cannot be combined with --resume, --initial-policy, or --scenario"
-            )
+            parser.error("--policy/--predict cannot be combined with --resume, --initial-policy, or --scenario")
         policy = GaussianPolicy(obs_dim=4, action_dim=3, hidden_dim=8)
         policy.load_state_dict(json.loads(args.policy.read_text(encoding="utf-8")))
         try:
             result = predict(policy, args.predict[0], args.predict[1:])
         except ValueError as error:
             parser.error(str(error))
-        print(
-            json.dumps(
-                {
-                    "cards": {
-                        name: {
-                            key: getattr(box, key)
-                            for key in ("x", "y", "width", "height")
-                        }
-                        for name, box in result.items()
-                    },
-                    "violations": make_layout(
-                        args.predict[0], args.predict[1:], result.values()
-                    ).violations(tolerance=1e-6),
-                },
-                indent=2,
-            )
-        )
-        return
-    if args.steps < 0:
-        parser.error("--steps must be nonnegative")
-    if args.resume is not None and args.initial_policy is not None:
-        parser.error("choose either --resume or --initial-policy")
-    if args.patience is not None and args.patience < 1:
-        parser.error("--patience must be positive")
-    if (
-        args.validation_interval < 1
-        or not math.isfinite(args.min_delta)
-        or args.min_delta < 0
-    ):
-        parser.error(
-            "validation interval must be positive and min-delta must be finite and nonnegative"
-        )
+        print(_prediction_json(args.predict, result))
+        return True
 
-    def progress(result):
+    @staticmethod
+    def _validate_dashboard_cli(args, parser):
+        if args.steps < 0:
+            parser.error("--steps must be nonnegative")
+        if args.resume is not None and args.initial_policy is not None:
+            parser.error("choose either --resume or --initial-policy")
+        if args.patience is not None and args.patience < 1:
+            parser.error("--patience must be positive")
+        if args.validation_interval < 1 or not math.isfinite(args.min_delta) or args.min_delta < 0:
+            parser.error("validation interval must be positive and min-delta must be finite and nonnegative")
+        _DashboardCLI._validate_cli_scenarios(args.scenario, parser)
+
+    @staticmethod
+    def _validate_cli_scenarios(scenarios, parser):
+        for scenario in scenarios or ():
+            if any(value <= 0 for value in scenario):
+                parser.error("scenario widths must be positive")
+            try:
+                reference_widths(scenario[0], scenario[1:])
+            except ValueError as error:
+                parser.error(str(error))
+
+    @staticmethod
+    def _dashboard_progress(result):
         if result["step"] == 1 or result["step"] % 10 == 0:
-            validation = (
-                f", validation loss {result['validation_loss']:.6f}"
-                if "validation_loss" in result
-                else ""
-            )
+            validation = _validation_progress_text(result)
             print(
                 f"step {result['step']}: training loss {result['loss']:.6f}{validation}",
                 flush=True,
             )
 
-    for scenario in args.scenario or ():
-        if any(value <= 0 for value in scenario):
-            parser.error("scenario widths must be positive")
-        try:
-            reference_widths(scenario[0], scenario[1:])
-        except ValueError as error:
-            parser.error(str(error))
-    report = run(
-        args.output,
-        args.steps,
-        args.seed,
-        args.resume,
-        args.scenario,
-        progress,
-        patience=args.patience,
-        validation_interval=args.validation_interval,
-        min_delta=args.min_delta,
-        initial_policy=args.initial_policy,
-    )
-    print(
-        json.dumps(
-            {
-                "training_loss": [
-                    report["first_training_loss"],
-                    report["last_training_loss"],
-                ],
-                "held_out_before": {
-                    name: report["before"][name]["loss"]
-                    for name in report["held_out_cases"]
-                },
-                "held_out_after": report["held_out_evaluation"]["cases"],
-                "image_readbacks_during_training": report["training_image_readbacks"],
-                "output": str(args.output.resolve()),
+    @staticmethod
+    def _print_dashboard_result(report, output):
+        payload = {
+            "training_loss": [report["first_training_loss"], report["last_training_loss"]],
+            "held_out_before": {
+                name: report["before"][name]["loss"] for name in report["held_out_cases"]
             },
-            indent=2,
-        )
+            "held_out_after": report["held_out_evaluation"]["cases"],
+            "image_readbacks_during_training": report["training_image_readbacks"],
+            "output": str(output.resolve()),
+        }
+        print(json.dumps(payload, indent=2))
+
+
+def _prediction_json(values, result):
+    cards = {
+        name: {key: getattr(box, key) for key in ("x", "y", _WIDTH_KEY, "height")}
+        for name, box in result.items()
+    }
+    violations = make_layout(values[0], values[1:], result.values()).violations(tolerance=1e-6)
+    return json.dumps({"cards": cards, "violations": violations}, indent=2)
+
+
+def _validation_progress_text(result):
+    if "validation_loss" not in result:
+        return ""
+    return f", validation loss {result['validation_loss']:.6f}"
+
+
+_handle_prediction = _DashboardCLI._handle_prediction
+_validate_dashboard_cli = _DashboardCLI._validate_dashboard_cli
+_dashboard_progress = _DashboardCLI._dashboard_progress
+_print_dashboard_result = _DashboardCLI._print_dashboard_result
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    _DashboardCLI.add_arguments(parser)
+    args = parser.parse_args()
+    if _handle_prediction(args, parser):
+        return
+    _validate_dashboard_cli(args, parser)
+    report = run(
+        args.output, args.steps, args.seed, args.resume, args.scenario,
+        _dashboard_progress, patience=args.patience,
+        validation_interval=args.validation_interval,
+        min_delta=args.min_delta, initial_policy=args.initial_policy,
     )
+    _print_dashboard_result(report, args.output)
 
 
 if __name__ == "__main__":

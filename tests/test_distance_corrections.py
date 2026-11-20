@@ -42,11 +42,11 @@ def test_local_normalization_fades_out_away_from_the_surface():
 
 def test_redistance_rebuilds_subpixel_signed_distance_to_a_line():
     yy, xx = np.mgrid[0:17, 0:21].astype(np.float32)
-    field = 0.2 * (xx - 10.25)
+    field = 1 / 5 * (xx - 41 / 4)
 
     result = redistance(field)
 
-    np.testing.assert_allclose(result, xx - 10.25, atol=1e-6)
+    np.testing.assert_allclose(result, xx - 41 / 4, atol=1e-6)
     assert result[8, 2] < 0 < result[8, 18]
 
 

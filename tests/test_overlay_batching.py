@@ -36,7 +36,7 @@ def test_chunked_overlay_outputs_match_sequential_rgba8_composites():
 
 def test_long_overlay_chain_batches_passes_and_keeps_intermediate_cache_entries():
     layers = [
-        color.clear((0.1 + index * 0.1, 0.7 - index * 0.06, 0.3, 0.25 + index * 0.07))
+        color.clear((1 / 10 + index * 1 / 10, 7 / 10 - index * 3 / 50, 0.3, 1 / 4 + index * 7 / 100))
         for index in range(7)
     ]
     chain = [layers[0]]
@@ -71,7 +71,7 @@ def test_repeated_long_overlay_chains_recycle_batch_intermediates():
         ):
             layers = [
                 color.clear(
-                    (0.12 + index * 0.04, 0.68 - index * 0.03, 0.3, 0.45)
+                    (3 / 25 + index * 1 / 25, 17 / 25 - index * 3 / 100, 0.3, 0.45)
                 ).uncached()
                 for index in range(overlay_count + 1)
             ]
@@ -115,7 +115,7 @@ def test_repeated_lagrange_frames_do_not_grow_render_cache_or_image_allocations(
         for start in starts:
             render_frame(start)
         for start in starts:
-            render_frame(start + 0.1)  # Warm all sections and the image pool.
+            render_frame(start + 1 / 10)  # Warm all sections and the image pool.
         cache_entries_after_warmup = renderer.cache_info().entries
         allocations_after_warmup = renderer.stats.texture_allocations
 

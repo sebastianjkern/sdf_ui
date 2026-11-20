@@ -1,6 +1,7 @@
 """Shader-name contracts and analytic shading gradients."""
 
-from types import SimpleNamespace
+
+
 
 import numpy as np
 import pytest
@@ -8,16 +9,59 @@ import pytest
 from sdf_ui.gpu.nodes.registry import registry
 from sdf_ui.learning.autodiff import Parameter, Tensor
 from sdf_ui.learning.shaders.shading import RULES
+from tests.helpers import shader_context
+
+_ISOLINES_TEXT = 'isolines'
+
+_LIGHT_TEXT = 'light'
+
+def _fill_params(foreground, background):
+    return dict(
+        color=foreground,
+        background=background,
+        inflate=0.13,
+        first=-157 / 100,
+        second=1.81,
+    )
 
 
-def _context(size=(4, 3)):
-    y, x = np.indices((size[1], size[0]), dtype=float)
-    return SimpleNamespace(size=size, x=Tensor(x), y=Tensor(y))
+def _isolines_params(foreground, background):
+    return dict(
+        line_color=foreground,
+        background=background,
+        inflate=0.13,
+        spacing=2.17,
+        line_width=0.67,
+        feather=0.31,
+        phase=-329 / 100,
+    )
+
+
+def _light_params(foreground, background):
+    return dict(
+        fgColor=foreground,
+        bgColor=background,
+        lightDir=[0.23, -37 / 100, 0.89],
+        ambient=0.23,
+        diffuse=0.57,
+        specular=0.13,
+        shininess=3.7,
+        normalStrength=1.37,
+        bevel=3.71,
+        shadeBackground=0.73,
+        backgroundBevel=2.93,
+        heightProfile=0.0,
+        heightGamma=1.23,
+        height=1.17,
+        inflate=0.13,
+        inner=-157 / 100,
+        outer=1.81,
+    )
 
 
 def _case(name, size=(4, 3)):
     rng = np.random.default_rng(512)
-    inputs = {"sdf": rng.uniform(-1.3, 2.8, (size[1], size[0]))}
+    inputs = {"sdf": rng.uniform(-13 / 10, 2.8, (size[1], size[0]))}
     foreground = [0.43, 0.28, 0.57, 0.71]
     background = [0.13, 0.21, 0.32, 0.27]
     if name == "clear_color":
@@ -25,95 +69,75 @@ def _case(name, size=(4, 3)):
     if name == "film_grain":
         return {}, {"time": 0.0}
     if name == "fill":
-        params = dict(
-            color=foreground,
-            background=background,
-            inflate=0.13,
-            first=-1.57,
-            second=1.81,
-        )
+        params = _fill_params(foreground, background)
     elif name == "outline":
         params = dict(outline=foreground, background=background, inflate=0.13)
     elif name == "fill_from_texture":
         inputs["origTex"] = rng.uniform(0.1, 0.9, (size[1], size[0], 4))
         params = dict(background=background, inflate=0.13)
-    elif name == "isolines":
-        params = dict(
-            line_color=foreground,
-            background=background,
-            inflate=0.13,
-            spacing=2.17,
-            line_width=0.67,
-            feather=0.31,
-            phase=-3.29,
-        )
-    elif name == "light":
-        params = dict(
-            fgColor=foreground,
-            bgColor=background,
-            lightDir=[0.23, -0.37, 0.89],
-            ambient=0.23,
-            diffuse=0.57,
-            specular=0.13,
-            shininess=3.7,
-            normalStrength=1.37,
-            bevel=3.71,
-            shadeBackground=0.73,
-            backgroundBevel=2.93,
-            heightProfile=0.0,
-            heightGamma=1.23,
-            height=1.17,
-            inflate=0.13,
-            inner=-1.57,
-            outer=1.81,
-        )
+    elif name == _ISOLINES_TEXT:
+        params = _isolines_params(foreground, background)
+    elif name == _LIGHT_TEXT:
+        params = _light_params(foreground, background)
     else:
         return (inputs if name == "partial_derivative" else {}), {}
     return inputs, params
 
 
-def _check_gradients(name, *, overrides=None, tolerance=3e-5):
-    context = _context()
-    input_values, uniform_values = _case(name)
-    uniform_values.update(overrides or {})
+def _finite_difference(parameter, objective):
+    original = parameter.numpy()
+    numeric = np.zeros_like(original)
+    for index in np.ndindex(original.shape):
+        plus, minus = original.copy(), original.copy()
+        plus[index] += 1 / 100_000
+        minus[index] -= 1 / 100_000
+        parameter.assign(plus)
+        high = objective().item()
+        parameter.assign(minus)
+        low = objective().item()
+        parameter.assign(original)
+        numeric[index] = (high - low) / 1 / 50_000
+    return numeric
+
+
+def _assert_gradient(name, parameter, grad, objective, tolerance):
+    np.testing.assert_allclose(
+        grad,
+        _finite_difference(parameter, objective),
+        atol=tolerance,
+        rtol=tolerance,
+        err_msg=f"{name}: {parameter.name}",
+    )
+
+
+def _gradient_inputs(uniform_values, input_values):
     inputs = {key: Parameter(key, value) for key, value in input_values.items()}
-    # heightProfile is a discrete branch selector, not a continuous parameter.
     params = {
         key: Tensor(value) if key == "heightProfile" else Parameter(key, value)
         for key, value in uniform_values.items()
     }
     leaves = list(inputs.values()) + [
-        v for v in params.values() if isinstance(v, Parameter)
+        value for value in params.values() if isinstance(value, Parameter)
     ]
-    weights = np.random.default_rng(73).uniform(-0.7, 1.0, (3, 4, 4))
+    return inputs, params, leaves
+
+
+def _check_gradients(name, *, overrides=None, tolerance=3e-5):
+    context = shader_context((4, 3))
+    input_values, uniform_values = _case(name)
+    uniform_values.update(overrides or {})
+    inputs, params, leaves = _gradient_inputs(uniform_values, input_values)
+    weights = np.random.default_rng(73).uniform(-7 / 10, 1.0, (3, 4, 4))
 
     def objective():
         value = RULES[name](context, inputs, params)
-        return (value * weights + 0.03 * value * value).mean()
+        return (value * weights + 3 / 100 * value * value).mean()
 
     objective().backward()
     analytic = [np.zeros(p.shape) if p.grad is None else p.grad.copy() for p in leaves]
     assert any(np.any(grad != 0) for grad in analytic)
     for parameter, grad in zip(leaves, analytic):
-        original = parameter.numpy()
-        numeric = np.zeros_like(original)
-        for index in np.ndindex(original.shape):
-            plus, minus = original.copy(), original.copy()
-            plus[index] += 1e-5
-            minus[index] -= 1e-5
-            parameter.assign(plus)
-            high = objective().item()
-            parameter.assign(minus)
-            low = objective().item()
-            parameter.assign(original)
-            numeric[index] = (high - low) / 2e-5
-        np.testing.assert_allclose(
-            grad,
-            numeric,
-            atol=tolerance,
-            rtol=tolerance,
-            err_msg=f"{name}: {parameter.name}",
-        )
+        _assert_gradient(name, parameter, grad, objective, tolerance)
     return inputs, params
 
 
@@ -128,7 +152,7 @@ def test_rules_cover_exact_standalone_shader_descriptors():
     for name, rule in RULES.items():
         inputs, params = _case(name)
         value = rule(
-            _context(),
+            shader_context((4, 3)),
             {key: Tensor(v) for key, v in inputs.items()},
             {key: Tensor(v) for key, v in params.items()},
         )
@@ -144,7 +168,7 @@ def test_rules_cover_exact_standalone_shader_descriptors():
         "fill",
         "outline",
         "fill_from_texture",
-        "isolines",
+        _ISOLINES_TEXT,
         "partial_derivative",
     ],
 )
@@ -159,7 +183,7 @@ def test_texture_and_uniform_gradients(name):
 @pytest.mark.parametrize("profile", range(6))
 def test_light_height_profiles_gradients(profile):
     inputs, params = _check_gradients(
-        "light", overrides={"heightProfile": float(profile)}
+        _LIGHT_TEXT, overrides={"heightProfile": float(profile)}
     )
     assert np.any(inputs["sdf"].grad != 0)
     for key in ["lightDir", "heightGamma", "shininess", "normalStrength", "specular"]:
@@ -170,25 +194,25 @@ def test_light_height_profiles_gradients(profile):
     "overrides",
     [
         {"shadeBackground": 0.0},
-        {"backgroundBevel": -0.3},
-        {"specular": -0.1, "ambient": -0.2, "diffuse": -0.3},
+        {"backgroundBevel": -3 / 10},
+        {"specular": -1 / 10, "ambient": -1 / 5, "diffuse": -3 / 10},
     ],
 )
 def test_light_other_branches_gradients(overrides):
-    _check_gradients("light", overrides=overrides)
+    _check_gradients(_LIGHT_TEXT, overrides=overrides)
 
 
 @pytest.mark.parametrize("profile", range(6))
 @pytest.mark.parametrize("distance", [-10.0, 10.0])
 def test_light_flat_endpoints_have_finite_gradients(profile, distance):
-    _, values = _case("light")
+    _, values = _case(_LIGHT_TEXT)
     values["heightProfile"] = float(profile)
     params = {
         key: Tensor(value) if key == "heightProfile" else Parameter(key, value)
         for key, value in values.items()
     }
     sdf = Parameter("sdf", np.full((1, 1), distance))
-    value = RULES["light"](_context((1, 1)), {"sdf": sdf}, params)
+    value = RULES[_LIGHT_TEXT](shader_context((1, 1)), {"sdf": sdf}, params)
     value.sum().backward()
     np.testing.assert_array_equal(sdf.grad, 0.0)
     for parameter in params.values():
@@ -199,8 +223,8 @@ def test_light_flat_endpoints_have_finite_gradients(profile, distance):
 @pytest.mark.parametrize("size", [(1, 1), (1, 3), (4, 1), (4, 3)])
 def test_partial_derivative_explicit_oob_zero_and_adjoint(size):
     width, height = size
-    sdf = Parameter("sdf", np.arange(width * height).reshape(height, width) + 0.3)
-    value = RULES["partial_derivative"](_context(size), {"sdf": sdf}, {})
+    sdf = Parameter("sdf", np.arange(width * height).reshape(height, width) + 3 / 10)
+    value = RULES["partial_derivative"](shader_context(size), {"sdf": sdf}, {})
     data = sdf.numpy()
     padded = np.pad(data, ((0, 1), (0, 1)))
     expected = np.stack(
@@ -222,24 +246,24 @@ def test_partial_derivative_explicit_oob_zero_and_adjoint(size):
 
 def test_uniform_tensor_containers_keep_their_graphs():
     red = Parameter("red", 0.37)
-    value = RULES["clear_color"](_context(), {}, {"color": (red, 0.2, 0.4, 0.8)})
+    value = RULES["clear_color"](shader_context((4, 3)), {}, {"color": (red, 0.2, 0.4, 0.8)})
     value.mean().backward()
     assert red.grad is not None and np.isfinite(red.grad) and red.grad != 0
 
 
 def test_isolines_invalid_distances_and_clamped_parameters():
-    inputs, params = _case("isolines")
-    params.update(spacing=-0.2, line_width=-0.3, feather=-0.7)
-    _check_gradients("isolines", overrides=params)
+    inputs, params = _case(_ISOLINES_TEXT)
+    params.update(spacing=-1 / 5, line_width=-3 / 10, feather=-7 / 10)
+    _check_gradients(_ISOLINES_TEXT, overrides=params)
     inputs["sdf"][:] = 1e21
-    actual = RULES["isolines"](_context(), {"sdf": Tensor(inputs["sdf"])}, params)
-    background = RULES["clear_color"](_context(), {}, {"color": params["background"]})
+    actual = RULES[_ISOLINES_TEXT](shader_context((4, 3)), {"sdf": Tensor(inputs["sdf"])}, params)
+    background = RULES["clear_color"](shader_context((4, 3)), {}, {"color": params["background"]})
     np.testing.assert_array_equal(actual.numpy(), background.numpy())
 
 
 @pytest.mark.parametrize("name", ["film_grain", "perlin_noise"])
 def test_noise_is_fixed_deterministic_unclipped_and_composable(name):
-    context = _context((301, 193))
+    context = shader_context((301, 193))
     first = RULES[name](context, {}, {})
     second = RULES[name](context, {}, {"time": Parameter("time", 9.3)})
     assert not first.requires_grad and not second.requires_grad

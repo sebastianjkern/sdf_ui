@@ -6,13 +6,42 @@ Backward accumulates gradients; clear them through an optimizer between
 training iterations. Non-scalar outputs require an explicit gradient seed.
 """
 
+
+
 from numbers import Real
-from typing import Any, Callable, Iterable, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Optional, Sequence, Tuple
 
 import numpy as np
 
+if TYPE_CHECKING:
+    from ._autodiff_functions import (
+        _axes,
+        _sigmoid,
+        abs,
+        cos,
+        exp,
+        log,
+        matmul,
+        maximum,
+        mean,
+        minimum,
+        relu,
+        reshape,
+        sigmoid,
+        sin,
+        softplus,
+        sqrt,
+        stack,
+        sum,
+        tanh,
+        transpose,
+    )
+    from ._autodiff_where import where
+
+_TENSOR_TEXT = 'Tensor'
+
 __all__ = [
-    "Tensor",
+    _TENSOR_TEXT,
     "Parameter",
     "as_tensor",
     "sum",
@@ -82,8 +111,8 @@ class Tensor:
 
     @classmethod
     def _result(
-        cls, data: Any, parents: Sequence["Tensor"], pullback: Callable
-    ) -> "Tensor":
+        cls, data: Any, parents: Sequence[_TENSOR_TEXT], pullback: Callable
+    ) -> _TENSOR_TEXT:
         _finite(data, "forward value")
         result = Tensor(data, any(p.requires_grad for p in parents))
         if result.requires_grad:
@@ -129,7 +158,7 @@ class Tensor:
     def item(self) -> float:
         return self._data.item()
 
-    def detach(self) -> "Tensor":
+    def detach(self) -> _TENSOR_TEXT:
         return Tensor(self._data)
 
     def zero_grad(self) -> None:
@@ -212,7 +241,7 @@ class Tensor:
                 contribution = _finite(adjoints[parent] + contribution, "gradient")
             adjoints[parent] = contribution
 
-    def _binary(self, other: Any, forward: Callable, derivative: Callable) -> "Tensor":
+    def _binary(self, other: Any, forward: Callable, derivative: Callable) -> _TENSOR_TEXT:
         other = as_tensor(other)
         a, b = self._data, other._data
         with np.errstate(all="ignore"):
@@ -227,31 +256,31 @@ class Tensor:
 
         return Tensor._result(value, (self, other), pullback)
 
-    def __add__(self, other: Any) -> "Tensor":
+    def __add__(self, other: Any) -> _TENSOR_TEXT:
         return self._binary(other, np.add, lambda g, a, b: (g, g))
 
-    def __radd__(self, other: Any) -> "Tensor":
+    def __radd__(self, other: Any) -> _TENSOR_TEXT:
         return self + other
 
-    def __sub__(self, other: Any) -> "Tensor":
+    def __sub__(self, other: Any) -> _TENSOR_TEXT:
         return self._binary(other, np.subtract, lambda g, a, b: (g, -g))
 
-    def __rsub__(self, other: Any) -> "Tensor":
+    def __rsub__(self, other: Any) -> _TENSOR_TEXT:
         return as_tensor(other) - self
 
-    def __mul__(self, other: Any) -> "Tensor":
+    def __mul__(self, other: Any) -> _TENSOR_TEXT:
         return self._binary(other, np.multiply, lambda g, a, b: (g * b, g * a))
 
-    def __rmul__(self, other: Any) -> "Tensor":
+    def __rmul__(self, other: Any) -> _TENSOR_TEXT:
         return self * other
 
-    def __truediv__(self, other: Any) -> "Tensor":
+    def __truediv__(self, other: Any) -> _TENSOR_TEXT:
         return self._binary(other, np.divide, lambda g, a, b: (g / b, -g * a / b**2))
 
-    def __rtruediv__(self, other: Any) -> "Tensor":
+    def __rtruediv__(self, other: Any) -> _TENSOR_TEXT:
         return as_tensor(other) / self
 
-    def __pow__(self, other: Any) -> "Tensor":
+    def __pow__(self, other: Any) -> _TENSOR_TEXT:
         other = as_tensor(other)
         a = self._data
         if other.requires_grad and np.any(a <= 0):
@@ -270,56 +299,56 @@ class Tensor:
 
         return self._binary(other, np.power, derivative)
 
-    def __rpow__(self, other: Any) -> "Tensor":
+    def __rpow__(self, other: Any) -> _TENSOR_TEXT:
         return as_tensor(other) ** self
 
-    def __neg__(self) -> "Tensor":
+    def __neg__(self) -> _TENSOR_TEXT:
         return Tensor._result(-self._data, (self,), lambda g: (-g,))
 
-    def __abs__(self) -> "Tensor":
+    def __abs__(self) -> _TENSOR_TEXT:
         return self.abs()
 
-    def _unary(self, forward: Callable, derivative: Callable) -> "Tensor":
+    def _unary(self, forward: Callable, derivative: Callable) -> _TENSOR_TEXT:
         a = self._data
         with np.errstate(all="ignore"):
             value = forward(a)
         return Tensor._result(value, (self,), lambda g: (g * derivative(a, value),))
 
-    def relu(self) -> "Tensor":
+    def relu(self) -> _TENSOR_TEXT:
         return self._unary(lambda a: np.maximum(a, 0), lambda a, y: a > 0)
 
-    def softplus(self) -> "Tensor":
+    def softplus(self) -> _TENSOR_TEXT:
         return self._unary(lambda a: np.logaddexp(0, a), lambda a, y: _sigmoid(a))
 
-    def sigmoid(self) -> "Tensor":
+    def sigmoid(self) -> _TENSOR_TEXT:
         return self._unary(_sigmoid, lambda a, y: y * (1 - y))
 
-    def tanh(self) -> "Tensor":
+    def tanh(self) -> _TENSOR_TEXT:
         return self._unary(np.tanh, lambda a, y: 1 - y * y)
 
-    def log(self) -> "Tensor":
+    def log(self) -> _TENSOR_TEXT:
         return self._unary(np.log, lambda a, y: 1 / a)
 
-    def exp(self) -> "Tensor":
+    def exp(self) -> _TENSOR_TEXT:
         return self._unary(np.exp, lambda a, y: y)
 
-    def sqrt(self) -> "Tensor":
+    def sqrt(self) -> _TENSOR_TEXT:
         """Square root with the finite subgradient convention sqrt'(0) = 0."""
         return self._unary(
             np.sqrt,
             lambda a, y: np.divide(0.5, y, out=np.zeros_like(y), where=y != 0),
         )
 
-    def abs(self) -> "Tensor":
+    def abs(self) -> _TENSOR_TEXT:
         return self._unary(np.abs, lambda a, y: np.sign(a))
 
-    def sin(self) -> "Tensor":
+    def sin(self) -> _TENSOR_TEXT:
         return self._unary(np.sin, lambda a, y: np.cos(a))
 
-    def cos(self) -> "Tensor":
+    def cos(self) -> _TENSOR_TEXT:
         return self._unary(np.cos, lambda a, y: -np.sin(a))
 
-    def maximum(self, other: Any) -> "Tensor":
+    def maximum(self, other: Any) -> _TENSOR_TEXT:
         return self._binary(
             other,
             np.maximum,
@@ -329,7 +358,7 @@ class Tensor:
             ),
         )
 
-    def minimum(self, other: Any) -> "Tensor":
+    def minimum(self, other: Any) -> _TENSOR_TEXT:
         return self._binary(
             other,
             np.minimum,
@@ -339,7 +368,7 @@ class Tensor:
             ),
         )
 
-    def sum(self, axis: Any = None, keepdims: bool = False) -> "Tensor":
+    def sum(self, axis: Any = None, keepdims: bool = False) -> _TENSOR_TEXT:
         value = (
             self._data.sum(axis=axis, keepdims=True)
             if keepdims
@@ -355,20 +384,20 @@ class Tensor:
 
         return Tensor._result(value, (self,), pullback)
 
-    def mean(self, axis: Any = None, keepdims: bool = False) -> "Tensor":
+    def mean(self, axis: Any = None, keepdims: bool = False) -> _TENSOR_TEXT:
         axes = _axes(axis, self.ndim)
         count = int(np.prod([self.shape[a] for a in axes], dtype=np.int64))
         if count == 0:
             raise ValueError("mean of an empty reduction is undefined")
         return self.sum(axis=axis, keepdims=keepdims) / count
 
-    def reshape(self, *shape: Any) -> "Tensor":
+    def reshape(self, *shape: Any) -> _TENSOR_TEXT:
         if len(shape) == 1 and isinstance(shape[0], (tuple, list)):
             shape = tuple(shape[0])
         value = self._data.reshape(*shape) if shape else self._data.reshape(())
         return Tensor._result(value, (self,), lambda g: (g.reshape(self.shape),))
 
-    def transpose(self, *axes: Any) -> "Tensor":
+    def transpose(self, *axes: Any) -> _TENSOR_TEXT:
         if len(axes) == 1 and isinstance(axes[0], (tuple, list)):
             axes = tuple(axes[0])
         elif axes == (None,):
@@ -380,10 +409,10 @@ class Tensor:
         return Tensor._result(value, (self,), lambda g: (g.transpose(inverse),))
 
     @property
-    def T(self) -> "Tensor":
+    def T(self) -> _TENSOR_TEXT:
         return self.transpose()
 
-    def matmul(self, other: Any) -> "Tensor":
+    def matmul(self, other: Any) -> _TENSOR_TEXT:
         other = as_tensor(other)
         a, b = self._data, other._data
         if a.ndim not in (1, 2) or b.ndim not in (1, 2):
@@ -402,13 +431,13 @@ class Tensor:
 
         return Tensor._result(value, (self, other), pullback)
 
-    def __matmul__(self, other: Any) -> "Tensor":
+    def __matmul__(self, other: Any) -> _TENSOR_TEXT:
         return self.matmul(other)
 
-    def __rmatmul__(self, other: Any) -> "Tensor":
+    def __rmatmul__(self, other: Any) -> _TENSOR_TEXT:
         return as_tensor(other).matmul(self)
 
-    def __getitem__(self, index: Any) -> "Tensor":
+    def __getitem__(self, index: Any) -> _TENSOR_TEXT:
         # Freeze mutable advanced indices so later caller edits cannot reroute grads.
         def freeze(value: Any) -> Any:
             if isinstance(value, np.ndarray):
@@ -489,12 +518,7 @@ class Parameter(Tensor):
             raise ValueError("animation progress must be a finite number in [0, 1]")
         value = self.animate(float(progress))
 
-        def as_animated_tensor(value):
-            if isinstance(value, (tuple, list)):
-                return stack(tuple(as_animated_tensor(item) for item in value))
-            return as_tensor(value)
-
-        result = as_animated_tensor(value)
+        result = _tensor_container(value)
         if result.shape != self.shape:
             raise ValueError(
                 f"Animation for parameter '{self.name}' returned shape "
@@ -523,6 +547,13 @@ class Parameter(Tensor):
         return self
 
 
+
+def _tensor_container(value):
+    """Convert nested numeric/Tensor containers without detaching leaves."""
+    if isinstance(value, (tuple, list)):
+        return stack(tuple(_tensor_container(item) for item in value))
+    return as_tensor(value)
+
 def as_tensor(value: Any, requires_grad: bool = False) -> Tensor:
     """Preserve tensor identity and graphs; wrap other values as new tensors."""
     if isinstance(value, Tensor):
@@ -532,119 +563,40 @@ def as_tensor(value: Any, requires_grad: bool = False) -> Tensor:
     return Tensor(value, requires_grad=requires_grad)
 
 
-def _axes(axis: Any, ndim: int) -> Tuple[int, ...]:
-    if axis is None:
-        return tuple(range(ndim))
-    axes = axis if isinstance(axis, tuple) else (axis,)
-    normalized = []
-    for a in axes:
-        if not isinstance(a, (int, np.integer)):
-            raise TypeError("reduction axes must be integers")
-        if not -ndim <= a < ndim:
-            # NumPy accepts scalar sum(axis=0), including axis=-1.
-            if ndim == 0 and a in (0, -1) and not isinstance(axis, tuple):
-                return ()
-            raise ValueError("reduction axis out of bounds")
-        a = int(a) % ndim
-        if a in normalized:
-            raise ValueError("duplicate reduction axis")
-        normalized.append(a)
-    return tuple(normalized)
+def _install_function_api():
+    from . import _autodiff_functions, _autodiff_where
 
-
-def _sigmoid(a: np.ndarray) -> np.ndarray:
-    e = np.exp(-np.abs(a))
-    return np.where(a >= 0, 1 / (1 + e), e / (1 + e))
-
-
-def sum(value: Any, axis: Any = None, keepdims: bool = False) -> Tensor:
-    return as_tensor(value).sum(axis, keepdims)
-
-
-def mean(value: Any, axis: Any = None, keepdims: bool = False) -> Tensor:
-    return as_tensor(value).mean(axis, keepdims)
-
-
-def relu(value: Any) -> Tensor:
-    return as_tensor(value).relu()
-
-
-def softplus(value: Any) -> Tensor:
-    return as_tensor(value).softplus()
-
-
-def sigmoid(value: Any) -> Tensor:
-    return as_tensor(value).sigmoid()
-
-
-def tanh(value: Any) -> Tensor:
-    return as_tensor(value).tanh()
-
-
-def log(value: Any) -> Tensor:
-    return as_tensor(value).log()
-
-
-def exp(value: Any) -> Tensor:
-    return as_tensor(value).exp()
-
-
-def sqrt(value: Any) -> Tensor:
-    return as_tensor(value).sqrt()
-
-
-def abs(value: Any) -> Tensor:
-    return as_tensor(value).abs()
-
-
-def sin(value: Any) -> Tensor:
-    return as_tensor(value).sin()
-
-
-def cos(value: Any) -> Tensor:
-    return as_tensor(value).cos()
-
-
-def maximum(left: Any, right: Any) -> Tensor:
-    return as_tensor(left).maximum(right)
-
-
-def minimum(left: Any, right: Any) -> Tensor:
-    return as_tensor(left).minimum(right)
-
-
-def matmul(left: Any, right: Any) -> Tensor:
-    return as_tensor(left).matmul(right)
-
-
-def reshape(value: Any, shape: Any) -> Tensor:
-    return as_tensor(value).reshape(shape)
-
-
-def transpose(value: Any, axes: Any = None) -> Tensor:
-    return as_tensor(value).transpose(axes)
-
-
-def stack(values: Iterable[Any], axis: int = 0) -> Tensor:
-    tensors = tuple(as_tensor(value) for value in values)
-    value = np.stack([t._data for t in tensors], axis=axis)
-    return Tensor._result(
-        value,
-        tensors,
-        lambda g: tuple(np.take(g, i, axis=axis) for i in range(len(tensors))),
+    _autodiff_functions.Tensor = Tensor
+    _autodiff_functions.as_tensor = as_tensor
+    _autodiff_where.Tensor = Tensor
+    _autodiff_where.as_tensor = as_tensor
+    _autodiff_where._unbroadcast = _unbroadcast
+    names = (
+        "_axes",
+        "_sigmoid",
+        "abs",
+        "cos",
+        "exp",
+        "log",
+        "matmul",
+        "maximum",
+        "mean",
+        "minimum",
+        "relu",
+        "reshape",
+        "sigmoid",
+        "sin",
+        "softplus",
+        "sqrt",
+        "stack",
+        "sum",
+        "tanh",
+        "transpose",
     )
-
-
-def where(condition: Any, x: Any, y: Any) -> Tensor:
-    condition = np.array(condition, copy=True)
-    if condition.dtype.kind != "b":
-        raise TypeError("where condition must be a boolean array")
-    x, y = as_tensor(x), as_tensor(y)
-    return Tensor._result(
-        np.where(condition, x._data, y._data),
-        (x, y),
-        lambda g: (
-            _unbroadcast(np.where(condition, g, 0), x.shape),
-            _unbroadcast(np.where(condition, 0, g), y.shape),
-        ),
+    globals().update(
+        {name: getattr(_autodiff_functions, name) for name in names}
     )
+    globals()["where"] = _autodiff_where.where
+
+
+_install_function_api()

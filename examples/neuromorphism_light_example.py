@@ -11,7 +11,7 @@ def _lit(shape, surface="#f2f5f8", background=TRANSPARENT, bevel=78):
     return shape.light(
         fg_color=surface,
         bg_color=background,
-        light_dir=(-0.55, -0.72, 0.42),
+        light_dir=(-11 / 20, -18 / 25, 0.42),
         ambient=0.62,
         diffuse=0.62,
         specular=0.05,

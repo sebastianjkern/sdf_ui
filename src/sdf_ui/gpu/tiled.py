@@ -33,35 +33,34 @@ _WARPS = {"warp_sdf", "warp_color"}
 _STENCIL_RADIUS = {"fill": 1, "radial_gradient": 1, "linear_gradient": 1}
 
 
+def _negative_gain_turbulence_bound(params, bound):
+    gain = abs(params["gain"])
+    octaves = params["octaves"]
+    if octaves not in range(1, 9):
+        raise ValueError("turbulence octaves must be an integer from 1 to 8")
+    return bound * sum(gain**i for i in range(int(octaves))) / 1 / 10_000
+
+
+def _base_field_bound(node, params, resolve, memo):
+    if node.op == "constant_field":
+        return math.hypot(*params["vector"])
+    if node.op in {"radial_field", "vortex_field"}:
+        return abs(params["strength"])
+    if node.op == "turbulence_field":
+        bound = math.sqrt(2) * abs(params["amplitude"])
+        return _negative_gain_turbulence_bound(params, bound) if params["gain"] < 0 else bound
+    if node.op == "field_add":
+        return sum(_field_bound(child, resolve, memo) for child in node.inputs)
+    if node.op == "field_scale":
+        return abs(params["amount"]) * _field_bound(node.inputs[0], resolve, memo)
+    raise NotImplementedError(f"Cannot bound displacement for field '{node.op}'")
+
+
 def _field_bound(node, resolve, memo):
     """Upper bound on the magnitude of the bilinearly interpolated field."""
     identity = id(node)
     if identity not in memo:
-        params = resolve(node)
-        if node.op == "constant_field":
-            bound = math.hypot(*params["vector"])
-        elif node.op in {"radial_field", "vortex_field"}:
-            # r * exp(-r²/2) is at most exp(-1/2); 1 is conservative.
-            bound = abs(params["strength"])
-        elif node.op == "turbulence_field":
-            bound = math.sqrt(2) * abs(params["amplitude"])
-            if params["gain"] < 0:
-                # Alternating weights may cancel in the shader's normalizer.
-                gain = abs(params["gain"])
-                octaves = params["octaves"]
-                if octaves not in range(1, 9):
-                    raise ValueError(
-                        "turbulence octaves must be an integer from 1 to 8"
-                    )
-                bound *= sum(gain**i for i in range(int(octaves))) / 0.0001
-        elif node.op == "field_add":
-            bound = sum(_field_bound(child, resolve, memo) for child in node.inputs)
-        elif node.op == "field_scale":
-            bound = abs(params["amount"]) * _field_bound(node.inputs[0], resolve, memo)
-        else:
-            raise NotImplementedError(
-                f"Cannot bound displacement for field '{node.op}'"
-            )
+        bound = _base_field_bound(node, resolve(node), resolve, memo)
         if not math.isfinite(bound):
             raise ValueError("Warp displacement bound must be finite")
         memo[identity] = bound
@@ -117,57 +116,72 @@ def required_halo(renderer, scene):
     return visit(scene)
 
 
-def save_tiled(canvas, scene, path, *, tile_size, params, progress):
-    """Read back one expanded tile at a time; assemble on the CPU."""
-    from ..core.texture import _texture_bytes
-
+def _validate_tiled_request(canvas, scene, tile_size, params, progress):
     if getattr(scene, "kind", None) != "color":
         raise TypeError("save_tiled requires a color scene")
-    tile_w, tile_h = _integer_pair(tile_size, "tile_size", positive=True)
-    width, height = canvas.size
-    path = Path(path)
+    tile_width, tile_height = _integer_pair(tile_size, "tile_size", positive=True)
     with Renderer(canvas, params=params, progress=progress) as probe:
         halo = required_halo(probe, scene)
     limit = canvas.device.limits["max-texture-dimension-2d"]
-    if min(width, tile_w + 2 * halo) > limit or min(height, tile_h + 2 * halo) > limit:
+    if min(canvas.size[0], tile_width + 2 * halo) > limit or min(
+        canvas.size[1], tile_height + 2 * halo
+    ) > limit:
         raise ValueError("Tile size plus sampling halo exceeds the GPU texture limit")
+    return tile_width, tile_height, halo
 
+
+def _expanded_tile(x, y, right, top, width, height, halo):
+    left_edge, bottom_edge = max(0, x - halo), max(0, y - halo)
+    right_edge, top_edge = min(width, right + halo), min(height, top + halo)
+    rect = (
+        left_edge, bottom_edge,
+        right_edge - left_edge, top_edge - bottom_edge,
+    )
+    crop = (x - left_edge, y - bottom_edge, right - left_edge, top - bottom_edge)
+    return rect, crop
+
+
+def _paste_tile(assembled, canvas, scene, params, progress, rect, crop, position):
+    from ..core.texture import _texture_bytes
+
+    with (
+        Renderer(canvas, params=params, progress=progress, evaluation_rect=rect) as renderer,
+        renderer.render(scene) as output,
+    ):
+        display = nullcontext(output) if output.mode == "RGB" else canvas.render(output.to_rgb())
+        with display as rgb:
+            with Image.frombytes("RGBA", rgb.size, _texture_bytes(rgb.tex)) as tile:
+                with tile.crop(crop) as core:
+                    with core.transpose(Image.Transpose.FLIP_TOP_BOTTOM) as upright:
+                        assembled.paste(upright, position)
+
+
+def _render_tile_grid(assembled, canvas, scene, params, progress, tile_width, tile_height, halo):
+    width, height = canvas.size
+    for y in range(0, height, tile_height):
+        for x in range(0, width, tile_width):
+            right, top = min(x + tile_width, width), min(y + tile_height, height)
+            rect, crop = _expanded_tile(x, y, right, top, width, height, halo)
+            _paste_tile(
+                assembled, canvas, scene, params, progress, rect, crop,
+                (x, height - top),
+            )
+
+
+def save_tiled(canvas, scene, path, *, tile_size, params, progress):
+    """Read back one expanded tile at a time; assemble on the CPU."""
+    tile_width, tile_height, halo = _validate_tiled_request(
+        canvas, scene, tile_size, params, progress
+    )
+    path = Path(path)
     previous = canvas._tiled_export
     canvas._tiled_export = True
     try:
         with Image.new("RGBA", canvas.size) as assembled:
-            for y in range(0, height, tile_h):
-                for x in range(0, width, tile_w):
-                    right, top = min(x + tile_w, width), min(y + tile_h, height)
-                    left, bottom = max(0, x - halo), max(0, y - halo)
-                    padded_right = min(width, right + halo)
-                    padded_top = min(height, top + halo)
-                    rect = (left, bottom, padded_right - left, padded_top - bottom)
-                    with (
-                        Renderer(
-                            canvas,
-                            params=params,
-                            progress=progress,
-                            evaluation_rect=rect,
-                        ) as renderer,
-                        renderer.render(scene) as output,
-                    ):
-                        display = (
-                            nullcontext(output)
-                            if output.mode == "RGB"
-                            else canvas.render(output.to_rgb())
-                        )
-                        with display as rgb:
-                            with Image.frombytes(
-                                "RGBA", rgb.size, _texture_bytes(rgb.tex)
-                            ) as tile:
-                                with tile.crop(
-                                    (x - left, y - bottom, right - left, top - bottom)
-                                ) as core:
-                                    with core.transpose(
-                                        Image.Transpose.FLIP_TOP_BOTTOM
-                                    ) as upright:
-                                        assembled.paste(upright, (x, height - top))
+            _render_tile_grid(
+                assembled, canvas, scene, params, progress,
+                tile_width, tile_height, halo,
+            )
             assembled.save(path)
     finally:
         canvas._tiled_export = previous

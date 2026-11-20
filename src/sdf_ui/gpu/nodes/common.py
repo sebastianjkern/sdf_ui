@@ -1,6 +1,6 @@
 __docformat__ = "google"
 
-from .base import ShaderFile
+from .base import Plugin, ShaderFile
 
 
 def lower_composite(builder, plugin, inputs, raw, values):
@@ -21,6 +21,40 @@ def shader(
     return ShaderFile(
         name, path, derivative_contract, gpu_derivative, program, interface
     )
+
+
+def register_single_texture_shader(
+    registry, name, family, texture_kind, shader_path, *, contract, program,
+    interface, mode=None,
+):
+    options = {
+        "input_uniforms": ("origTex",),
+        "method_of": (texture_kind,),
+    }
+    if mode is not None:
+        options["mode"] = mode
+    registry.register(
+        Plugin(
+            name,
+            family,
+            texture_kind,
+            (texture_kind,),
+            shader=shader(
+                name, shader_path, derivative_contract=contract,
+                program=program, interface=interface,
+            ),
+            **options,
+        )
+    )
+
+
+def polygon_signed_area(points):
+    area = 0.0
+    for index, point in enumerate(points):
+        x0, y0 = point
+        x1, y1 = points[(index + 1) % len(points)]
+        area += x0 * y1 - x1 * y0
+    return area * 0.5
 
 
 def build(name, *args, **kwargs):

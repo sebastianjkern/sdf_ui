@@ -19,6 +19,16 @@ from .kernel import PointwiseKernel
 
 _COLOR = TextureKind.COLOR
 _SDF = TextureKind.SDF
+_LINEAR_RGBA = "linear_rgba"
+_SOURCE = "source"
+_FLOAT_TYPE = "float"
+_SRGB_BREAKPOINT = 0.04045
+_SRGB_LINEAR_SCALE = 12.92
+_SRGB_OFFSET = 0.055
+_SRGB_SCALE = 1.055
+_SRGB_GAMMA = 2.4
+_LAB_MIN_LUMA = 1e-6
+_SRGB_LINEAR_BREAKPOINT = 0.0031308
 
 
 def _rgba(value):
@@ -31,41 +41,47 @@ def _rgba(value):
 
 
 def _uniforms(values, names):
-    import numpy as np
-
     result = {}
     scalars = {}
     for name in names:
-        value = values[name]
-        if name in {"linear_rgba", "linear_background"}:
-            tensor = _rgba(value)
-            data = tensor.numpy()
-            if (
-                not np.isfinite(data).all()
-                or np.any(data[:3] < 0)
-                or not 0 <= data[3] <= 1
-            ):
-                raise ValueError(
-                    "Linear RGBA requires finite nonnegative RGB and alpha in [0, 1]"
-                )
-            result[name] = tensor
-        else:
-            scalar = float(value.item() if hasattr(value, "item") else value)
-            if name == "grain_amount" and not 0 <= scalar <= 1:
-                raise ValueError("Film grain amount must be in [0, 1]")
-            if name == "grain_size" and not 1 <= scalar < float("inf"):
-                raise ValueError("Film grain size must be finite and at least 1")
-            if not np.isfinite(scalar) or (
-                name in {"threshold", "amount", "tone", "dither"} and scalar < 0
-            ):
-                raise ValueError(
-                    f"{name} must be finite and, for finishing controls, nonnegative"
-                )
-            result[name] = value
-            scalars[name] = scalar
+        if _is_color_uniform(name):
+            result[name] = _validated_color_uniform(values[name])
+            continue
+        result[name], scalars[name] = _validated_scalar_uniform(name, values[name])
     if "inner" in scalars and scalars["outer"] <= scalars["inner"]:
         raise ValueError("Linear fill outer distance must exceed inner distance")
     return result
+
+
+def _is_color_uniform(name):
+    return name in {_LINEAR_RGBA, "linear_background"}
+
+
+def _validated_color_uniform(value):
+    import numpy as np
+    tensor = _rgba(value)
+    data = tensor.numpy()
+    if not np.isfinite(data).all() or np.any(data[:3] < 0) or not 0 <= data[3] <= 1:
+        raise ValueError("Linear RGBA requires finite nonnegative RGB and alpha in [0, 1]")
+    return tensor
+
+
+def _validated_scalar_uniform(name, value):
+    import numpy as np
+    scalar = float(value.item() if hasattr(value, "item") else value)
+    if name == "grain_amount" and not 0 <= scalar <= 1:
+        raise ValueError("Film grain amount must be in [0, 1]")
+    if name == "grain_size" and not 1 <= scalar < float("inf"):
+        raise ValueError("Film grain size must be finite and at least 1")
+    nonnegative = {"threshold", "amount", "tone", "dither"}
+    if not np.isfinite(scalar) or (name in nonnegative and scalar < 0):
+        raise ValueError(f"{name} must be finite and, for finishing controls, nonnegative")
+    return value, scalar
+
+
+def _clip01(value):
+    from sdf_ui.learning.autodiff import where
+    return where(value.data <= 0, 0, where(value.data >= 1, 1, value))
 
 
 def _reference(context, inputs, p, *, op):
@@ -75,96 +91,117 @@ def _reference(context, inputs, p, *, op):
     from sdf_ui.learning.render import _rgba as pack
     from sdf_ui.learning.render import _tensor
 
-    def clip01(value):
-        return where(value.data <= 0, 0, where(value.data >= 1, 1, value))
+    base_result = _reference_base(context, inputs, p, op, _tensor, pack)
+    if base_result is not None:
+        return base_result
+    source = _tensor(inputs[_SOURCE])
+    rgb, alpha = source[..., :3], source[..., 3]
+    operations = {
+        "decode": lambda: (_decode(rgb, where), alpha),
+        "over": lambda: _over(rgb, alpha, inputs, _tensor, where),
+        "expose": lambda: (rgb * exp(_tensor(p["stops"]) * np.log(2)), alpha),
+        "grain": lambda: _grain(rgb, alpha, context, p, _tensor, where),
+        "extract": lambda: _extract(rgb, alpha, p, _tensor, where),
+        "glow": lambda: _glow(rgb, alpha, inputs, p, context, _tensor, where),
+        "finish": lambda: _finish(rgb, alpha, p, context, np, _tensor, where),
+    }
+    operation = operations.get(op)
+    if operation is not None:
+        rgb, alpha = operation()
+    return pack(rgb, alpha)
 
+
+def _reference_base(context, inputs, params, op, tensor, pack):
     if op == "clear":
-        return _rgba(p["linear_rgba"]) + (context.x * 0)[..., None]
+        return _rgba(params[_LINEAR_RGBA]) + (context.x * 0)[..., None]
     if op == "ink":
-        distance = _tensor(inputs["sdf"])
-        opacity = clip01(0.5 - distance)
-        rgba = _rgba(p["linear_rgba"])
-        return pack(rgba[:3] + (distance * 0)[..., None], rgba[3] * opacity)
+        distance = tensor(inputs["sdf"])
+        rgba = _rgba(params[_LINEAR_RGBA])
+        return pack(rgba[:3] + (distance * 0)[..., None], rgba[3] * _clip01(0.5 - distance))
     if op == "fill":
-        distance = _tensor(inputs["sdf"])
-        inner, outer = _tensor(p["inner"]), _tensor(p["outer"])
-        t = clip01((distance - inner) / (outer - inner))
-        t = (t * t * (3 - 2 * t))[..., None]
-        fg, bg = _rgba(p["linear_rgba"]), _rgba(p["linear_background"])
-        return fg + (bg - fg) * t
+        distance = tensor(inputs["sdf"])
+        inner, outer = tensor(params["inner"]), tensor(params["outer"])
+        weight = _clip01((distance - inner) / (outer - inner))
+        weight = (weight * weight * (3 - 2 * weight))[..., None]
+        foreground = _rgba(params[_LINEAR_RGBA])
+        background = _rgba(params["linear_background"])
+        return foreground + (background - foreground) * weight
+    return None
 
-    source = _tensor(inputs["source"])
-    rgb, a = source[..., :3], source[..., 3]
-    if op == "decode":
-        rgb = where(
-            rgb.data <= 0.04045, rgb / 12.92, ((rgb + 0.055) / 1.055).maximum(0) ** 2.4
-        )
-    elif op == "over":
-        top = _tensor(inputs["top"])
-        top_a = top[..., 3]
-        remaining = a * (1 - top_a)
-        alpha = top_a + remaining
-        denominator = where(alpha.data > 0, alpha, 1)
-        rgb = (
-            top[..., :3] * top_a[..., None] + rgb * remaining[..., None]
-        ) / denominator[..., None]
-        rgb = where((alpha.data > 0)[..., None], rgb, 0)
-        a = alpha
-    elif op == "expose":
-        rgb = rgb * exp(_tensor(p["stops"]) * np.log(2))
-    elif op == "grain":
-        amount = _tensor(p["grain_amount"])
-        size = _tensor(p["grain_size"])
-        amount = where(amount.data < 0, 0, where(amount.data > 1, 1, amount))
-        size = where(size.data < 1, 1, size)
-        luma = (rgb * [0.2126, 0.7152, 0.0722]).sum(axis=-1)
-        factor = 1 + amount * reference_noise(context, size) / (1 + 3 * luma)
-        rgb = rgb * factor[..., None]
-    elif op == "extract":
-        luma = (rgb * [0.2126, 0.7152, 0.0722]).sum(axis=-1)
-        excess = luma - _tensor(p["threshold"])
-        amount = where(excess.data > 0, excess, 0) / where(luma.data > 1e-6, luma, 1e-6)
-        rgb = rgb * (a * amount)[..., None]
-        a = a * 0
-    elif op == "glow":
-        light = _tensor(inputs["light"])[..., :3] * _tensor(p["amount"])
-        # Give light in transparent areas coverage, while retaining HDR
-        # energy in straight RGB. An opaque source stays opaque.
-        glow_alpha = clip01((light * [0.2126, 0.7152, 0.0722]).sum(axis=-1))
-        alpha = a + (1 - a) * glow_alpha
-        denominator = where(alpha.data > 0, alpha, 1)
-        rgb = where(
-            (alpha.data > 0)[..., None],
-            (rgb * a[..., None] + light) / denominator[..., None],
-            0,
-        )
-        a = alpha
-    elif op == "finish":
-        rgb = where(rgb.data > 0, rgb, 0)
-        luma = (rgb * [0.2126, 0.7152, 0.0722]).sum(axis=-1)
-        rgb = rgb / (1 + luma[..., None] * _tensor(p["tone"]))
-        # Avoid an infinite derivative in the unused power branch at zero.
-        rgb = where(
-            rgb.data <= 0.0031308,
-            rgb * 12.92,
-            1.055 * rgb.maximum(0.0031308) ** (1 / 2.4) - 0.055,
-        )
-        pattern = np.array([0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5])
-        index = (context.y.data.astype(int) % 4) * 4 + context.x.data.astype(int) % 4
-        noise = ((pattern[index] + 0.5) / 16 - 0.5) / 255
-        rgb = clip01(rgb + _tensor(p["dither"]) * noise[..., None])
-    return pack(rgb, a)
+
+def _decode(rgb, where):
+    return where(
+        rgb.data <= _SRGB_BREAKPOINT,
+        rgb / _SRGB_LINEAR_SCALE,
+        ((rgb + _SRGB_OFFSET) / _SRGB_SCALE).maximum(0) ** _SRGB_GAMMA,
+    )
+
+
+def _over(rgb, alpha, inputs, tensor, where):
+    top = tensor(inputs["top"])
+    top_alpha = top[..., 3]
+    remaining = alpha * (1 - top_alpha)
+    output_alpha = top_alpha + remaining
+    denominator = where(output_alpha.data > 0, output_alpha, 1)
+    output_rgb = (top[..., :3] * top_alpha[..., None] + rgb * remaining[..., None]) / denominator[..., None]
+    output_rgb = where((output_alpha.data > 0)[..., None], output_rgb, 0)
+    return output_rgb, output_alpha
+
+
+def _grain(rgb, alpha, context, params, tensor, where):
+    amount = tensor(params["grain_amount"])
+    size = tensor(params["grain_size"])
+    amount = where(amount.data < 0, 0, where(amount.data > 1, 1, amount))
+    size = where(size.data < 1, 1, size)
+    luma = (rgb * [0.2126, 0.7152, 0.0722]).sum(axis=-1)
+    factor = 1 + amount * reference_noise(context, size) / (1 + 3 * luma)
+    return rgb * factor[..., None], alpha
+
+
+def _extract(rgb, alpha, params, tensor, where):
+    luma = (rgb * [0.2126, 0.7152, 0.0722]).sum(axis=-1)
+    excess = luma - tensor(params["threshold"])
+    amount = where(excess.data > 0, excess, 0) / where(luma.data > _LAB_MIN_LUMA, luma, _LAB_MIN_LUMA)
+    return rgb * (alpha * amount)[..., None], alpha * 0
+
+
+def _glow(rgb, alpha, inputs, params, tensor, where):
+    light = tensor(inputs["light"])[..., :3] * tensor(params["amount"])
+    glow_alpha = _clip01((light * [0.2126, 0.7152, 0.0722]).sum(axis=-1))
+    output_alpha = alpha + (1 - alpha) * glow_alpha
+    denominator = where(output_alpha.data > 0, output_alpha, 1)
+    output_rgb = where(
+        (output_alpha.data > 0)[..., None],
+        (rgb * alpha[..., None] + light) / denominator[..., None],
+        0,
+    )
+    return output_rgb, output_alpha
+
+
+def _finish(rgb, alpha, params, context, np, tensor, where):
+    rgb = where(rgb.data > 0, rgb, 0)
+    luma = (rgb * [0.2126, 0.7152, 0.0722]).sum(axis=-1)
+    rgb = rgb / (1 + luma[..., None] * tensor(params["tone"]))
+    rgb = where(
+        rgb.data <= _SRGB_LINEAR_BREAKPOINT,
+        rgb * _SRGB_LINEAR_SCALE,
+        _SRGB_SCALE * rgb.maximum(_SRGB_LINEAR_BREAKPOINT) ** (1 / _SRGB_GAMMA) - _SRGB_OFFSET,
+    )
+    pattern = np.array([0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5])
+    index = (context.y.data.astype(int) % 4) * 4 + context.x.data.astype(int) % 4
+    noise = ((pattern[index] + 0.5) / 16 - 0.5) / 255
+    return _clip01(rgb + tensor(params["dither"]) * noise[..., None]), alpha
 
 
 _OPS = {
     "clear": (
         (),
-        (("linear_rgba", "vec4"),),
+        ((_LINEAR_RGBA, "vec4"),),
         "return array<D,4>(u[0],u[1],u[2],u[3]);",
     ),
     "ink": (
         (("sdf", _SDF),),
-        (("linear_rgba", "vec4"),),
+        ((_LINEAR_RGBA, "vec4"),),
         """
         let coverage=clip(sub(k(0.5),ins[0][0]));
         return array<D,4>(u[0],u[1],u[2],mul(u[3],coverage));
@@ -173,10 +210,10 @@ _OPS = {
     "fill": (
         (("sdf", _SDF),),
         (
-            ("linear_rgba", "vec4"),
+            (_LINEAR_RGBA, "vec4"),
             ("linear_background", "vec4"),
-            ("inner", "float"),
-            ("outer", "float"),
+            ("inner", _FLOAT_TYPE),
+            ("outer", _FLOAT_TYPE),
         ),
         """
         let t=clip(div(sub(ins[0][0],u[8]),sub(u[9],u[8])));
@@ -187,7 +224,7 @@ _OPS = {
     """,
     ),
     "decode": (
-        (("source", _COLOR),),
+        ((_SOURCE, _COLOR),),
         (),
         """
         var out=ins[0];
@@ -196,7 +233,7 @@ _OPS = {
     """,
     ),
     "over": (
-        (("source", _COLOR), ("top", _COLOR)),
+        ((_SOURCE, _COLOR), ("top", _COLOR)),
         (),
         """
         let a=ins[0][3];
@@ -214,8 +251,8 @@ _OPS = {
     """,
     ),
     "expose": (
-        (("source", _COLOR),),
-        (("stops", "float"),),
+        ((_SOURCE, _COLOR),),
+        (("stops", _FLOAT_TYPE),),
         """
         var out=ins[0];
         let multiplier=scale2(u[0]);
@@ -224,8 +261,8 @@ _OPS = {
     """,
     ),
     "grain": (
-        (("source", _COLOR),),
-        (("grain_amount", "float"), ("grain_size", "float")),
+        ((_SOURCE, _COLOR),),
+        (("grain_amount", _FLOAT_TYPE), ("grain_size", _FLOAT_TYPE)),
         """
         var out=ins[0];
         var amount=u[0];
@@ -239,8 +276,8 @@ _OPS = {
     """,
     ),
     "extract": (
-        (("source", _COLOR),),
-        (("threshold", "float"),),
+        ((_SOURCE, _COLOR),),
+        (("threshold", _FLOAT_TYPE),),
         """
         var out=ins[0];
         let luma=luminance(out);
@@ -254,8 +291,8 @@ _OPS = {
     """,
     ),
     "glow": (
-        (("source", _COLOR), ("light", _COLOR)),
-        (("amount", "float"),),
+        ((_SOURCE, _COLOR), ("light", _COLOR)),
+        (("amount", _FLOAT_TYPE),),
         """
         var out=ins[0];
         var light=ins[1];
@@ -272,8 +309,8 @@ _OPS = {
     """,
     ),
     "finish": (
-        (("source", _COLOR),),
-        (("tone", "float"), ("dither", "float")),
+        ((_SOURCE, _COLOR),),
+        (("tone", _FLOAT_TYPE), ("dither", _FLOAT_TYPE)),
         """
         var out=ins[0];
         for (var i=0; i<3; i++) { out[i]=positive(out[i]); }
@@ -288,55 +325,48 @@ _OPS = {
 
 def register_plugins(registry):
     for op, (inputs, parameters, body) in _OPS.items():
-        name = f"hdr_{op}"
-        path = f"gpu/shaders/{name}.wgsl"
-        contract = ShaderDifferentiation(
-            name,
-            path,
-            tuple(
-                ShaderArgument(
-                    port,
-                    () if kind == _SDF else (4,),
-                    "r32f" if kind == _SDF else "rgba8",
-                )
-                for port, kind in inputs
-            ),
-            tuple(
-                ShaderArgument(key, (4,) if kind == "vec4" else (), kind)
-                for key, kind in parameters
-            ),
-            (ShaderArgument("destTex", (4,), "rgba8"),),
-            notes="Differentiate unquantized linear-light math with fixed branches and a fixed dither pattern.",
-            reference=partial(_reference, op=op),
-        )
-        descriptor = ShaderFile(
-            name,
-            path,
-            derivative_contract=contract,
-            interface=ShaderInterface(
-                ImageBinding("destTex", 0, write=True),
-                tuple(
-                    ImageBinding(port, i, read=True)
-                    for i, (port, _) in enumerate(inputs, 1)
-                ),
-                tuple(Uniform(key, kind) for key, kind in parameters),
-            ),
-            wgsl=PointwiseKernel(
-                contract, body, mixed=op, helpers=GRAIN_WGSL if op == "grain" else ""
-            ),
-        )
-        registry.register(
-            Plugin(
-                name,
-                PluginFamily.POSTPROCESSING,
-                _COLOR,
-                tuple(kind for _, kind in inputs),
-                params=tuple(key for key, _ in parameters),
-                shader=descriptor,
-                input_uniforms=tuple(port for port, _ in inputs),
-                make_uniforms=partial(
-                    _uniforms, names=tuple(key for key, _ in parameters)
-                ),
-                mode="RGB" if op == "finish" else "LINEAR",
-            )
-        )
+        _register_operation(registry, op, inputs, parameters, body)
+
+
+def _register_operation(registry, op, inputs, parameters, body):
+    name = f"hdr_{op}"
+    path = f"gpu/shaders/{name}.wgsl"
+    contract = _shader_contract(name, path, op, inputs, parameters)
+    descriptor = _shader_descriptor(name, path, op, inputs, parameters, body, contract)
+    registry.register(Plugin(
+        name,
+        PluginFamily.POSTPROCESSING,
+        _COLOR,
+        tuple(kind for _, kind in inputs),
+        params=tuple(key for key, _ in parameters),
+        shader=descriptor,
+        input_uniforms=tuple(port for port, _ in inputs),
+        make_uniforms=partial(_uniforms, names=tuple(key for key, _ in parameters)),
+        mode="RGB" if op == "finish" else "LINEAR",
+    ))
+
+
+def _shader_contract(name, path, op, inputs, parameters):
+    return ShaderDifferentiation(
+        name,
+        path,
+        tuple(ShaderArgument(port, () if kind == _SDF else (4,), "r32f" if kind == _SDF else "rgba8") for port, kind in inputs),
+        tuple(ShaderArgument(key, (4,) if kind == "vec4" else (), kind) for key, kind in parameters),
+        (ShaderArgument("destTex", (4,), "rgba8"),),
+        notes="Differentiate unquantized linear-light math with fixed branches and a fixed dither pattern.",
+        reference=partial(_reference, op=op),
+    )
+
+
+def _shader_descriptor(name, path, op, inputs, parameters, body, contract):
+    return ShaderFile(
+        name,
+        path,
+        derivative_contract=contract,
+        interface=ShaderInterface(
+            ImageBinding("destTex", 0, write=True),
+            tuple(ImageBinding(port, i, read=True) for i, (port, _) in enumerate(inputs, 1)),
+            tuple(Uniform(key, kind) for key, kind in parameters),
+        ),
+        wgsl=PointwiseKernel(contract, body, mixed=op, helpers=GRAIN_WGSL if op == "grain" else ""),
+    )

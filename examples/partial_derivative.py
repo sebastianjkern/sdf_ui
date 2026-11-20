@@ -1,9 +1,9 @@
 # %% 
+import random
 from functools import reduce
 
-import random
-
 from sdf_ui import Canvas, sdf
+
 
 def partial_derivative_example():
     with Canvas((1080, 1080)) as ctx:

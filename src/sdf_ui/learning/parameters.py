@@ -1,18 +1,58 @@
 """Named trainable values shared by layout expressions and render graphs."""
 
-import json
 import math
 from collections.abc import Mapping
-from pathlib import Path
 
 import numpy as np
 
+from ._checkpoint_io import JsonCheckpoint
 from .autodiff import Parameter
 
 _UNSET = object()
 
 
-class ParameterStore(Mapping):
+def _validate_parameter_checkpoint(store, state):
+    if not isinstance(state, Mapping) or state.get("format_version") != 1:
+        raise ValueError("Invalid parameter checkpoint format")
+    if state.get("schema") != store.schema():
+        raise ValueError("Checkpoint parameter schema differs from the store")
+
+
+def _validated_scalar_value(value, bounds):
+    if isinstance(value, bool) or not np.isscalar(value) or not np.isfinite(value):
+        raise ValueError("Scalar value must be finite")
+    value = float(value)
+    lower, upper = bounds
+    if (lower is not None and value <= lower) or (upper is not None and value >= upper):
+        raise ValueError("Scalar value must be strictly inside its bounds")
+    return value
+
+
+def _inverse_unbounded_scalar(value, lower, upper):
+    if lower is not None:
+        distance = value - lower
+    elif upper is not None:
+        distance = upper - value
+    else:
+        return value
+    return distance + math.log(-math.expm1(-distance))
+
+
+def _checkpoint_parameter_values(store, raw):
+    if not isinstance(raw, Mapping) or set(raw) != set(store):
+        raise ValueError("Checkpoint parameter names do not match the store")
+    values = {}
+    for name, parameter in store.items():
+        value = np.asarray(raw[name], dtype=float)
+        if value.shape != parameter.shape:
+            raise ValueError(f"Checkpoint shape mismatch for '{name}'")
+        if not np.all(np.isfinite(value)):
+            raise ValueError(f"Nonfinite checkpoint value for '{name}'")
+        values[name] = value
+    return values
+
+
+class ParameterStore(Mapping, JsonCheckpoint):
     """A named collection usable directly as ``render(..., params=store)``.
 
     Checkpoints contain values, rather than execution tapes or GPU resources.
@@ -101,26 +141,12 @@ class ParameterStore(Mapping):
 
     @staticmethod
     def _inverse_scalar(value, bounds):
-        if isinstance(value, bool) or not np.isscalar(value) or not np.isfinite(value):
-            raise ValueError("Scalar value must be finite")
-        value = float(value)
+        value = _validated_scalar_value(value, bounds)
         lower, upper = bounds
-        if (lower is not None and value <= lower) or (
-            upper is not None and value >= upper
-        ):
-            raise ValueError("Scalar value must be strictly inside its bounds")
         if lower is not None and upper is not None:
             return math.log(value - lower) - math.log(upper - value)
-        distance = (
-            value - lower
-            if lower is not None
-            else upper - value
-            if upper is not None
-            else None
-        )
-        return (
-            value if distance is None else distance + math.log(-math.expm1(-distance))
-        )
+        return _inverse_unbounded_scalar(value, lower, upper)
+
 
     def assign_value(self, name, value):
         """Assign a declared scalar in its rendered units."""
@@ -215,28 +241,9 @@ class ParameterStore(Mapping):
 
     def load_state_dict(self, state):
         """Validate the entire checkpoint before assigning any values."""
-        if not isinstance(state, Mapping) or state.get("format_version") != 1:
-            raise ValueError("Invalid parameter checkpoint format")
-        if state.get("schema") != self.schema():
-            raise ValueError("Checkpoint parameter schema differs from the store")
-        raw = state.get("parameters")
-        if not isinstance(raw, Mapping) or set(raw) != set(self):
-            raise ValueError("Checkpoint parameter names do not match the store")
-        values = {}
-        for name, parameter in self.items():
-            value = np.asarray(raw[name], dtype=float)
-            if value.shape != parameter.shape:
-                raise ValueError(f"Checkpoint shape mismatch for '{name}'")
-            if not np.all(np.isfinite(value)):
-                raise ValueError(f"Nonfinite checkpoint value for '{name}'")
-            values[name] = value
+        _validate_parameter_checkpoint(self, state)
+        values = _checkpoint_parameter_values(self, state["parameters"])
         for name, value in values.items():
             parameter = self[name]
             if parameter.animate is None:
                 parameter.assign(value)
-
-    def save(self, path):
-        Path(path).write_text(json.dumps(self.state_dict(), indent=2), encoding="utf-8")
-
-    def load(self, path):
-        self.load_state_dict(json.loads(Path(path).read_text(encoding="utf-8")))

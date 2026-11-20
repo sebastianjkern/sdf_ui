@@ -16,18 +16,23 @@ with lazy center and half-size calculations for the existing SDF rect API.
 
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from itertools import combinations
-from pathlib import Path
 from types import MappingProxyType
 
 import numpy as np
 
+from .._json_identity import serialize_identity
 from ..core.expressions import Expr, evaluate_expr
 from .autodiff import Parameter, Tensor, as_tensor, maximum, minimum
 from .optimizers import Adam
+
+_HEIGHT_TEXT = 'height'
+
+_MINIMUM_SIZE_TEXT = 'minimum_size'
+
+_WIDTH_TEXT = 'width'
 
 __all__ = ["Bounds", "Element", "Layout", "LayoutSnapshot", "LayoutTrainer"]
 
@@ -81,8 +86,8 @@ class Bounds:
     height: object
 
     def __post_init__(self):
-        for name in ("x", "y", "width", "height"):
-            _validate_scalar(getattr(self, name), name, name in {"width", "height"})
+        for name in ("x", "y", _WIDTH_TEXT, _HEIGHT_TEXT):
+            _validate_scalar(getattr(self, name), name, name in {_WIDTH_TEXT, _HEIGHT_TEXT})
 
     @property
     def left(self):
@@ -134,26 +139,39 @@ class Element:
     minimum_size: object = None
     content_bounds: object = None
 
-    def __post_init__(self):
-        if not isinstance(self.name, str) or not self.name.strip():
+    @staticmethod
+    def _validate_labels(element):
+        if not isinstance(element.name, str) or not element.name.strip():
             raise ValueError("Element name must be a nonempty string")
-        if not isinstance(self.bounds, Bounds):
+        if not isinstance(element.bounds, Bounds):
             raise TypeError("Element bounds must be Bounds")
-        if not isinstance(self.role, str):
+        if not isinstance(element.role, str):
             raise TypeError("Element role must be a string")
-        if isinstance(self.parent, Element):
-            object.__setattr__(self, "parent", self.parent.name)
-        if self.parent is not None and not isinstance(self.parent, str):
+
+    @staticmethod
+    def _normalize_parent(parent):
+        if isinstance(parent, Element):
+            return parent.name
+        if parent is not None and not isinstance(parent, str):
             raise TypeError("Element parent must be an Element or name")
-        if self.minimum_size is not None:
-            pair = _pair(self.minimum_size, "minimum_size")
-            for value in pair:
-                _validate_scalar(value, "minimum_size", nonnegative=True)
-            object.__setattr__(self, "minimum_size", pair)
-        if self.content_bounds is not None and not isinstance(
-            self.content_bounds, Bounds
-        ):
+        return parent
+
+    @staticmethod
+    def _normalize_minimum_size(value):
+        if value is None:
+            return None
+        pair = _pair(value, _MINIMUM_SIZE_TEXT)
+        for item in pair:
+            _validate_scalar(item, _MINIMUM_SIZE_TEXT, nonnegative=True)
+        return pair
+
+    def __post_init__(self):
+        self._validate_labels(self)
+        object.__setattr__(self, "parent", self._normalize_parent(self.parent))
+        object.__setattr__(self, _MINIMUM_SIZE_TEXT, self._normalize_minimum_size(self.minimum_size))
+        if self.content_bounds is not None and not isinstance(self.content_bounds, Bounds):
             raise TypeError("content_bounds must be Bounds")
+
 
     def shape(self, corner_radius=0.0):
         """Build a persistent SDF rect sharing these raw geometry leaves.
@@ -220,9 +238,9 @@ def _resolve_bounds(bounds, ctx, params, track_grad):
                 params,
                 track_grad,
                 name,
-                nonnegative=name in {"width", "height"},
+                nonnegative=name in {_WIDTH_TEXT, _HEIGHT_TEXT},
             )
-            for name in ("x", "y", "width", "height")
+            for name in ("x", "y", _WIDTH_TEXT, _HEIGHT_TEXT)
         )
     )
 
@@ -253,17 +271,7 @@ def _validated_parameters(parameters):
 
 
 def _serialize_layout_identity(identity):
-    if identity is None:
-        return None
-    try:
-        return json.dumps(
-            identity, sort_keys=True, allow_nan=False, separators=(",", ":")
-        )
-    except (TypeError, ValueError) as error:
-        raise ValueError(
-            "Layout identity must be finite JSON-serializable data"
-        ) from error
-
+    return serialize_identity(identity, "Layout")
 
 def _validate_layout_checkpoint(trainer, state):
     if (
@@ -341,7 +349,7 @@ class LayoutSnapshot:
         """Return a mutable, JSON-compatible copy for reporting/checkpoints."""
 
         def box(bounds):
-            return {key: getattr(bounds, key) for key in ("x", "y", "width", "height")}
+            return {key: getattr(bounds, key) for key in ("x", "y", _WIDTH_TEXT, _HEIGHT_TEXT)}
 
         return {
             "size": list(self.size),
@@ -350,7 +358,7 @@ class LayoutSnapshot:
                     "bounds": box(element.bounds),
                     "role": element.role,
                     "parent": element.parent,
-                    "minimum_size": element.minimum_size,
+                    _MINIMUM_SIZE_TEXT: element.minimum_size,
                     "content_bounds": (
                         box(element.content_bounds)
                         if element.content_bounds is not None
@@ -422,67 +430,61 @@ class Layout:
             for name, element in self.elements.items()
         }
 
-    def snapshot(self, params=None):
-        """Validate and freeze numeric geometry without retaining a Tensor graph."""
-        params = {} if params is None else params
+    def _snapshot_elements(self, params):
         ctx = _LayoutContext(self.size, self.inputs)
         elements = {}
         for name, element in self.elements.items():
             minimum_size = (
-                tuple(
-                    _resolve(v, ctx, params, False, "minimum_size", True)
-                    for v in element.minimum_size
-                )
-                if element.minimum_size is not None
-                else None
+                tuple(_resolve(v, ctx, params, False, _MINIMUM_SIZE_TEXT, True)
+                      for v in element.minimum_size)
+                if element.minimum_size is not None else None
+            )
+            content_bounds = (
+                _resolve_bounds(element.content_bounds, ctx, params, False)
+                if element.content_bounds is not None else None
             )
             elements[name] = Element(
-                name,
-                _resolve_bounds(element.bounds, ctx, params, False),
-                role=element.role,
-                parent=element.parent,
-                minimum_size=minimum_size,
-                content_bounds=(
-                    _resolve_bounds(element.content_bounds, ctx, params, False)
-                    if element.content_bounds is not None
-                    else None
-                ),
+                name, _resolve_bounds(element.bounds, ctx, params, False),
+                role=element.role, parent=element.parent,
+                minimum_size=minimum_size, content_bounds=content_bounds,
             )
-        bounds = {name: element.bounds for name, element in elements.items()}
-        overlap_area = sum(
-            max(
-                0.0,
-                min(bounds[a].right, bounds[b].right)
-                - max(bounds[a].left, bounds[b].left),
-            )
-            * max(
-                0.0,
-                min(bounds[a].bottom, bounds[b].bottom)
-                - max(bounds[a].top, bounds[b].top),
-            )
+        return elements
+
+    def _snapshot_overlap_area(self, bounds):
+        return sum(
+            max(0.0, min(bounds[a].right, bounds[b].right)
+                - max(bounds[a].left, bounds[b].left))
+            * max(0.0, min(bounds[a].bottom, bounds[b].bottom)
+                - max(bounds[a].top, bounds[b].top))
             for a, b in self._pairs()
         )
-        offscreen_area = 0.0
-        minimum_size_loss = 0.0
+
+    def _snapshot_constraints(self, elements):
+        offscreen_area = minimum_size_loss = 0.0
         for element in elements.values():
-            b = element.bounds
-            outside_width = _outside_length(b.x, b.width, self.size[0])
-            outside_height = _outside_length(b.y, b.height, self.size[1])
-            # Count full-height side strips, then top/bottom strips across the
-            # remaining width. Avoid area-minus-visible-area cancellation.
-            offscreen_area += outside_width * b.height
-            offscreen_area += (b.width - outside_width) * outside_height
+            bounds = element.bounds
+            outside_width = _outside_length(bounds.x, bounds.width, self.size[0])
+            outside_height = _outside_length(bounds.y, bounds.height, self.size[1])
+            offscreen_area += outside_width * bounds.height
+            offscreen_area += (bounds.width - outside_width) * outside_height
             if element.minimum_size is not None:
-                mw, mh = element.minimum_size
-                minimum_size_loss += max(0.0, mw - b.width) ** 2
-                minimum_size_loss += max(0.0, mh - b.height) ** 2
+                minimum_width, minimum_height = element.minimum_size
+                minimum_size_loss += max(0.0, minimum_width - bounds.width) ** 2
+                minimum_size_loss += max(0.0, minimum_height - bounds.height) ** 2
+        return offscreen_area, minimum_size_loss
+
+    def snapshot(self, params=None):
+        """Validate and freeze numeric geometry without retaining a Tensor graph."""
+        params = {} if params is None else params
+        elements = self._snapshot_elements(params)
+        bounds = {name: element.bounds for name, element in elements.items()}
+        overlap_area = self._snapshot_overlap_area(bounds)
+        offscreen_area, minimum_size_loss = self._snapshot_constraints(elements)
         return LayoutSnapshot(
-            elements,
-            self.size,
-            float(overlap_area),
-            float(offscreen_area),
+            elements, self.size, float(overlap_area), float(offscreen_area),
             float(minimum_size_loss),
         )
+
 
     def overlap_loss(self, params=None):
         """Sum pairwise overlap areas; gradients vanish for separated boxes.
@@ -523,7 +525,7 @@ class Layout:
             if element.minimum_size is None:
                 continue
             mw, mh = (
-                _resolve(v, ctx, params, True, "minimum_size", True)
+                _resolve(v, ctx, params, True, _MINIMUM_SIZE_TEXT, True)
                 for v in element.minimum_size
             )
             b = bounds[name]
@@ -768,12 +770,6 @@ class LayoutTrainer:
         for p in self.parameters:
             p.assign(checked[p.name])
         self.steps = steps
-
-    def save(self, path):
-        Path(path).write_text(json.dumps(self.state_dict(), indent=2), encoding="utf-8")
-
-    def load(self, path):
-        self.load_state_dict(json.loads(Path(path).read_text(encoding="utf-8")))
 
     def fit(
         self,

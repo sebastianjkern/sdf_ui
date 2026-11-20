@@ -10,16 +10,19 @@ Use ``collect_episode`` and ``update`` to batch trajectories, or
 collect fresh episodes after each update.
 """
 
-import json
 from copy import deepcopy
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Tuple, Union
 
 import numpy as np
 
+from ._checkpoint_io import JsonCheckpoint
 from .autodiff import Parameter, Tensor, as_tensor, stack
 from .optimizers import SGD, Adam
+
+_POLICY_INIT_SCALE = 0.1
+_ADVANTAGE_EPSILON = 1e-8
+_GAMMA_KEY = "gamma"
 
 __all__ = [
     "CategoricalPolicy",
@@ -109,7 +112,7 @@ class _MLP:
         self.w2 = Parameter(
             "w2",
             rng.normal(
-                0, 0.1 / np.sqrt(self.hidden_dim), (self.hidden_dim, self.action_dim)
+                0, _POLICY_INIT_SCALE / np.sqrt(self.hidden_dim), (self.hidden_dim, self.action_dim)
             ),
         )
         self.b2 = Parameter("b2", np.zeros(self.action_dim))
@@ -324,7 +327,7 @@ class Episode:
 
 def discounted_returns(rewards, gamma=0.99):
     """Compute reward-to-go without crossing episode boundaries."""
-    gamma = _scalar(gamma, "gamma")
+    gamma = _scalar(gamma, _GAMMA_KEY)
     if not 0 <= gamma <= 1:
         raise ValueError("gamma must be in [0, 1]")
     rewards = np.asarray(list(rewards), dtype=float)
@@ -340,7 +343,7 @@ def discounted_returns(rewards, gamma=0.99):
     return result
 
 
-class PolicyGradientTrainer:
+class PolicyGradientTrainer(JsonCheckpoint):
     """Reward-to-go REINFORCE with a scalar baseline and standardized advantages.
 
     Batches with multiple transitions use their mean return as baseline and
@@ -364,7 +367,7 @@ class PolicyGradientTrainer:
             if len(actual) != len(expected) or {id(p) for p in actual} != expected:
                 raise ValueError("Optimizer must own exactly this policy's parameters")
         self.rng = np.random.default_rng(seed)
-        self.gamma = _scalar(gamma, "gamma")
+        self.gamma = _scalar(gamma, _GAMMA_KEY)
         if not 0 <= self.gamma <= 1:
             raise ValueError("gamma must be in [0, 1]")
         self.baseline = 0.0
@@ -444,7 +447,7 @@ class PolicyGradientTrainer:
         baseline = float(returns.mean()) if len(returns) > 1 else self.baseline
         advantages = returns - baseline
         scale = float(advantages.std())
-        if scale > 1e-8:
+        if scale > _ADVANTAGE_EPSILON:
             advantages /= scale
         loss = -(stack(log_probs) * advantages).mean()
         loss_value = _scalar(loss, "loss")
@@ -500,35 +503,9 @@ class PolicyGradientTrainer:
         validation_interval=1,
     ):
         """Train a named render environment with named observations."""
-        if not callable(observation_fn):
-            raise TypeError("observation_fn must be callable")
-        if callback is not None and not callable(callback):
-            raise TypeError("callback must be callable")
-        if (
-            not callable(getattr(environment, "encode_observation", None))
-            or not callable(getattr(environment, "reward_vector", None))
-            or not callable(getattr(environment, "schema", None))
-        ):
-            raise TypeError("fit requires a named render environment")
-        if len(environment.observations) != self.policy.obs_dim:
-            raise ValueError("Policy observation dimension differs from environment")
-        if (
-            isinstance(self.policy, CategoricalPolicy)
-            and environment.action_transform is None
-        ):
-            raise ValueError(
-                "Categorical policies require an action_transform returning named actions"
-            )
-        if (
-            environment.action_transform is None
-            and len(environment.actions) != self.policy.action_dim
-        ):
-            raise ValueError("Policy action dimension differs from environment")
-        steps = _integer(steps, "steps", minimum=0)
-        batch_size = _integer(batch_size, "batch_size")
-        schema = environment.schema()
-        if self._environment_schema is not None and self._environment_schema != schema:
-            raise ValueError("Policy trainer environment schema differs")
+        steps, batch_size, schema = self._validate_fit_inputs(
+            environment, observation_fn, steps, batch_size, callback
+        )
         self._environment_schema = schema
 
         def step():
@@ -556,6 +533,41 @@ class PolicyGradientTrainer:
             validation_interval=validation_interval,
             step=step,
         )
+
+    def _validate_fit_inputs(self, environment, observation_fn, steps, batch_size, callback):
+        if not callable(observation_fn):
+            raise TypeError("observation_fn must be callable")
+        if callback is not None and not callable(callback):
+            raise TypeError("callback must be callable")
+        self._validate_policy_environment(environment)
+        steps = _integer(steps, "steps", minimum=0)
+        batch_size = _integer(batch_size, "batch_size")
+        schema = environment.schema()
+        if self._environment_schema is not None and self._environment_schema != schema:
+            raise ValueError("Policy trainer environment schema differs")
+        return steps, batch_size, schema
+
+    def _validate_policy_environment(self, environment):
+        if (
+            not callable(getattr(environment, "encode_observation", None))
+            or not callable(getattr(environment, "reward_vector", None))
+            or not callable(getattr(environment, "schema", None))
+        ):
+            raise TypeError("fit requires a named render environment")
+        if len(environment.observations) != self.policy.obs_dim:
+            raise ValueError("Policy observation dimension differs from environment")
+        if (
+            isinstance(self.policy, CategoricalPolicy)
+            and environment.action_transform is None
+        ):
+            raise ValueError(
+                "Categorical policies require an action_transform returning named actions"
+            )
+        if (
+            environment.action_transform is None
+            and len(environment.actions) != self.policy.action_dim
+        ):
+            raise ValueError("Policy action dimension differs from environment")
 
     def evaluate(self, environment, observations):
         """Score deterministic actions on named held-out observations."""
@@ -600,7 +612,7 @@ class PolicyGradientTrainer:
             "format_version": 2,
             "environment": deepcopy(self._environment_schema),
             "policy": self.policy.state_dict(),
-            "gamma": self.gamma,
+            _GAMMA_KEY: self.gamma,
             "baseline": self.baseline,
             "updates": self.updates,
             "rng": deepcopy(self.rng.bit_generator.state),
@@ -611,6 +623,17 @@ class PolicyGradientTrainer:
 
     def load_state_dict(self, state):
         """Restore a checkpoint; create the same policy and optimizer types first."""
+        environment, gamma, baseline, updates, rng, optimizer_state = (
+            self._validate_checkpoint_state(state)
+        )
+        self._restore_optimizer_state(state, optimizer_state)
+        self.policy.load_state_dict(state["policy"])
+        self.gamma, self.baseline, self.updates = gamma, baseline, updates
+        self.rng = rng
+        self._environment_schema = deepcopy(environment)
+        self.last_metrics = None
+
+    def _validate_checkpoint_state(self, state):
         if (
             not isinstance(state, dict)
             or state.get("format_version") != 2
@@ -628,7 +651,7 @@ class PolicyGradientTrainer:
         ):
             raise ValueError("Policy trainer environment schema differs")
         self.policy._validated_state(state["policy"])
-        gamma = _scalar(state["gamma"], "gamma")
+        gamma = _scalar(state[_GAMMA_KEY], _GAMMA_KEY)
         baseline = _scalar(state["baseline"], "baseline")
         updates = _integer(state["updates"], "updates", minimum=0)
         if not 0 <= gamma <= 1:
@@ -636,6 +659,9 @@ class PolicyGradientTrainer:
         rng = np.random.default_rng()
         rng.bit_generator.state = deepcopy(state["rng"])
         optimizer_state = state.get("optimizer")
+        return environment, gamma, baseline, updates, rng, optimizer_state
+
+    def _restore_optimizer_state(self, state, optimizer_state):
         if optimizer_state is not None:
             load = getattr(self.optimizer, "load_state_dict", None)
             if state["optimizer_type"] != type(self.optimizer).__name__ or not callable(
@@ -644,15 +670,3 @@ class PolicyGradientTrainer:
                 raise ValueError("Checkpoint optimizer type is incompatible")
             # Optimizers validate their entire state before assigning it.
             load(deepcopy(optimizer_state))
-        self.policy.load_state_dict(state["policy"])
-        self.gamma, self.baseline, self.updates = gamma, baseline, updates
-        self.rng = rng
-        self._environment_schema = deepcopy(environment)
-        self.last_metrics = None
-
-    def save(self, path):
-        """Write policy, optimizer, and random state to JSON."""
-        Path(path).write_text(json.dumps(self.state_dict(), indent=2), encoding="utf-8")
-
-    def load(self, path):
-        self.load_state_dict(json.loads(Path(path).read_text(encoding="utf-8")))

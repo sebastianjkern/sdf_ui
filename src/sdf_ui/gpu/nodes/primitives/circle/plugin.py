@@ -1,4 +1,4 @@
-__docformat__ = "google"
+
 
 from sdf_ui.gpu.nodes.base import (
     ImageBinding,
@@ -12,9 +12,12 @@ from sdf_ui.gpu.nodes.common import shader
 
 from .implementation import CONTRACT, PROGRAM
 
+_RADIUS_TEXT = 'radius'
+
+__docformat__ = "google"
 
 def _uniforms(params):
-    return {"offset": params["center"], "radius": params["radius"]}
+    return {"offset": params["center"], _RADIUS_TEXT: params[_RADIUS_TEXT]}
 
 
 def register_plugins(registry):
@@ -24,7 +27,7 @@ def register_plugins(registry):
         program=PROGRAM,
         interface=ShaderInterface(
             output=ImageBinding("destTex", 0, write=True),
-            uniforms=(Uniform("offset", "vec2"), Uniform("radius", "float")),
+            uniforms=(Uniform("offset", "vec2"), Uniform(_RADIUS_TEXT, "float")),
         ),
     )
     registry.register(
@@ -32,7 +35,7 @@ def register_plugins(registry):
             "circle",
             PluginFamily.PRIMITIVE,
             TextureKind.SDF,
-            params=("center", "radius"),
+            params=("center", _RADIUS_TEXT),
             shader=descriptor,
             make_uniforms=_uniforms,
             public=True,
@@ -43,7 +46,7 @@ def register_plugins(registry):
             "disc",
             PluginFamily.PRIMITIVE,
             TextureKind.SDF,
-            params=("center", "radius"),
+            params=("center", _RADIUS_TEXT),
             shader=descriptor,
             make_uniforms=_uniforms,
             public=True,

@@ -1,5 +1,7 @@
 """CPU SGD and Adam optimizers for learning parameters."""
 
+
+
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Iterable, Mapping, Optional, Sequence, Tuple
 
@@ -7,6 +9,11 @@ import numpy as np
 
 from .autodiff import Parameter, _array, _finite
 
+_EXP_AVG_TEXT = 'exp_avg'
+
+_EXP_AVG_SQ_TEXT = 'exp_avg_sq'
+
+_MOMENTUM_BUFFER_TEXT = 'momentum_buffer'
 
 def _hyper(
     value: Any, name: str, upper: Optional[float] = None, positive: bool = False
@@ -24,6 +31,38 @@ def _hyper(
         or (upper is not None and result >= upper)
     ):
         raise ValueError("invalid {}".format(name))
+    return result
+
+
+def _validate_optimizer_checkpoint(optimizer, state):
+    if (
+        not isinstance(state, Mapping)
+        or state.get("format_version") != 1
+        or state.get("type") != type(optimizer).__name__
+    ):
+        raise ValueError("incompatible optimizer state")
+    expected = {parameter.name: list(parameter.shape) for parameter in optimizer.parameters}
+    if state.get("parameters") != expected:
+        raise ValueError("optimizer state parameter names or shapes differ")
+    config = state.get("hyperparameters")
+    if not isinstance(config, Mapping):
+        raise ValueError("invalid optimizer hyperparameters")
+    try:
+        candidate = type(optimizer)(optimizer.parameters, **dict(config))
+    except (TypeError, ValueError) as error:
+        raise ValueError("invalid optimizer hyperparameters") from error
+    return candidate
+
+
+def _validated_optimizer_buffers(optimizer, raw_state):
+    if not isinstance(raw_state, Mapping):
+        raise ValueError("invalid optimizer buffers")
+    parameters = {parameter.name: parameter for parameter in optimizer.parameters}
+    result = {}
+    for name, entry in raw_state.items():
+        if name not in parameters or not isinstance(entry, Mapping):
+            raise ValueError("invalid optimizer parameter state")
+        result[name] = optimizer._validate_entry(entry, parameters[name].shape)
     return result
 
 
@@ -90,30 +129,8 @@ class _Optimizer(ABC):
 
     def load_state_dict(self, state: Mapping[str, Any]) -> None:
         """Validate the entire state before replacing any optimizer settings."""
-        if (
-            not isinstance(state, Mapping)
-            or state.get("format_version") != 1
-            or state.get("type") != type(self).__name__
-        ):
-            raise ValueError("incompatible optimizer state")
-        if state.get("parameters") != {p.name: list(p.shape) for p in self.parameters}:
-            raise ValueError("optimizer state parameter names or shapes differ")
-        config = state.get("hyperparameters")
-        if not isinstance(config, Mapping):
-            raise ValueError("invalid optimizer hyperparameters")
-        try:
-            candidate = type(self)(self.parameters, **dict(config))
-        except (TypeError, ValueError) as error:
-            raise ValueError("invalid optimizer hyperparameters") from error
-        raw_state = state.get("state")
-        if not isinstance(raw_state, Mapping):
-            raise ValueError("invalid optimizer buffers")
-        parameters = {p.name: p for p in self.parameters}
-        new_state = {}
-        for name, entry in raw_state.items():
-            if name not in parameters or not isinstance(entry, Mapping):
-                raise ValueError("invalid optimizer parameter state")
-            new_state[name] = self._validate_entry(entry, parameters[name].shape)
+        candidate = _validate_optimizer_checkpoint(self, state)
+        new_state = _validated_optimizer_buffers(self, state.get("state"))
         for key, value in candidate._hyperparameters().items():
             setattr(self, key, value)
         self._state = new_state
@@ -153,12 +170,12 @@ class SGD(_Optimizer):
     def _validate_entry(
         self, entry: Mapping[str, Any], shape: Tuple[int, ...]
     ) -> Dict[str, Any]:
-        if set(entry) != {"momentum_buffer"}:
+        if set(entry) != {_MOMENTUM_BUFFER_TEXT}:
             raise ValueError("invalid SGD buffers")
-        buffer = _array(entry["momentum_buffer"], "momentum buffer")
+        buffer = _array(entry[_MOMENTUM_BUFFER_TEXT], "momentum buffer")
         if buffer.shape != shape:
             raise ValueError("momentum buffer shape mismatch")
-        return {"momentum_buffer": buffer}
+        return {_MOMENTUM_BUFFER_TEXT: buffer}
 
     def step(self) -> None:
         updates = []
@@ -168,12 +185,12 @@ class SGD(_Optimizer):
                 state = {}
                 if self.momentum:
                     previous = self._state.get(parameter.name, {}).get(
-                        "momentum_buffer", np.zeros_like(direction)
+                        _MOMENTUM_BUFFER_TEXT, np.zeros_like(direction)
                     )
                     buffer = _finite(
                         self.momentum * previous + direction, "momentum buffer"
                     )
-                    state = {"momentum_buffer": buffer.copy()}
+                    state = {_MOMENTUM_BUFFER_TEXT: buffer.copy()}
                     direction = (
                         direction + self.momentum * buffer if self.nesterov else buffer
                     )
@@ -218,7 +235,7 @@ class Adam(_Optimizer):
     def _validate_entry(
         self, entry: Mapping[str, Any], shape: Tuple[int, ...]
     ) -> Dict[str, Any]:
-        if set(entry) != {"step", "exp_avg", "exp_avg_sq"}:
+        if set(entry) != {"step", _EXP_AVG_TEXT, _EXP_AVG_SQ_TEXT}:
             raise ValueError("invalid Adam buffers")
         step = entry["step"]
         if (
@@ -227,11 +244,11 @@ class Adam(_Optimizer):
             or step < 1
         ):
             raise ValueError("invalid Adam step")
-        m = _array(entry["exp_avg"], "Adam first moment")
-        v = _array(entry["exp_avg_sq"], "Adam second moment")
+        m = _array(entry[_EXP_AVG_TEXT], "Adam first moment")
+        v = _array(entry[_EXP_AVG_SQ_TEXT], "Adam second moment")
         if m.shape != shape or v.shape != shape or np.any(v < 0):
             raise ValueError("invalid Adam moment shape or variance")
-        return {"step": int(step), "exp_avg": m, "exp_avg_sq": v}
+        return {"step": int(step), _EXP_AVG_TEXT: m, _EXP_AVG_SQ_TEXT: v}
 
     def step(self) -> None:
         updates = []
@@ -244,12 +261,12 @@ class Adam(_Optimizer):
                 previous = self._state.get(parameter.name, {})
                 step = previous.get("step", 0) + 1
                 m = _finite(
-                    beta1 * previous.get("exp_avg", np.zeros_like(grad))
+                    beta1 * previous.get(_EXP_AVG_TEXT, np.zeros_like(grad))
                     + (1 - beta1) * grad,
                     "Adam first moment",
                 )
                 v = _finite(
-                    beta2 * previous.get("exp_avg_sq", np.zeros_like(grad))
+                    beta2 * previous.get(_EXP_AVG_SQ_TEXT, np.zeros_like(grad))
                     + (1 - beta2) * grad * grad,
                     "Adam second moment",
                 )
@@ -261,7 +278,7 @@ class Adam(_Optimizer):
                     (
                         parameter,
                         value,
-                        {"step": step, "exp_avg": m.copy(), "exp_avg_sq": v.copy()},
+                        {"step": step, _EXP_AVG_TEXT: m.copy(), _EXP_AVG_SQ_TEXT: v.copy()},
                     )
                 )
         for parameter, value, state in updates:

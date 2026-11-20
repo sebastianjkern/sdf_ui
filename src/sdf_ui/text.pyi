@@ -3,8 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .core.sdf import SDFTexture
 from .core.color import ColorTexture
+from .core.sdf import SDFTexture
 
 def glyph(
     char: str,

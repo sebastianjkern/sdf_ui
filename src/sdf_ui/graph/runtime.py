@@ -1,6 +1,5 @@
 """Compiled parameter-driven SDF graphs with native GPU forward/backward passes."""
 
-import json
 import weakref
 from collections.abc import Mapping
 from hashlib import sha256
@@ -11,15 +10,31 @@ from types import MappingProxyType
 import numpy as np
 from PIL import Image
 
-from ..core.expressions import Expr, evaluate_expr, validate_progress
-from ..core.image import Image as BackendImage
+from ..core.expressions import evaluate_expr, validate_progress
 from ..core.image import shape_size
 from ..core.texture import MultiOutputResult, TextureNode
-from ..learning.autodiff import Parameter, Tensor, as_tensor
+from ..learning.autodiff import Tensor, as_tensor
 from ..learning.objective import Objective
 from ..learning.render import _tensor
 from ..util import hex_col
-from .lowering import GraphPlan, lower_graph
+from ._runtime_helpers import (
+    _create_environment,
+    _create_execution,
+    _evaluate_reference,
+    _fit_result,
+    _is_backend_image,
+    _is_objective,
+    _is_parameter,
+    _needs_expression_evaluation,
+    _normalize_graph_outputs,
+    _validate_run_request,
+)
+
+
+def _check_graph_handle(graph, closed, message):
+    if closed:
+        raise RuntimeError(message)
+    graph._check()
 
 
 def _cache_hit(cached, key):
@@ -47,6 +62,26 @@ def _validate_shared_graph_case(case, graph):
         id(parameter) for parameter in case.graph.parameters
     } != {id(parameter) for parameter in graph.parameters}:
         raise ValueError("Cases must share a Canvas and parameter leaves")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 class FitResult:
@@ -112,22 +147,7 @@ class LossContext:
 
     def __getitem__(self, key):
         if isinstance(key, (TextureNode, MultiOutputResult)):
-            ports = self._execution.graph.plan._node_outputs.get(id(key))
-            if ports is None:
-                name = self._execution.graph._output_nodes.get(id(key))
-                ports = (
-                    (self._execution.graph.plan.outputs[name],)
-                    if name is not None
-                    else None
-                )
-            if not ports:
-                raise KeyError("Scene node is not part of the compiled graph")
-            if len(ports) != 1:
-                raise ValueError(
-                    "Select one output from a multi-output scene node before using it in a loss"
-                )
-            name = self._execution.graph._output_nodes.get(id(key))
-            return LossLayer(self._execution, name=name, port=ports[0])
+            return self._node_layer(key)
         if isinstance(key, str):
             try:
                 return self._layers[key]
@@ -144,6 +164,24 @@ class LossContext:
             return self._layers[self._names[key]]
         except IndexError as exc:
             raise IndexError("Loss graph output index is out of range") from exc
+
+    def _node_layer(self, node):
+        graph = self._execution.graph
+        ports = graph.plan._node_outputs.get(id(node))
+        if ports is None:
+            name = graph._output_nodes.get(id(node))
+            ports = (graph.plan.outputs[name],) if name is not None else None
+        if not ports:
+            raise KeyError("Scene node is not part of the compiled graph")
+        if len(ports) != 1:
+            raise ValueError(
+                "Select one output from a multi-output scene node before using it in a loss"
+            )
+        return LossLayer(
+            self._execution,
+            name=graph._output_nodes.get(id(node)),
+            port=ports[0],
+        )
 
 
 def _validate_trainer_checkpoint(trainer, state, parameter_store_type):
@@ -209,31 +247,39 @@ class RenderGraph:
     """
 
     def __init__(self, canvas, outputs, params=None, *, size=None, inputs=None):
+        self.canvas = canvas
+        self._canvas_size = self._validate_canvas(canvas)
+        self.size, self.params = self._validate_graph_inputs(
+            size, params, self._canvas_size
+        )
+        self._initialize_plan(outputs, inputs, canvas)
+        self._initialize_execution_state(canvas)
+
+    @staticmethod
+    def _validate_canvas(canvas):
         if getattr(canvas, "_closed", False):
             raise RuntimeError("Canvas is closed")
-        self.canvas = canvas
-        self._canvas_size = tuple(canvas.size)
-        size = self._canvas_size if size is None else tuple(size)
+        return tuple(canvas.size)
+
+    @staticmethod
+    def _validate_graph_inputs(size, params, canvas_size):
+        size = canvas_size if size is None else tuple(size)
         if len(size) != 2 or any(
             isinstance(v, bool) or not isinstance(v, (int, np.integer)) or v <= 0
             for v in size
         ):
             raise ValueError("Graph size must be two positive integers")
-        self.size = tuple(int(v) for v in size)
-        self.params = {} if params is None else params
-        if not isinstance(self.params, Mapping):
+        normalized_size = tuple(int(v) for v in size)
+        params = {} if params is None else params
+        if not isinstance(params, Mapping):
             raise TypeError("Graph params must be a mapping")
-        if isinstance(outputs, (TextureNode, MultiOutputResult)):
-            outputs = {"output": outputs}
-        self._output_nodes = (
-            {id(node): name for name, node in outputs.items()}
-            if isinstance(outputs, Mapping)
-            else {}
-        )
+        return normalized_size, params
+
+    def _initialize_plan(self, outputs, inputs, canvas):
+        self._output_nodes, self.plan = _normalize_graph_outputs(outputs)
         self._inputs = {}
         self._input_version = 0
         self._set_inputs({} if inputs is None else inputs)
-        self.plan = outputs if isinstance(outputs, GraphPlan) else lower_graph(outputs)
         self._source_specs = {
             id(node): (
                 node.kind,
@@ -248,6 +294,8 @@ class RenderGraph:
         for operation in self.plan.passes:
             if getattr(operation.shader.wgsl, "forward_formats", None) is not None:
                 self.backend.descriptors.setdefault(operation.shader.name, operation.shader)
+
+    def _initialize_execution_state(self, canvas):
         self._cache = {}
         self._sources = []
         self._active = None
@@ -280,7 +328,7 @@ class RenderGraph:
         leaves = {
             id(value): value
             for value in self.params.values()
-            if isinstance(value, Parameter) and value.animate is None
+            if _is_parameter(value) and value.animate is None
         }
         for values in self._uniforms():
             for value in values.values():
@@ -392,10 +440,7 @@ class RenderGraph:
         identity=None,
     ):
         """Create a named policy environment backed by this graph."""
-        from .environment import NamedRenderEnvironment
-
-        return NamedRenderEnvironment(
-            self,
+        return _create_environment(
             actions=actions,
             observations=observations,
             objective=objective,
@@ -412,7 +457,7 @@ class RenderGraph:
         return tuple(
             (name, id(value), value.shape)
             for name, value in self.params.items()
-            if isinstance(value, Parameter)
+            if _is_parameter(value)
         )
 
     def _import_source(self, node):
@@ -489,9 +534,9 @@ class RenderGraph:
         return value / 100 * min(self.size)
 
     def _resolve(self, value):
-        if isinstance(value, Parameter) and value.animate is not None:
+        if _is_parameter(value) and value.animate is not None:
             self._animated_parameters[id(value)] = value
-        if isinstance(value, (Expr, str, Tensor)):
+        if _needs_expression_evaluation(value):
             value = evaluate_expr(value, self, self.params, track_grad=True)
         if isinstance(value, (tuple, list)):
             return tuple(self._resolve(v) for v in value)
@@ -534,25 +579,19 @@ class RenderGraph:
 
     def run(self, objective=None, *, loss=None, progress=None):
         self._check()
-        if self._running or (self._active is not None and not self._active.closed):
-            raise RuntimeError(
-                "Close the previous graph execution before starting another"
-            )
-        if objective is not None and loss is not None:
-            raise ValueError("Pass either an Objective or a loss callback, not both")
-        if objective is not None and not isinstance(objective, Objective):
-            raise TypeError("Graph objective must be an Objective")
-        if loss is not None and not callable(loss):
-            raise TypeError("Graph loss must be callable")
+        self._validate_run_request(objective, loss)
         if progress is not None:
             self.set_inputs(progress=progress)
         self._running = True
         try:
-            execution = GraphExecution(self, objective, loss=loss)
+            execution = _create_execution(self, objective, loss)
             self._active = execution
             return execution
         finally:
             self._running = False
+
+    def _validate_run_request(self, objective, loss):
+        _validate_run_request(self, objective, loss)
 
     execute = run
 
@@ -592,7 +631,7 @@ class RenderGraph:
                     history.append(execution.loss)
         finally:
             optimizer.close()
-        return FitResult(history)
+        return _fit_result(history)
 
     def render(self, *, backend="display"):
         """Render all roots as display textures, reference Tensors or FP32 GPU images.
@@ -631,15 +670,10 @@ class RenderGraph:
         )
 
     def _render_reference(self):
-        from ..learning.render import DifferentiableRenderer
-        from .execution import execute_reference
-
         sources = [image.read() for image in self._sources]
-        renderer = DifferentiableRenderer(
-            self.size, self.params, progress=self.progress
+        return _evaluate_reference(
+            self.plan, self.size, self.params, self.progress, self.inputs, sources
         )
-        renderer.inputs = self.inputs
-        return execute_reference(self.plan, renderer, sources=sources)
 
     def _render_training(self):
         images = {}
@@ -719,7 +753,7 @@ class RenderGraph:
     def objective_signature(self, objective, *, portable=False):
         """Fingerprint an objective and any currently captured target snapshots."""
         self._check()
-        if not isinstance(objective, Objective):
+        if not _is_objective(objective):
             raise TypeError("Expected an Objective")
         current = (id(objective), objective.version, objective.signature())
         targets = self._targets if self._target_signature == current else {}
@@ -762,7 +796,7 @@ class RenderGraph:
                     self._mask_denominators[index] = self.backend.mask_weight_sum(mask)
 
     def _copy_loss_target(self, term, prediction):
-        if isinstance(term.target, BackendImage):
+        if _is_backend_image(term.target):
             if term.target.shape != prediction.shape:
                 raise ValueError("GPU target shape differs from prediction")
             return self.backend.copy_image(term.target)
@@ -779,7 +813,7 @@ class RenderGraph:
     def _copy_loss_mask(self, term, prediction):
         if term.mask is None:
             return None
-        if isinstance(term.mask, BackendImage):
+        if _is_backend_image(term.mask):
             if term.mask.shape != prediction.shape:
                 raise ValueError("GPU mask shape differs from prediction")
             return self.backend.copy_image(term.mask)
@@ -1020,9 +1054,7 @@ class GraphExecution:
         return result
 
     def _check(self):
-        if self.closed:
-            raise RuntimeError("Graph execution is closed")
-        self.graph._check()
+        _check_graph_handle(self.graph, self.closed, "Graph execution is closed")
 
     def _port_image(self, port):
         if port.pass_index < 0:
@@ -1039,6 +1071,20 @@ class GraphExecution:
             )
 
     def backward(self):
+        self._validate_backward_ready()
+        graph = self.graph
+        self._seed_custom_output_gradients(graph)
+        needed = self._needed_passes()
+        self._run_backward_passes(graph, needed)
+        raw = np.frombuffer(graph._uniform_gradients.read(), dtype=np.float32)
+        self._accumulate_parameter_gradients(raw, needed)
+        self._check_versions()
+        self.backward_called = True
+        return {
+            p.name: None if p.grad is None else p.grad.copy() for p in graph.parameters
+        }
+
+    def _validate_backward_ready(self):
         self._check()
         self._check_versions()
         if self.objective is None and self.loss_callback is None:
@@ -1050,7 +1096,8 @@ class GraphExecution:
             raise RuntimeError("Objective changed after forward; execute it again")
         if self.backward_called:
             raise RuntimeError("This execution's backward pass was already consumed")
-        graph = self.graph
+
+    def _seed_custom_output_gradients(self, graph):
         if self.loss_callback is not None:
             for (
                 pass_index,
@@ -1061,23 +1108,21 @@ class GraphExecution:
                 offset = graph._offsets[(pass_index, output_index)]
                 gradient = np.asarray(value.grad, dtype=np.float32)
                 graph._adjoints.write(gradient.tobytes(order="C"), offset * 4)
-        needed = self._needed_passes()
+
+    def _run_backward_passes(self, graph, needed):
         reaches_source = self._passes_reaching_sources()
         graph.backend.clear_status()
         for index in reversed(range(len(graph.plan.passes))):
             self._backward_pass(index, needed, reaches_source)
         graph.backend.check_status()
-        raw = np.frombuffer(graph._uniform_gradients.read(), dtype=np.float32)
+
+    def _accumulate_parameter_gradients(self, raw, needed):
         terms = self._uniform_gradient_terms(raw, needed)
         self._check_versions()
         if terms:
             chain = sum(terms)
             if chain.requires_grad:
                 chain.backward()
-        self.backward_called = True
-        return {
-            p.name: None if p.grad is None else p.grad.copy() for p in graph.parameters
-        }
 
     def _needed_passes(self):
         graph = self.graph
@@ -1286,9 +1331,7 @@ class GraphTrainer:
         graph._trainers.add(self)
 
     def _check(self):
-        if self.closed:
-            raise RuntimeError("Graph trainer is closed")
-        self.graph._check()
+        _check_graph_handle(self.graph, self.closed, "Graph trainer is closed")
 
     def check(self):
         """Validate that this trainer and its graph are open."""
@@ -1441,12 +1484,6 @@ class GraphTrainer:
         self.steps = steps
         self.last_metrics = None
         self.graph.clear_cache()
-
-    def save(self, path):
-        Path(path).write_text(json.dumps(self.state_dict(), indent=2), encoding="utf-8")
-
-    def load(self, path):
-        self.load_state_dict(json.loads(Path(path).read_text(encoding="utf-8")))
 
     def close(self):
         if not self.closed:

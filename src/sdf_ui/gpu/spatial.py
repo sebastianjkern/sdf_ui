@@ -16,7 +16,9 @@ from .nodes.common import build
 from .nodes.registry import registry
 from .regions import _matching_brace, _matching_paren, _split_arguments
 
-_TRANSFORMS = {"translate", "rotate", "scale", "skew"}
+_SCALE = "scale"
+_FLOAT = "float"
+_TRANSFORMS = {"translate", "rotate", _SCALE, "skew"}
 _INLINE_COMPOSITES = {
     "radial_gradient",
     "linear_gradient",
@@ -28,7 +30,7 @@ _VECTOR = {
     f"{prefix}vec{size}": size for prefix in ("", "i", "u") for size in (2, 3, 4)
 }
 _ARRAY = re.compile(r"(float|int|uint)\[(\d+)\]")
-_WGSL_TYPES = {"float": "f32", "int": "i32", "uint": "u32"}
+_WGSL_TYPES = {_FLOAT: "f32", "int": "i32", "uint": "u32"}
 _BINARY = {"add": "+", "sub": "-", "mul": "*", "div": "/"}
 _FUNCTIONS = {
     "sin": "sin",
@@ -92,6 +94,70 @@ def _color_output(node, tex, context):
     return ColorTexture(tex=tex, context=context, mode=node.mode or "LAB")
 
 
+def _dispatch_local_entry(kernel):
+    code = kernel.source
+    match = _ENTRY.search(code)
+    if match is None:
+        raise NotImplementedError(f"'{kernel.descriptor.name}' has no adaptable compute entry")
+    ending = _matching_brace(code, match.end() - 1)
+    invocation = match.group(1)
+    body = code[match.end():ending]
+    body = re.sub(rf"\b{invocation}\.xy\b", "vec2<i32>(round(position))", body)
+    body = re.sub(rf"\b{invocation}\.([xy])\b", r"i32(round(position.\1))", body)
+    body = body.replace("return;", "return vec4<f32>(0.0);")
+    body = _replace_calls(body, "textureStore", lambda image, pos, value:
+        f"_spatial_result={value}" if image == kernel.output else "_spatial_result=_spatial_result")
+    body = "var _spatial_result=vec4<f32>(0.0);\n" + body + "\nreturn _spatial_result;"
+    return code[:match.start()] + (
+        f"fn dispatch_local(position: vec2<f32>) -> vec4<f32> {{\n{body}\n}}"
+    ) + code[ending + 1:]
+
+
+def _substitute_uniform_bindings(code, params):
+    code = _IMAGE_BINDING.sub("", code)
+    bindings = _UNIFORM_BINDING.findall(code)
+    code = _UNIFORM_BINDING.sub("", code)
+    for instance, _ in bindings:
+        for uniform, expression in params.items():
+            if expression.startswith("array<"):
+                code = re.sub(
+                    rf"\b{instance}\.{uniform}\[([^\]]+)\](?:\.value)?",
+                    lambda match: f"({expression})[{match[1]}]", code,
+                )
+            code = re.sub(
+                rf"\b{instance}\.{uniform}\b",
+                lambda _: f"({expression})", code,
+            )
+    return code
+
+
+def _replace_spatial_samples(code, children):
+    code = _replace_calls(code, "textureDimensions", lambda _: "canvas_extent()")
+    code = re.sub(
+        r"if\s*\(\(any\(\(p < vec2<i32>\(0\)\)\) \|\| any\(\(p >= n\)\)\)\)\s*"
+        r"\{\s*return dualC\(0\.0\);\s*\}", "", code,
+    )
+    code = _replace_calls(
+        code, "textureLoad",
+        lambda image, pos: f"{children[image]}(vec2<f32>({pos}) + fractional_position)",
+    )
+    return re.sub(r"vec2<f32>\(pos\)", "(vec2<f32>(pos) + fractional_position)", code)
+
+
+def _namespace_inline_shader(code, name):
+    code = "var<private> fractional_position: vec2<f32>;\n" + code
+    code += """
+fn invoke(position: vec2<f32>) -> vec4<f32> {
+    fractional_position = position-vec2<f32>(round(position));
+    return dispatch_local(position);
+}
+"""
+    names = re.findall(r"\b(?:fn|struct|alias|const|var<private>)\s+(\w+)", code)
+    renames = {value: f"{name}_{value}" for value in set(names)}
+    renames["invoke"] = name
+    return re.sub(r"\b\w+\b", lambda match: renames.get(match[0], match[0]), code)
+
+
 class Compiler:
     """A compilation has no image readbacks and retains no materialized images."""
 
@@ -143,17 +209,28 @@ class Compiler:
             raise ValueError(
                 "Use a tuple of spatial expressions for a vector parameter"
             )
-        op = value.op
-        if op == "texture_sample":
-            texture, index, scope = value.args
-            position = "world" if scope == "pixel" else "cell"
-            return f"sample_{self.texture(texture)}({position})[{index}]"
-        if op == "index":
-            raw, index = value.args
-            if isinstance(raw, (tuple, list)) and isinstance(index, int):
-                return self.expression(raw[index])
-            raise ValueError("Index a spatial vector with a fixed component index")
+        return self._expression_node(value)
+
+    def _expression_node(self, value):
+        if value.op == "texture_sample":
+            return self._sample_expression(value)
+        if value.op == "index":
+            return self._index_expression(value)
         args = [self.expression(arg) for arg in value.args]
+        return self._format_expression(value.op, args)
+
+    def _sample_expression(self, value):
+        texture, index, scope = value.args
+        position = "world" if scope == "pixel" else "cell"
+        return f"sample_{self.texture(texture)}({position})[{index}]"
+
+    def _index_expression(self, value):
+        raw, index = value.args
+        if isinstance(raw, (tuple, list)) and isinstance(index, int):
+            return self.expression(raw[index])
+        raise ValueError("Index a spatial vector with a fixed component index")
+
+    def _format_expression(self, op, args):
         if op in _BINARY:
             return f"({args[0]} {_BINARY[op]} {args[1]})"
         if op in _FUNCTIONS:
@@ -169,62 +246,70 @@ class Compiler:
         if op == "select_positive":
             return f"select({args[2]}, {args[1]}, ({args[0]}>0.0))"
         if op.startswith("percent"):
-            if self.ctx is None:
-                return f"({args[0]} * {self.constant(Expr(op, (1.0,)))})"
-            dimension = {
-                "percent": self.ctx.logical_size[0],
-                "percent_x": self.ctx.logical_size[0],
-                "percent_y": self.ctx.logical_size[1],
-                "percent_of_min": min(self.ctx.logical_size),
-            }.get(op)
-            if dimension is not None:
-                return f"({args[0]} * {self.constant(dimension / 100)})"
+            return self._percent_expression(op, args[0])
         raise NotImplementedError(f"Expression '{op}' cannot be sampled on the GPU")
 
-    def uniform(self, value, glsl_type, *, scale=1):
-        def scalar(part):
-            result = self.expression(part)
-            return result if scale == 1 else f"({result} * {self.constant(scale)})"
+    def _percent_expression(self, op, argument):
+        if self.ctx is None:
+            return f"({argument} * {self.constant(Expr(op, (1.0,)))})"
+        dimension = {
+            "percent": self.ctx.logical_size[0],
+            "percent_x": self.ctx.logical_size[0],
+            "percent_y": self.ctx.logical_size[1],
+            "percent_of_min": min(self.ctx.logical_size),
+        }.get(op)
+        if dimension is None:
+            raise NotImplementedError(f"Expression '{op}' cannot be sampled on the GPU")
+        return f"({argument} * {self.constant(dimension / 100)})"
 
+    def uniform(self, value, glsl_type, *, scale=1):
         array = _ARRAY.fullmatch(glsl_type)
         if array is not None:
-            item_type, count = array.groups()
-            items = value if isinstance(value, (list, tuple)) else self.resolve(value)
-            if self.renderer is None and not hasattr(items, "__len__"):
-                items = tuple(Expr("index", (items, i)) for i in range(int(count)))
-            if not hasattr(items, "__len__") or len(items) != int(count):
-                raise ValueError(f"Spatial {glsl_type} requires {count} components")
-            return (
-                f"array<{_WGSL_TYPES[item_type]},{count}>("
-                + ",".join(self.uniform(item, item_type, scale=scale) for item in items)
-                + ")"
-            )
+            return self._array_uniform(value, glsl_type, scale, array)
         if glsl_type in _VECTOR:
-            parts = value if isinstance(value, (tuple, list)) else self.resolve(value)
-            size = _VECTOR[glsl_type]
-            if (
-                glsl_type == "vec4"
-                and isinstance(parts, (tuple, list))
-                and len(parts) == 3
-            ):
-                parts = (*parts, 1.0)
-            if self.renderer is None and not hasattr(parts, "__len__"):
-                parts = tuple(Expr("index", (parts, i)) for i in range(size))
-            if not hasattr(parts, "__len__") or len(parts) != size:
-                raise ValueError(f"Spatial {glsl_type} requires {size} components")
-            component = {"i": "i32", "u": "u32"}.get(glsl_type[0], "f32")
-            expressions = [scalar(part) for part in parts]
-            if component != "f32":
-                expressions = [f"{component}({part})" for part in expressions]
-            return f"vec{size}<{component}>({', '.join(expressions)})"
-        result = scalar(value)
-        if glsl_type == "float":
+            return self._vector_uniform(value, glsl_type, scale)
+        result = self._scalar_uniform(value, scale)
+        if glsl_type == _FLOAT:
             return result
         if glsl_type in {"int", "uint"}:
             return f"{_WGSL_TYPES[glsl_type]}({result})"
         if glsl_type == "bool":
             return f"({result} != 0.0)"
         raise NotImplementedError(f"Spatial binding for uniform type '{glsl_type}'")
+
+    def _scalar_uniform(self, value, scale):
+        result = self.expression(value)
+        return result if scale == 1 else f"({result} * {self.constant(scale)})"
+
+    def _array_uniform(self, value, glsl_type, scale, array):
+        item_type, count = array.groups()
+        items = value if isinstance(value, (list, tuple)) else self.resolve(value)
+        if self.renderer is None and not hasattr(items, "__len__"):
+            items = tuple(Expr("index", (items, i)) for i in range(int(count)))
+        if not hasattr(items, "__len__") or len(items) != int(count):
+            raise ValueError(f"Spatial {glsl_type} requires {count} components")
+        contents = ",".join(self.uniform(item, item_type, scale=scale) for item in items)
+        return f"array<{_WGSL_TYPES[item_type]},{count}>({contents})"
+
+    def _vector_uniform(self, value, glsl_type, scale):
+        parts = value if isinstance(value, (tuple, list)) else self.resolve(value)
+        size = _VECTOR[glsl_type]
+        parts = self._pad_color_vector(parts, glsl_type)
+        if self.renderer is None and not hasattr(parts, "__len__"):
+            parts = tuple(Expr("index", (parts, i)) for i in range(size))
+        if not hasattr(parts, "__len__") or len(parts) != size:
+            raise ValueError(f"Spatial {glsl_type} requires {size} components")
+        component = {"i": "i32", "u": "u32"}.get(glsl_type[0], "f32")
+        expressions = [self._scalar_uniform(part, scale) for part in parts]
+        if component != "f32":
+            expressions = [f"{component}({part})" for part in expressions]
+        return f"vec{size}<{component}>({', '.join(expressions)})"
+
+    @staticmethod
+    def _pad_color_vector(parts, glsl_type):
+        if glsl_type == "vec4" and isinstance(parts, (tuple, list)) and len(parts) == 3:
+            return (*parts, 1.0)
+        return parts
 
     def sampler(self, i, node, rendered):
         image = rendered.tex
@@ -290,8 +375,8 @@ fn sample_{i}(p: vec2<f32>) -> vec4<f32> {{
                 f"if any(index < vec2<f32>(0.0)) || any(index >= {counts}) "
                 "{ return outside; }"
             )
-        rotation = self.uniform(raw["rotation"], "float")
-        scale = self.uniform(raw["scale"], "float")
+        rotation = self.uniform(raw["rotation"], _FLOAT)
+        scale = self.uniform(raw[_SCALE], _FLOAT)
         outside = (
             "vec4<f32>(max(spacing.x, spacing.y),0,0,0)"
             if node.kind == "sdf"
@@ -332,7 +417,7 @@ fn sample_{i}(p: vec2<f32>) -> vec4<f32> {{
             return f"return {source}(p - {offset});"
         center = self.uniform(raw["center"], "vec2", scale=self.scale)
         if node.op == "rotate":
-            angle = self.uniform(raw["angle"], "float")
+            angle = self.uniform(raw["angle"], _FLOAT)
             return f"""
     let d=p-{center}; let angle={angle}; let co=cos(angle); let si=sin(angle);
     let previous = basis;
@@ -341,8 +426,8 @@ fn sample_{i}(p: vec2<f32>) -> vec4<f32> {{
     basis = previous;
     return result;
 """
-        if node.op == "scale":
-            factor = self.uniform(raw["factor"], "float")
+        if node.op == _SCALE:
+            factor = self.uniform(raw["factor"], _FLOAT)
             return f"""
     let d=p-{center}; let factor={factor};
     if abs(factor)<0.000001 {{ return vec4<f32>(1.0e6,0,0,0); }}
@@ -375,36 +460,37 @@ fn sample_{i}(p: vec2<f32>) -> vec4<f32> {{
         if node.op in {"ngon", "polygon", "convex_polygon"}:
             return self.polygon(node, raw)
         if node.op in {"radial_gradient", "linear_gradient"}:
-            from ..core.expressions import _lazy_scalar
-
-            if node.op == "radial_gradient":
-                shape = build("circle", raw["a"], 0)
-                inner, outer = raw["inner"], raw["outer"]
-            else:
-                ax, ay = map(_lazy_scalar, raw["a"])
-                bx, by = map(_lazy_scalar, raw["b"])
-                dx, dy = ax - bx, ay - by
-                shape = build("line", (ax + dx, ay - dy), (ax - dx, ay + dy))
-                inner, outer = 0, Expr("sqrt", (dx * dx + dy * dy,))
-            child = build(
-                "fill",
-                shape,
-                raw["color1"],
-                raw["color2"],
-                0,
-                inner,
-                outer,
-            )
-            self.functions.append(
-                f"fn {name}(p: vec2<f32>) -> vec4<f32> {{ return {self.evaluate(child)}(p); }}"
-            )
-            return None
+            return self._gradient_shader(node, name, raw)
         if plugin.shader is None or not plugin.shader.interface:
-            if not spatial_scene(node):
-                return f"return sample_{self.texture(node)}(p);"
-            raise NotImplementedError(
-                f"'{node.op}' cannot consume spatial parameters because it has no callable shader"
-            )
+            return self._unavailable_shader(node)
+        return self._plugin_shader(node, output, plugin, raw)
+
+    def _gradient_shader(self, node, name, raw):
+        from ..core.expressions import _lazy_scalar
+
+        if node.op == "radial_gradient":
+            shape = build("circle", raw["a"], 0)
+            inner, outer = raw["inner"], raw["outer"]
+        else:
+            ax, ay = map(_lazy_scalar, raw["a"])
+            bx, by = map(_lazy_scalar, raw["b"])
+            dx, dy = ax - bx, ay - by
+            shape = build("line", (ax + dx, ay - dy), (ax - dx, ay + dy))
+            inner, outer = 0, Expr("sqrt", (dx * dx + dy * dy,))
+        child = build("fill", shape, raw["color1"], raw["color2"], 0, inner, outer)
+        self.functions.append(
+            f"fn {name}(p: vec2<f32>) -> vec4<f32> {{ return {self.evaluate(child)}(p); }}"
+        )
+        return None
+
+    def _unavailable_shader(self, node):
+        if not spatial_scene(node):
+            return f"return sample_{self.texture(node)}(p);"
+        raise NotImplementedError(
+            f"'{node.op}' cannot consume spatial parameters because it has no callable shader"
+        )
+
+    def _plugin_shader(self, node, output, plugin, raw):
         shader = plugin.shader
         interface = shader.interface
         bindings = (interface.output, *interface.extra_outputs)
@@ -425,7 +511,7 @@ fn sample_{i}(p: vec2<f32>) -> vec4<f32> {{
         self.functions.append(
             self.inline(
                 Kernel(shader, code, bindings[output].name),
-                name,
+                bindings[output].name,
                 params,
                 child_functions,
             )
@@ -477,163 +563,88 @@ fn sample_{i}(p: vec2<f32>) -> vec4<f32> {{
     def uniform_values(self, node, plugin, raw):
         """Apply existing plugin aliases while leaving sampled expressions intact."""
         interface = plugin.shader.interface
-        names = {item.name for item in interface.uniforms}
-        if not names:
+        uniforms = interface.uniforms
+        if not uniforms:
             return {}
-        shader_name = plugin.shader.name
+        values = self._adapt_uniform_values(node, plugin, raw, uniforms)
+        return self._format_uniform_values(node, plugin, values, uniforms)
+
+    def _adapt_uniform_values(self, node, plugin, raw, uniforms):
         adapter = plugin.spatial_uniforms or plugin.make_uniforms
         if adapter is not None:
             try:
-                values = adapter(raw)
+                return adapter(raw)
             except (ValueError, TypeError) as exc:
-                if (
-                    plugin.spatial_uniforms is None
-                    and names.issubset(raw)
-                    and (
-                        shader_name.startswith("hdr_")
-                        or node.kind == "field"
-                        or node.op in {"warp_sdf", "warp_color"}
-                    )
-                ):
-                    # These builtins validate uniform shape and range at the
-                    # render boundary. Their symbolic mapping is identity.
-                    values = raw
-                else:
-                    raise ValueError(
-                        f"Spatial uniforms for '{node.op}' need a symbolic adapter"
-                    ) from exc
-        else:
-            values = raw
-        result = {}
-        for item in interface.uniforms:
-            value = values.get(item.name, 0)
-            if item.name == "corner_radius" and not isinstance(value, (tuple, list)):
-                value = (value,) * 4
-            # Shader aliases such as circle.offset and fill.first are measures
-            # even when the public parameter names differ.
-            spatial = item.name in _SPATIAL_PARAMS or item.name in {
-                "first",
-                "second",
-                "smoothness",
-                "repeat",
-            }
-            result[item.name] = self.uniform(
-                value, item.glsl_type, scale=self.scale if spatial else 1
+                if self._identity_uniform_adapter(node, plugin, raw, uniforms):
+                    return raw
+                raise ValueError(
+                    f"Spatial uniforms for '{node.op}' need a symbolic adapter"
+                ) from exc
+        return raw
+
+    @staticmethod
+    def _identity_uniform_adapter(node, plugin, raw, uniforms):
+        names = {item.name for item in uniforms}
+        return (
+            plugin.spatial_uniforms is None
+            and names.issubset(raw)
+            and (
+                plugin.shader.name.startswith("hdr_")
+                or node.kind == "field"
+                or node.op in {"warp_sdf", "warp_color"}
             )
+        )
+
+    def _format_uniform_values(self, node, plugin, values, uniforms):
+        result = {}
+        for item in uniforms:
+            value = values.get(item.name, 0)
+            value = self._normalize_uniform(item.name, value)
+            result[item.name] = self._uniform_expression(item, value)
         return result
+
+    @staticmethod
+    def _normalize_uniform(name, value):
+        if name == "corner_radius" and not isinstance(value, (tuple, list)):
+            return (value,) * 4
+        return value
+
+    def _uniform_expression(self, item, value):
+        spatial = item.name in _SPATIAL_PARAMS or item.name in {
+            "first", "second", "smoothness", "repeat",
+        }
+        scale = self.scale if spatial else 1
+        return self.uniform(value, item.glsl_type, scale=scale)
 
     def inline(self, kernel, name, params, children):
         """Adapt the existing shader's entry point to a coordinate function."""
-        code = kernel.source
-        match = _ENTRY.search(code)
-        if match is None:
-            raise NotImplementedError(
-                f"'{kernel.descriptor.name}' has no adaptable compute entry"
-            )
-        ending = _matching_brace(code, match.end() - 1)
-        invocation = match.group(1)
-        body = code[match.end() : ending]
-        body = re.sub(rf"\b{invocation}\.xy\b", "vec2<i32>(round(position))", body)
-        # Hand-written field kernels use the named invocation's x/y separately.
-        body = re.sub(rf"\b{invocation}\.([xy])\b", r"i32(round(position.\1))", body)
-        body = body.replace("return;", "return vec4<f32>(0.0);")
-        body = _replace_calls(
-            body,
-            "textureStore",
-            lambda image, pos, value: (
-                f"_spatial_result={value}"
-                if image == kernel.output
-                else "_spatial_result=_spatial_result"
-            ),
-        )
-        body = (
-            "var _spatial_result=vec4<f32>(0.0);\n" + body + "\nreturn _spatial_result;"
-        )
-        code = (
-            code[: match.start()]
-            + f"fn dispatch_local(position: vec2<f32>) -> vec4<f32> {{\n{body}\n}}"
-            + code[ending + 1 :]
-        )
-        code = _IMAGE_BINDING.sub("", code)
-        bindings = _UNIFORM_BINDING.findall(code)
-        code = _UNIFORM_BINDING.sub("", code)
-        for instance, _ in bindings:
-            for uniform, expr in params.items():
-                if expr.startswith("array<"):
-                    code = re.sub(
-                        rf"\b{instance}\.{uniform}\[([^\]]+)\](?:\.value)?",
-                        lambda match: f"({expr})[{match[1]}]",
-                        code,
-                    )
-                code = re.sub(
-                    rf"\b{instance}\.{uniform}\b", lambda _: f"({expr})", code
-                )
-        code = _replace_calls(code, "textureDimensions", lambda _: "canvas_extent()")
-        # Bounds checks in generated image reads address a baked canvas.
-        # Inlined child shapes are callable on either side of the origin.
-        code = re.sub(
-            r"if\s*\(\(any\(\(p < vec2<i32>\(0\)\)\) \|\| any\(\(p >= n\)\)\)\)\s*"
-            r"\{\s*return dualC\(0\.0\);\s*\}",
-            "",
-            code,
-        )
-        code = _replace_calls(
-            code,
-            "textureLoad",
-            lambda image, pos: (
-                f"{children[image]}(vec2<f32>({pos}) + fractional_position)"
-            ),
-        )
-        # Primitive evaluators normally take an integer pixel. Preserve their
-        # true local position when an enclosing transform produces fractions.
-        code = re.sub(
-            r"vec2<f32>\(pos\)", "(vec2<f32>(pos) + fractional_position)", code
-        )
-        code = "var<private> fractional_position: vec2<f32>;\n" + code
-        code += """
-fn invoke(position: vec2<f32>) -> vec4<f32> {
-    fractional_position = position-vec2<f32>(round(position));
-    return dispatch_local(position);
-}
-"""
-        # Isolate the shader's helper functions, types and private variables.
-        names = re.findall(r"\b(?:fn|struct|alias|const|var<private>)\s+(\w+)", code)
-        # Function-local constants have a local declaration and may safely be renamed.
-        # Coordinates, sampled accessors and the common bindings are generated above.
-        renames = {var: f"{name}_{var}" for var in set(names)}
-        renames["invoke"] = name
-        return re.sub(r"\b\w+\b", lambda m: renames.get(m[0], m[0]), code)
+        code = _dispatch_local_entry(kernel)
+        code = _substitute_uniform_bindings(code, params)
+        code = _replace_spatial_samples(code, children)
+        return _namespace_inline_shader(code, name)
 
 
-def render_spatial(renderer, node):
+
+def _spatial_output(ctx, node, output):
     from ..core.field import FieldTexture
     from ..core.sdf import SDFTexture
 
-    if node.kind not in {"sdf", "field", "color"}:
-        raise ValueError("Select individual outputs before rendering a spatial shader")
-    compiler = Compiler(renderer)
-    target = compiler.evaluate(node)
-    # Every value is a uniform; edits to its value don't rebuild the pipeline.
-    size = renderer.ctx.size
-    # Append the full extent at the end so preceding indices stay stable.
-    width = compiler.constant(size[0])
-    height = compiler.constant(size[1])
-    ctx = renderer.ctx
     if node.kind == "sdf":
-        allocate = ctx.r32f
-    elif node.kind == "field":
-        allocate = ctx.rgba32f
-    else:
-        allocate = ctx.rgba32f if node.mode == "LINEAR" else ctx.rgba8
-    output = allocate()
-    try:
-        ox, oy = map(compiler.constant, output.origin)
-        samplers = "\n".join(
-            compiler.sampler(i, *item) for i, item in enumerate(compiler.maps)
-        )
-        count = (len(compiler.constants) + 3) // 4
-        compiler.constants.extend([0.0] * (4 * count - len(compiler.constants)))
-        source = f"""
+        return SDFTexture(tex=output, context=ctx)
+    if node.kind == "field":
+        return FieldTexture(tex=output, context=ctx)
+    return _color_output(node, output, ctx)
+
+
+def _spatial_source(compiler, node, target, output, size):
+    width, height = map(compiler.constant, size)
+    ox, oy = map(compiler.constant, output.origin)
+    samplers = "\n".join(
+        compiler.sampler(index, *item) for index, item in enumerate(compiler.maps)
+    )
+    count = (len(compiler.constants) + 3) // 4
+    compiler.constants.extend([0.0] * (4 * count - len(compiler.constants)))
+    source = f"""
 struct SpatialValues {{ data: array<vec4<f32>, {count}>, }}
 @group(0) @binding(0) var dest: texture_storage_2d<{output.format}, write>;
 @group(0) @binding(1) var<uniform> values: SpatialValues;
@@ -643,9 +654,8 @@ var<private> basis: mat2x2<f32>;
 fn spatial_value(i: i32) -> f32 {{ return values.data[i/4][i%4]; }}
 fn canvas_extent() -> vec2<u32> {{ return vec2<u32>(u32({width}), u32({height})); }}
 """
-        source += samplers
-        source += "\n".join(compiler.functions)
-        source += f"""
+    source += samplers + "\n".join(compiler.functions)
+    return source + f"""
 @compute @workgroup_size(16,16,1)
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {{
     if any(id.xy >= textureDimensions(dest)) {{ return; }}
@@ -655,26 +665,42 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {{
     textureStore(dest, vec2<i32>(id.xy), {target}(world));
 }}
 """
-        contents = struct.pack(f"<{len(compiler.constants)}f", *compiler.constants)
-        uniforms = ctx._uniform_buffer_for_payload(
-            ("spatial", len(contents)), contents, label="spatial parameters"
-        )
-        inputs = {i + 2: image.tex for i, (_, image) in enumerate(compiler.maps)}
-        if len(inputs) + 1 > ctx.device.limits["max-storage-textures-per-shader-stage"]:
-            raise ValueError(
-                "Spatial graph exceeds the adapter limit for distinct sampled textures"
-            )
-        ctx.run_shader(
-            "spatial_parameters",
-            {0: output, 1: uniforms, **inputs},
-            source_code=source,
-            group_count=((output.size[0] + 15) // 16, (output.size[1] + 15) // 16, 1),
-        )
-        if node.kind == "sdf":
-            return SDFTexture(tex=output, context=ctx)
-        if node.kind == "field":
-            return FieldTexture(tex=output, context=ctx)
-        return _color_output(node, output, ctx)
+
+
+def _run_spatial_shader(ctx, compiler, node, target, output):
+    source = _spatial_source(compiler, node, target, output, ctx.size)
+    contents = struct.pack(f"<{len(compiler.constants)}f", *compiler.constants)
+    uniforms = ctx._uniform_buffer_for_payload(
+        ("spatial", len(contents)), contents, label="spatial parameters"
+    )
+    inputs = {index + 2: image.tex for index, (_, image) in enumerate(compiler.maps)}
+    if len(inputs) + 1 > ctx.device.limits["max-storage-textures-per-shader-stage"]:
+        raise ValueError("Spatial graph exceeds the adapter limit for distinct sampled textures")
+    ctx.run_shader(
+        "spatial_parameters", {0: output, 1: uniforms, **inputs}, source_code=source,
+        group_count=((output.size[0] + 15) // 16, (output.size[1] + 15) // 16, 1),
+    )
+
+
+def _spatial_allocator(ctx, node):
+    if node.kind == "sdf":
+        return ctx.r32f
+    if node.kind == "field" or node.mode == "LINEAR":
+        return ctx.rgba32f
+    return ctx.rgba8
+
+
+def render_spatial(renderer, node):
+    """Render a fused spatial graph to one GPU texture."""
+    if node.kind not in {"sdf", "field", "color"}:
+        raise ValueError("Select individual outputs before rendering a spatial shader")
+    compiler = Compiler(renderer)
+    target = compiler.evaluate(node)
+    ctx = renderer.ctx
+    output = _spatial_allocator(ctx, node)()
+    try:
+        _run_spatial_shader(ctx, compiler, node, target, output)
+        return _spatial_output(ctx, node, output)
     except BaseException:
         output.close()
         raise
@@ -690,113 +716,151 @@ def _interval(renderer, value):
     if not isinstance(value, Expr) or value.op == "texture_sample":
         return -math.inf, math.inf
     bounds = [_interval(renderer, item) for item in value.args]
-    if value.op == "minimum":
+    return _expression_interval(value.op, bounds)
+
+
+def _expression_interval(op, bounds):
+    if op == "minimum":
         return min(item[0] for item in bounds), min(item[1] for item in bounds)
-    if value.op in {"maximum", "relu"}:
-        if value.op == "relu":
+    if op in {"maximum", "relu"}:
+        if op == "relu":
             bounds.append((0, 0))
         return max(item[0] for item in bounds), max(item[1] for item in bounds)
-    if value.op == "neg":
+    if op == "neg":
         low, high = bounds[0]
         return -high, -low
-    if value.op in {"sin", "cos", "tanh"}:
+    if op in {"sin", "cos", "tanh"}:
         return -1, 1
-    if value.op == "sigmoid":
+    if op == "sigmoid":
         return 0, 1
-    if value.op == "add":
+    return _binary_interval(op, bounds)
+
+
+def _binary_interval(op, bounds):
+    if op == "add":
         result = bounds[0][0] + bounds[1][0], bounds[0][1] + bounds[1][1]
-    elif value.op == "sub":
+    elif op == "sub":
         result = bounds[0][0] - bounds[1][1], bounds[0][1] - bounds[1][0]
-    elif value.op == "mul" and all(math.isfinite(v) for pair in bounds for v in pair):
+    elif op == "mul" and _finite_bounds(bounds):
         products = [a * b for a in bounds[0] for b in bounds[1]]
         result = min(products), max(products)
-    elif value.op == "div" and bounds[1][0] * bounds[1][1] > 0:
+    elif op == "div" and bounds[1][0] * bounds[1][1] > 0:
         quotients = [a / b for a in bounds[0] for b in bounds[1]]
         result = min(quotients), max(quotients)
     else:
         return -math.inf, math.inf
-    return (
-        result
-        if not any(math.isnan(item) for item in result)
-        else (-math.inf, math.inf)
-    )
+    return result if not any(math.isnan(item) for item in result) else (-math.inf, math.inf)
 
 
-def tile_dependencies(renderer, node):
-    """Return map dependencies and each one's maximum sampling reach."""
-    from ..core.spatial import samples
+def _finite_bounds(bounds):
+    return all(math.isfinite(value) for pair in bounds for value in pair)
 
-    result = {}
 
-    def bounds(value):
-        return max(abs(x) for x in _interval(renderer, value))
+class TileDependencyCollector:
+    """Collect nonresident sampled images and their required tile margins."""
 
-    def resident(current):
+    def __init__(self, renderer):
+        from ..core.spatial import samples
+
+        self.renderer = renderer
+        self.samples = samples
+        self.result = {}
+
+    def bounds(self, value):
+        return max(abs(item) for item in _interval(self.renderer, value))
+
+    def resident(self, current):
         image = getattr(current, "tex", None)
         if image is None:
             return False
         image._check_open()
-        if image.context is not renderer.ctx:
+        if image.context is not self.renderer.ctx:
             raise ValueError("Spatial textures must belong to the rendering canvas")
         if image.origin != (0, 0) or image.size != image.canvas_size:
             raise ValueError("Tiled spatial sampling requires a complete source image")
         return True
 
-    def visit(current, reach, local_scale):
-        if resident(current):
+    def visit(self, current, reach, local_scale):
+        if self.resident(current):
             return
         raw = dict(current.params)
-        next_reach, next_scale = reach, local_scale
-        if current.op == "spatial_repeat":
-            if raw["baked"] and not resident(current.inputs[0]):
-                raise NotImplementedError(
-                    "Render a baked stamp once before using it in a tiled export"
-                )
-            spacing = raw["spacing"]
-            if not isinstance(spacing, (list, tuple)):
-                spacing = renderer._resolve(spacing)
-            radius = 0.5 * math.hypot(*(bounds(component) for component in spacing))
-            next_reach = radius * local_scale * renderer.ctx.device_scale
-            next_scale = local_scale * bounds(raw["scale"])
-        elif current.op == "scale":
-            next_scale *= bounds(raw["factor"])
-        elif current.op == "skew":
-            shear = raw["skew"]
-            if isinstance(shear, (tuple, list)):
-                next_scale *= 1 + max(bounds(component) for component in shear)
-            else:
-                next_scale = math.inf
-        elif current.op not in _TRANSFORMS | {"output"}:
-            plugin = registry.get(current.op)
-            if plugin.spatial_lowering is not None:
-                visit(plugin.spatial_lowering(current.inputs, raw), reach, local_scale)
-                return
-            if plugin.shader is None and current.op not in _INLINE_COMPOSITES:
-                raise NotImplementedError(
-                    f"Tiled spatial pattern cannot inline '{current.op}'"
-                )
-        for name, value in current.params:
-            for item in samples(value):
-                texture, _, scope = item.args
-                if resident(texture):
-                    continue
-                sample_reach = 0
-                if scope == "cell":
-                    sample_reach = (
-                        next_reach
-                        if current.op == "spatial_repeat"
-                        and name in {"rotation", "scale", "stamp_center"}
-                        else reach
-                    )
-                if not math.isfinite(sample_reach):
-                    raise ValueError(
-                        "Tiled per-cell sampling needs bounded spacing and scale"
-                    )
-                result[texture] = max(
-                    result.get(texture, 0), math.ceil(sample_reach) + 2
-                )
+        target, next_reach, next_scale = self._transformed_node(
+            current, raw, reach, local_scale
+        )
+        if target is not current:
+            self.visit(target, reach, local_scale)
+            return
+        self._record_samples(current, raw, reach, next_reach)
         for child in current.inputs:
-            visit(child, next_reach, next_scale)
+            self.visit(child, next_reach, next_scale)
 
-    visit(node, 0, 1)
-    return tuple(result.items())
+    def _transformed_node(self, current, raw, reach, local_scale):
+        if current.op == "spatial_repeat":
+            return current, *self._repeat_transform(current, raw, reach, local_scale)
+        if current.op == _SCALE:
+            return current, reach, local_scale * self.bounds(raw["factor"])
+        if current.op == "skew":
+            return current, reach, self._skew_scale(raw["skew"], local_scale)
+        return self._plugin_node(current, raw, reach, local_scale)
+
+    def _repeat_transform(self, current, raw, reach, local_scale):
+        if raw["baked"] and not self.resident(current.inputs[0]):
+            raise NotImplementedError(
+                "Render a baked stamp once before using it in a tiled export"
+            )
+        spacing = raw["spacing"]
+        if not isinstance(spacing, (list, tuple)):
+            spacing = self.renderer._resolve(spacing)
+        radius = 0.5 * math.hypot(*(self.bounds(component) for component in spacing))
+        next_reach = radius * local_scale * self.renderer.ctx.device_scale
+        next_scale = local_scale * self.bounds(raw[_SCALE])
+        return next_reach, next_scale
+
+    def _skew_scale(self, shear, local_scale):
+        if not isinstance(shear, (tuple, list)):
+            return math.inf
+        return local_scale * (1 + max(self.bounds(component) for component in shear))
+
+    def _plugin_node(self, current, raw, reach, local_scale):
+        if current.op in _TRANSFORMS | {"output"}:
+            return current, reach, local_scale
+        plugin = registry.get(current.op)
+        if plugin.spatial_lowering is not None:
+            lowered = plugin.spatial_lowering(current.inputs, raw)
+            return lowered, reach, local_scale
+        if plugin.shader is None and current.op not in _INLINE_COMPOSITES:
+            raise NotImplementedError(
+                f"Tiled spatial pattern cannot inline '{current.op}'"
+            )
+        return current, reach, local_scale
+
+    def _record_samples(self, current, raw, reach, next_reach):
+        for name, value in current.params:
+            for item in self.samples(value):
+                self._record_sample(current, name, item, reach, next_reach)
+
+    def _record_sample(self, current, name, item, reach, next_reach):
+        texture, _, scope = item.args
+        if self.resident(texture):
+            return
+        sample_reach = self._sample_reach(current, name, scope, reach, next_reach)
+        if not math.isfinite(sample_reach):
+            raise ValueError("Tiled per-cell sampling needs bounded spacing and scale")
+        self.result[texture] = max(
+            self.result.get(texture, 0), math.ceil(sample_reach) + 2
+        )
+
+    @staticmethod
+    def _sample_reach(current, name, scope, reach, next_reach):
+        if scope != "cell":
+            return 0
+        if current.op == "spatial_repeat" and name in {"rotation", _SCALE, "stamp_center"}:
+            return next_reach
+        return reach
+
+
+def tile_dependencies(renderer, node):
+    """Return map dependencies and each one's maximum sampling reach."""
+    collector = TileDependencyCollector(renderer)
+    collector.visit(node, 0, 1)
+    return tuple(collector.result.items())

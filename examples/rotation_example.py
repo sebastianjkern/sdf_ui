@@ -2,6 +2,7 @@ import math
 
 from sdf_ui import Canvas, sdf
 
+
 def rotation_example():
     SIZE = (512, 512)
 

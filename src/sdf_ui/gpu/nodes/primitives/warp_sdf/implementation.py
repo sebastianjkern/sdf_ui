@@ -1,9 +1,12 @@
 """Differentiable reference and shader contract for vector-field warping."""
 
+
+
 import numpy as np
 
 from sdf_ui.gpu.nodes.differentiation import ShaderArgument, ShaderDifferentiation
 
+_STEPS_TEXT = 'steps'
 
 def _sample(image, x, y):
     from sdf_ui.learning.autodiff import where
@@ -28,7 +31,7 @@ def _reference(context, inputs, params, color=False):
     field = inputs["fieldTex"]
     x, y = context.x, context.y
     strength = _tensor(params["strength"])
-    steps = int(params["steps"].item())
+    steps = int(params[_STEPS_TEXT].item())
     for _ in range(steps):
         vx = _sample(field[..., 0], x, y)
         vy = _sample(field[..., 1], x, y)
@@ -54,9 +57,9 @@ SDF_CONTRACT = ShaderDifferentiation(
     "warp_sdf",
     "gpu/nodes/primitives/warp_sdf/shader.glsl",
     (ShaderArgument("sourceTex", (), "r32f"), ShaderArgument("fieldTex", (4,), "rgba32float")),
-    (ShaderArgument("strength", (), "float"), ShaderArgument("steps", (), "int")),
+    (ShaderArgument("strength", (), "float"), ShaderArgument(_STEPS_TEXT, (), "int")),
     (ShaderArgument("destTex", (), "r32f"),),
-    zero_gradient_parameters=("steps",), sampling="linear_clamp",
+    zero_gradient_parameters=(_STEPS_TEXT,), sampling="linear_clamp",
     notes="Differentiate bilinear weights within a fixed cell; integration steps are discrete.",
     reference=lambda context, inputs, params: _reference(context, inputs, params),
 )
@@ -64,9 +67,9 @@ COLOR_CONTRACT = ShaderDifferentiation(
     "warp_color",
     "gpu/nodes/shading/warp_color/shader.glsl",
     (ShaderArgument("sourceTex", (4,), "rgba8"), ShaderArgument("fieldTex", (4,), "rgba32float")),
-    (ShaderArgument("strength", (), "float"), ShaderArgument("steps", (), "int")),
+    (ShaderArgument("strength", (), "float"), ShaderArgument(_STEPS_TEXT, (), "int")),
     (ShaderArgument("destTex", (4,), "rgba8"),),
-    zero_gradient_parameters=("steps",), sampling="linear_clamp",
+    zero_gradient_parameters=(_STEPS_TEXT,), sampling="linear_clamp",
     notes="Differentiate bilinear weights within a fixed cell; integration steps are discrete.",
     reference=lambda context, inputs, params: _reference(context, inputs, params, color=True),
 )

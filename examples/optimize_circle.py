@@ -1,15 +1,18 @@
 """Fit a circle radius with a custom loss over scene output and parameters."""
 
+
+
 import argparse
 from pathlib import Path
 
 from sdf_ui import Canvas, param, sdf
 from sdf_ui.learning import Parameter
 
+_RADIUS_TEXT = 'radius'
 
 def optimize(steps=150, output=None):
-    radius = Parameter("radius", 4.0)
-    field = sdf.circle((16, 16), param("radius"))
+    radius = Parameter(_RADIUS_TEXT, 4.0)
+    field = sdf.circle((16, 16), param(_RADIUS_TEXT))
 
     with Canvas((32, 32)) as canvas:
         with canvas.capture(sdf.circle((16, 16), 9)) as target:
@@ -18,12 +21,12 @@ def optimize(steps=150, output=None):
             def loss(graph):
                 image_error = ((graph["field"].output - target_pixels) ** 2).mean()
                 radius_prior = (radius - 9) ** 2
-                return image_error + radius_prior * 0.01
+                return image_error + radius_prior * 1 / 100
 
             result = canvas.fit(
                 {"field": field},
                 loss,
-                params={"radius": radius},
+                params={_RADIUS_TEXT: radius},
                 steps=steps,
                 lr=0.1,
             )
@@ -31,10 +34,10 @@ def optimize(steps=150, output=None):
         if output is not None:
             output = Path(output)
             output.parent.mkdir(parents=True, exist_ok=True)
-            field.save(output, canvas=canvas, params={"radius": radius})
+            field.save(output, canvas=canvas, params={_RADIUS_TEXT: radius})
 
     return {
-        "radius": radius.item(),
+        _RADIUS_TEXT: radius.item(),
         "loss_before_last_update": result.final_loss,
         "steps": result.steps,
     }

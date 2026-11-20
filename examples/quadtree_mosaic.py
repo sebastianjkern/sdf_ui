@@ -103,7 +103,7 @@ def mosaic(controls, *, max_depth=param("max_depth", MAX_DEPTH)):
         tone = abs(cell).remap((0.25, 1.0), (0.006, 0.94))
         inset = 0.65 if edge >= 16 else 0.5
         tile = sdf.rounded_rect_from_size(
-            (0, 0), (edge - 2 * inset, edge - 2 * inset), corner_radius=edge * 0.16
+            (0, 0), (edge - 2 * inset, edge - 2 * inset), corner_radius=edge * 4 / 25
         ).ink_linear((tone, tone, tone, opacity))
         layers.append(
             tile.repeat_grid(

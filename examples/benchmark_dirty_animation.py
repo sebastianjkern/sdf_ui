@@ -6,6 +6,8 @@ persistent dirty-region renderer session. Timings include GPU readback so both
 paths are measured on the same basis.
 """
 
+
+
 import argparse
 import json
 import math
@@ -23,14 +25,17 @@ from sdf_ui import Canvas, color, param, sdf
 from sdf_ui.anim import _dirty_animation_node_count
 from sdf_ui.learning import Parameter
 
+_CENTER_X_TEXT = 'center_x'
+
+_PHASE_TEXT = 'phase'
 
 def _scenes():
     center_x = Parameter(
-        "center_x",
+        _CENTER_X_TEXT,
         0.0,
-        animate=lambda progress: 640 * (0.35 + 0.25 * math.sin(progress * 2 * math.pi)),
+        animate=lambda progress: 640 * (7 / 20 + 1 / 4 * math.sin(progress * 2 * math.pi)),
     )
-    moving_disc = sdf.circle((param("center_x"), 180), 54)
+    moving_disc = sdf.circle((param(_CENTER_X_TEXT), 180), 54)
     simple = color.clear("#ffffff").alpha_overlay(
         sdf.circle((64, 180), 126)
         .smooth_union(moving_disc)
@@ -38,78 +43,93 @@ def _scenes():
     )
 
     center = Parameter(
-        "center_x", 0.0, animate=lambda progress: 120 + 400 * progress - 20
+        _CENTER_X_TEXT, 0.0, animate=lambda progress: 120 + 400 * progress - 20
     )
-    div = sdf.rounded_rect((param("center_x"), 180), (90, 56), 18).fill(
+    div = sdf.rounded_rect((param(_CENTER_X_TEXT), 180), (90, 56), 18).fill(
         "#62bb47", "#14251b"
     )
     center_scene = color.clear("#111827").over(div).to_rgb()
 
-    phase = Parameter("phase", 0.0, animate=lambda progress: progress * 2 * math.pi)
+    phase = Parameter(_PHASE_TEXT, 0.0, animate=lambda progress: progress * 2 * math.pi)
     tidal_scene = tidal_bloom_scene(None)
 
     city = kinetic_city_scene()
     layout, parameters, widths, heights, names, _, _ = make_learned_layout()
     parameters = dict(parameters.items())
     learned_phase = Parameter(
-        "phase", 0.0, animate=lambda progress: progress * 2 * math.pi
+        _PHASE_TEXT, 0.0, animate=lambda progress: progress * 2 * math.pi
     )
-    parameters["phase"] = learned_phase
+    parameters[_PHASE_TEXT] = learned_phase
     learned = build_score(layout, parameters, widths, heights, names)
     return (
-        ("animation_example", (640, 360), simple, {"center_x": center_x}),
-        ("center_div_motion", (640, 360), center_scene, {"center_x": center}),
-        ("tidal_bloom", (SIZE, SIZE), tidal_scene, {"phase": phase}),
-        ("blue_hour", (WIDTH, HEIGHT), city, {"phase": phase}),
+        ("animation_example", (640, 360), simple, {_CENTER_X_TEXT: center_x}),
+        ("center_div_motion", (640, 360), center_scene, {_CENTER_X_TEXT: center}),
+        ("tidal_bloom", (SIZE, SIZE), tidal_scene, {_PHASE_TEXT: phase}),
+        ("blue_hour", (WIDTH, HEIGHT), city, {_PHASE_TEXT: phase}),
         ("learned_score", (WIDTH, HEIGHT), learned, parameters),
     )
 
 
-def _render(spec, frames, dirty):
-    name, size, scene, params = spec
+def _read_snapshot(path):
+    return np.asarray(Image.open(path).convert("RGBA"))
+
+
+def _render_dirty_frames(scene, size, params, frames, directory, canvas, started):
     snapshots = []
+    with canvas.compile({"frame": scene}, params=params) as graph, canvas.session(
+        params=params, dirty_regions=True
+    ) as renderer:
+        fallback_frames = 0
+        for index in range(frames):
+            progress = index / max(frames - 1, 1)
+            path = Path(directory) / f"{index:04d}.png"
+            use_dirty = _can_render_dirty(renderer, scene, size, index, progress)
+            if use_dirty:
+                renderer.render(scene, progress=progress).save(path)
+            else:
+                fallback_frames += 1
+                with graph.run(progress=progress) as execution:
+                    execution.save("frame", path)
+            snapshots.append(_read_snapshot(path))
+        stats = renderer.stats.as_dict()
+        stats["full_frame_fallbacks"] = fallback_frames
+        stats["dirty_animation_enabled"] = True
+    return snapshots, time.perf_counter() - started, stats
+
+
+def _can_render_dirty(renderer, scene, size, index, progress):
+    if index == 0:
+        return True
+    renderer.progress = progress
+    rect = renderer._resolve_dirty_rect(scene)
+    area = 0 if rect is None else rect[2] * rect[3]
+    return area <= 7 / 20 * size[0] * size[1] and renderer.stats.dirty_region_fallbacks <= 10
+
+
+def _render_full_frames(scene, size, params, frames, directory, canvas):
+    snapshots = []
+    with canvas.compile({"frame": scene}, params=params) as graph:
+        for index in range(frames):
+            progress = index / max(frames - 1, 1)
+            path = Path(directory) / f"{index:04d}.png"
+            with graph.run(progress=progress) as execution:
+                execution.save("frame", path)
+            snapshots.append(_read_snapshot(path))
+    return snapshots
+
+
+def _render(spec, frames, dirty):
+    _name, size, scene, params = spec
     started = time.perf_counter()
     with tempfile.TemporaryDirectory(prefix="sdf-ui-dirty-bench-") as directory:
         with Canvas(size) as canvas:
-            use_dirty_renderer = dirty and _dirty_animation_node_count(scene) <= 96
-            if use_dirty_renderer:
-                with canvas.compile({"frame": scene}, params=params) as graph, canvas.session(
-                    params=params, dirty_regions=True
-                ) as renderer:
-                    fallback_frames = 0
-                    for index in range(frames):
-                        progress = index / max(frames - 1, 1)
-                        path = Path(directory) / f"{index:04d}.png"
-                        use_dirty = True
-                        if index:
-                            renderer.progress = progress
-                            rect = renderer._resolve_dirty_rect(scene)
-                            area = 0 if rect is None else rect[2] * rect[3]
-                            use_dirty = (
-                                area <= 0.35 * size[0] * size[1]
-                                and renderer.stats.dirty_region_fallbacks <= 10
-                            )
-                        if use_dirty:
-                            renderer.render(scene, progress=progress).save(path)
-                        else:
-                            fallback_frames += 1
-                            with graph.run(progress=progress) as execution:
-                                execution.save("frame", path)
-                        snapshots.append(np.asarray(Image.open(path).convert("RGBA")))
-                    stats = renderer.stats.as_dict()
-                    stats["full_frame_fallbacks"] = fallback_frames
-                    stats["dirty_animation_enabled"] = True
-                    return snapshots, time.perf_counter() - started, stats
-            with canvas.compile({"frame": scene}, params=params) as graph:
-                for index in range(frames):
-                    progress = index / max(frames - 1, 1)
-                    with graph.run(progress=progress) as execution:
-                        path = Path(directory) / f"{index:04d}.png"
-                        execution.save("frame", path)
-                        snapshots.append(np.asarray(Image.open(path).convert("RGBA")))
-    return snapshots, time.perf_counter() - started, {
-        "dirty_animation_enabled": False
-    }
+            should_render_dirty = dirty and _dirty_animation_node_count(scene) <= 96
+            if should_render_dirty:
+                return _render_dirty_frames(
+                    scene, size, params, frames, directory, canvas, started
+                )
+            snapshots = _render_full_frames(scene, size, params, frames, directory, canvas)
+    return snapshots, time.perf_counter() - started, {"dirty_animation_enabled": False}
 
 
 def benchmark(frames=6):

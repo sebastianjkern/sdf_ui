@@ -1,5 +1,7 @@
 """Explicit lowering of public plugin conventions to shader derivative ports."""
 
+from functools import partial
+
 import numpy as np
 
 from ...gpu.nodes.registry import registry
@@ -64,7 +66,7 @@ def _blur(renderer, source, base, n):
     return source
 
 
-def _fill(renderer, source, foreground, background, inflate=0, first=-1.5, second=0):
+def _fill(renderer, source, foreground, background, inflate=0, first=-3 / 2, second=0):
     return _shader(
         renderer,
         "fill",
@@ -79,39 +81,74 @@ def _fill(renderer, source, foreground, background, inflate=0, first=-1.5, secon
     )
 
 
-def evaluate_plugin(renderer, plugin, inputs, params, input_modes):
-    """Return a Tensor/mode or tuple-of-Tensors/tuple-of-modes.
+class _PluginAdapters:
+    @staticmethod
+    def _adapt_output(renderer, plugin, inputs, params, modes):
+        return _output_plugin(inputs, params, modes)
 
-    Composite passes retain the host plugin's color and iteration conventions.
-    No opaque custom render function is executed during differentiation.
-    """
+
+    @staticmethod
+    def _adapt_masked_union(renderer, plugin, inputs, params, modes):
+        return _masked_union_plugin(renderer, inputs)
+
+
+    @staticmethod
+    def _adapt_transform(renderer, plugin, inputs, params, modes):
+        return _transform_plugin(renderer, plugin.name, inputs, params)
+
+
+    @staticmethod
+    def _adapt_layer(renderer, plugin, inputs, params, modes):
+        return _layer_plugin(renderer, plugin.name, inputs, modes)
+
+
+    @staticmethod
+    def _adapt_fill_texture(renderer, plugin, inputs, params, modes):
+        return _fill_texture_plugin(renderer, inputs, params, modes)
+
+
+    @staticmethod
+    def _adapt_fixed_blur(base, renderer, plugin, inputs, params, modes):
+        return _blur(renderer, inputs[0], base, params["n"]), modes[0]
+
+
+    @staticmethod
+    def _adapt_blur(renderer, plugin, inputs, params, modes):
+        return _iterated_blur_plugin(renderer, inputs, params, modes)
+
+
+    @staticmethod
+    def _adapt_shadow(renderer, plugin, inputs, params, modes):
+        return _shadow_plugin(renderer, inputs, params)
+
+
+    @staticmethod
+    def _adapt_radial(renderer, plugin, inputs, params, modes):
+        return _radial_gradient_plugin(renderer, params)
+
+
+    @staticmethod
+    def _adapt_linear(renderer, plugin, inputs, params, modes):
+        return _linear_gradient_plugin(renderer, params)
+
+
+
+    @staticmethod
+    def result_mode(plugin, input_modes):
+        mode = plugin.mode or next((value for value in input_modes if value), None)
+        if plugin.result == "color":
+            return mode or "LAB"
+        return mode
+
+
+def evaluate_plugin(renderer, plugin, inputs, params, input_modes):
+    """Return differentiable results for a supported public plugin."""
     if not supports_plugin(plugin):
         raise ValueError(f"Plugin '{plugin.name}' needs an explicit derivative adapter")
-    name = plugin.name
-    match name:
-        case "output":
-            return _output_plugin(inputs, params, input_modes)
-        case "masked_union":
-            return _masked_union_plugin(renderer, inputs)
-        case "translate" | "scale" | "rotate" | "skew":
-            return _transform_plugin(renderer, name, inputs, params)
-        case "mask" | "layer_mask" | "multiply" | "alpha_overlay":
-            return _layer_plugin(renderer, name, inputs, input_modes)
-        case "fill_from_texture":
-            return _fill_texture_plugin(renderer, inputs, params, input_modes)
-        case "blur_9" | "blur_13":
-            base = 9 if name == "blur_9" else 13
-            return _blur(renderer, inputs[0], base, params["n"]), input_modes[0]
-        case "blur":
-            return _iterated_blur_plugin(renderer, inputs, params, input_modes)
-        case "shadow":
-            return _shadow_plugin(renderer, inputs, params)
-        case "radial_gradient":
-            return _radial_gradient_plugin(renderer, params)
-        case "linear_gradient":
-            return _linear_gradient_plugin(renderer, params)
-        case _:
-            return _shader_plugin(renderer, plugin, inputs, params, input_modes)
+    adapter = _PLUGIN_ADAPTERS.get(plugin.name)
+    if adapter is None:
+        return _shader_plugin(renderer, plugin, inputs, params, input_modes)
+    return adapter(renderer, plugin, inputs, params, input_modes)
 
 
 def _output_plugin(inputs, params, input_modes):
@@ -210,30 +247,50 @@ def _linear_gradient_plugin(renderer, params):
     ), "LAB"
 
 
-def _shader_plugin(renderer, plugin, inputs, params, input_modes):
-    name = plugin.name
-    uniform_params = params
-    if name == "light" and isinstance(params["shade_background"], Tensor):
-        # The display adapter casts this mode to float. Preserve its continuous
-        # factor in the shader's height curve while choosing the same branch.
-        uniform_params = dict(
-            params, shade_background=params["shade_background"].item()
-        )
-    uniforms = (
-        {} if plugin.make_uniforms is None else plugin.make_uniforms(uniform_params)
-    )
-    if name == "light":
-        uniforms["shadeBackground"] = params["shade_background"]
+def _shader_uniform_parameters(plugin, params):
+    if plugin.name == "light" and isinstance(params["shade_background"], Tensor):
+        return dict(params, shade_background=params["shade_background"].item())
+    return params
+
+
+def _normalize_shader_colors(renderer, plugin, uniforms):
+    color_names = {"color", "background", "fgColor", "bgColor", "outline", "line_color"}
     for argument in plugin.shader.differentiation.parameters:
-        if (
-            argument.name
-            in {"color", "background", "fgColor", "bgColor", "outline", "line_color"}
-            and argument.name in uniforms
-        ):
+        if argument.name in color_names and argument.name in uniforms:
             uniforms[argument.name] = renderer._color(uniforms[argument.name])
+
+
+
+
+def _shader_plugin(renderer, plugin, inputs, params, input_modes):
+    uniforms = (
+        {} if plugin.make_uniforms is None
+        else plugin.make_uniforms(_shader_uniform_parameters(plugin, params))
+    )
+    if plugin.name == "light":
+        uniforms["shadeBackground"] = params["shade_background"]
+    _normalize_shader_colors(renderer, plugin, uniforms)
     ports = dict(zip(plugin.input_uniforms, inputs))
     result = plugin.shader.differentiation.evaluate(renderer.size, ports, uniforms)
-    mode = plugin.mode or next((mode for mode in input_modes if mode), None)
-    if plugin.result == "color":
-        mode = mode or "LAB"
-    return result, mode
+    return result, _PluginAdapters.result_mode(plugin, input_modes)
+
+
+_PLUGIN_ADAPTERS = {
+    "output": _PluginAdapters._adapt_output,
+    "masked_union": _PluginAdapters._adapt_masked_union,
+    "translate": _PluginAdapters._adapt_transform,
+    "scale": _PluginAdapters._adapt_transform,
+    "rotate": _PluginAdapters._adapt_transform,
+    "skew": _PluginAdapters._adapt_transform,
+    "mask": _PluginAdapters._adapt_layer,
+    "layer_mask": _PluginAdapters._adapt_layer,
+    "multiply": _PluginAdapters._adapt_layer,
+    "alpha_overlay": _PluginAdapters._adapt_layer,
+    "fill_from_texture": _PluginAdapters._adapt_fill_texture,
+    "blur_9": partial(_PluginAdapters._adapt_fixed_blur, 9),
+    "blur_13": partial(_PluginAdapters._adapt_fixed_blur, 13),
+    "blur": _PluginAdapters._adapt_blur,
+    "shadow": _PluginAdapters._adapt_shadow,
+    "radial_gradient": _PluginAdapters._adapt_radial,
+    "linear_gradient": _PluginAdapters._adapt_linear,
+}

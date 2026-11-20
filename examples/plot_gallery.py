@@ -5,6 +5,7 @@ Run with ``uv run --extra math python -m examples.plot_gallery``.
 
 import argparse
 import math
+from functools import partial
 from pathlib import Path
 
 from sdf_ui import Canvas, Plot, color, sdf
@@ -42,7 +43,7 @@ def _heading(scene, title, subtitle):
 
 
 def function_plot(canvas, output_dir):
-    plot = Plot((132, 132, 710, 355), (-2 * math.pi, 2 * math.pi), (-1.4, 1.4))
+    plot = Plot((132, 132, 710, 355), (-2 * math.pi, 2 * math.pi), (-7 / 5, 1.4))
     scene = _heading(
         color.clear(BACKGROUND),
         "01  FUNCTIONS AND ADAPTIVE CURVES",
@@ -50,7 +51,7 @@ def function_plot(canvas, output_dir):
     )
     scene = scene.over(
         plot.axes(
-            x_ticks=(-6.28, -3.14, 0, 3.14, 6.28),
+            x_ticks=(-157 / 25, -157 / 50, 0, 3.14, 6.28),
             y_ticks=(-1, 0, 1),
             axis_color=(0.74, 0.79, 0.87, 1.0),
             grid_color=GRID,
@@ -59,13 +60,22 @@ def function_plot(canvas, output_dir):
             y_label="y",
         )
     )
+    scene = scene.over(_function_curves(plot))
+    scene = _function_annotations(scene, plot)
+    canvas.save(scene, output_dir / "functions.png")
+
+
+def _function_curves(plot):
     sine = plot.curve(math.sin, tolerance=0.18, samples=20).stroke(
         3.5, (0.28, 0.85, 0.77, 1.0)
     )
     cosine = plot.curve(math.cos, tolerance=0.18, samples=20).stroke(
         2.5, (0.98, 0.65, 0.34, 0.9)
     )
-    scene = scene.over(sine).over(cosine)
+    return sine.over(cosine)
+
+
+def _function_annotations(scene, plot):
     scene = scene.over(
         plot.annotate(
             (math.pi / 2, 1),
@@ -82,7 +92,7 @@ def function_plot(canvas, output_dir):
     scene = scene.over(
         _formula(r"y=\cos x", (825, 508), size=22, tint=(0.98, 0.65, 0.34, 1.0))
     )
-    canvas.save(scene, output_dir / "functions.png")
+    return scene
 
 
 def parametric_gallery(canvas, output_dir):
@@ -92,8 +102,8 @@ def parametric_gallery(canvas, output_dir):
         "Two parameterized paths, clipped to independent viewports",
     )
     plots = (
-        Plot((105, 155, 330, 330), (-1.2, 1.2), (-1.2, 1.2)),
-        Plot((525, 155, 330, 330), (-1.2, 1.2), (-1.2, 1.2)),
+        Plot((105, 155, 330, 330), (-6 / 5, 6 / 5), (-6 / 5, 6 / 5)),
+        Plot((525, 155, 330, 330), (-6 / 5, 6 / 5), (-6 / 5, 6 / 5)),
     )
     rose, lissajous = plots
     scene = scene.over(
@@ -114,6 +124,13 @@ def parametric_gallery(canvas, output_dir):
             label_color=MUTED,
         )
     )
+    flower, loop = _parametric_curves(rose, lissajous)
+    scene = scene.over(flower).over(loop)
+    scene = _parametric_labels(scene)
+    canvas.save(scene, output_dir / "parametric_curves.png")
+
+
+def _parametric_curves(rose, lissajous):
     flower = rose.parametric(
         lambda t: (math.cos(5 * t) * math.cos(t), math.cos(5 * t) * math.sin(t)),
         (0, 2 * math.pi),
@@ -126,7 +143,10 @@ def parametric_gallery(canvas, output_dir):
         samples=48,
         tolerance=0.2,
     ).stroke(3.0, (0.38, 0.75, 1.0, 1.0))
-    scene = scene.over(flower).over(loop)
+    return flower, loop
+
+
+def _parametric_labels(scene):
     scene = scene.over(
         _text(
             "FIVE PETALS",
@@ -149,7 +169,7 @@ def parametric_gallery(canvas, output_dir):
     scene = scene.over(
         _formula(r"(x,y)=(\sin 3t,\cos 4t)", (690, 76), size=21, tint=WHITE)
     )
-    canvas.save(scene, output_dir / "parametric_curves.png")
+    return scene
 
 
 def optimization_plot(canvas, output_dir):
@@ -171,21 +191,37 @@ def optimization_plot(canvas, output_dir):
         )
     )
     circle = plot.parametric(
-        lambda t: (math.cos(t), math.sin(t)),
+        _unit_circle_point,
         (0, math.pi / 2),
         samples=24,
         tolerance=0.15,
     ).stroke(3.0, (0.26, 0.86, 0.75, 1.0))
     scene = scene.over(circle)
+    scene = _optimization_contours(scene, plot)
+    scene = _optimization_optimum(scene, plot)
+    scene = _optimization_annotations(scene)
+    canvas.save(scene, output_dir / "constraint_optimization.png")
+
+
+def _optimization_contours(scene, plot):
     for level in (0.1, 0.2, 0.3, 0.4, 0.5):
         contour = plot.curve(
-            lambda x, c=level: c / x,
-            domain=(level / 1.2, 1.2),
-            tolerance=0.2,
-            samples=20,
+            partial(_hyperbola, level), domain=(level / (12 / 10), 12 / 10),
+            tolerance=0.2, samples=20,
         ).stroke(1.5 if level < 0.5 else 3.0, (1.0, 0.68, 0.35, 0.82))
         scene = scene.over(contour)
+    return scene
 
+
+def _hyperbola(level, x):
+    return level / x
+
+
+def _unit_circle_point(angle):
+    return math.cos(angle), math.sin(angle)
+
+
+def _optimization_optimum(scene, plot):
     optimum = 1 / math.sqrt(2)
     scene = scene.over(
         plot.annotate(
@@ -199,11 +235,14 @@ def optimization_plot(canvas, output_dir):
     )
     tangent = plot.parametric(
         lambda t: (optimum + t, optimum - t),
-        (-0.22, 0.22),
+        (-11 / 50, 0.22),
         samples=4,
         tolerance=0.1,
     ).stroke(1.7, (0.72, 0.62, 1.0, 0.95))
-    scene = scene.over(tangent)
+    return scene.over(tangent)
+
+
+def _optimization_annotations(scene):
     scene = scene.over(
         _formula(r"f(x,y)=xy", (765, 440), size=30, tint=(1.0, 0.75, 0.43, 1.0))
     )
@@ -223,7 +262,7 @@ def optimization_plot(canvas, output_dir):
             tint=WHITE,
         )
     )
-    canvas.save(scene, output_dir / "constraint_optimization.png")
+    return scene
 
 
 def render_plot_gallery(output_dir=OUTPUT_DIR, only="all"):

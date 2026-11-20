@@ -1,5 +1,7 @@
 """Outline shader interface, reference evaluation and GPU program."""
 
+
+
 from sdf_ui.gpu.nodes.base import ImageBinding, ShaderInterface, Uniform
 from sdf_ui.gpu.nodes.differentiation import (
     ShaderArgument,
@@ -9,6 +11,7 @@ from sdf_ui.gpu.nodes.shader_expression import ShaderProgram
 
 from ..glsl import RGBA
 
+_OUTLINE_TEXT = 'outline'
 
 def reference(context, inputs, params):
     from sdf_ui.learning.autodiff import maximum
@@ -16,9 +19,9 @@ def reference(context, inputs, params):
 
     distance = abs(inputs["sdf"] - _tensor(params["inflate"]))
     half_width = maximum(abs(_tensor(params.get("width", 1.5))) * 0.5, 0.0001)
-    weight = _smoothstep(maximum(half_width - 0.75, 0.0), half_width + 0.7501, distance)
+    weight = _smoothstep(maximum(half_width - 3 / 4, 0.0), half_width + 7_501 / 10_000, distance)
     return _mix(
-        _rgb_to_lab(_tensor(params["outline"])),
+        _rgb_to_lab(_tensor(params[_OUTLINE_TEXT])),
         _rgb_to_lab(_tensor(params["background"])),
         weight[..., None],
     )
@@ -29,18 +32,18 @@ INTERFACE = ShaderInterface(
     inputs=(ImageBinding("sdf", 1, read=True),),
     uniforms=(
         Uniform("background", "vec4"),
-        Uniform("outline", "vec4"),
+        Uniform(_OUTLINE_TEXT, "vec4"),
         Uniform("inflate", "float"),
         Uniform("width", "float"),
     ),
 )
 CONTRACT = ShaderDifferentiation(
-    "outline",
+    _OUTLINE_TEXT,
     "gpu/nodes/shading/outline/shader.glsl",
     (ShaderArgument("sdf", (), "r32f"),),
     (
         ShaderArgument("background", (4,), "vec4"),
-        ShaderArgument("outline", (4,), "vec4"),
+        ShaderArgument(_OUTLINE_TEXT, (4,), "vec4"),
         ShaderArgument("inflate", (), "float"),
         ShaderArgument("width", (), "float"),
     ),
@@ -59,4 +62,4 @@ void evaluate(ivec2 pos, out D o[8]) {
     shadingOutput(shadingMix(rgbToLab(U_outline), rgbToLab(U_background), weight), o);
 }
 """
-PROGRAM = ShaderProgram("outline", RGBA + BODY)
+PROGRAM = ShaderProgram(_OUTLINE_TEXT, RGBA + BODY)

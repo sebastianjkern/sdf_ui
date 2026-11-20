@@ -1,4 +1,4 @@
-__docformat__ = "google"
+
 
 from sdf_ui.gpu.nodes.base import (
     ImageBinding,
@@ -12,10 +12,13 @@ from sdf_ui.gpu.nodes.common import color, shader
 
 from .implementation import CONTRACT, PROGRAM
 
+_INFLATE_TEXT = 'inflate'
+
+__docformat__ = "google"
 
 def _uniforms(params):
     return {
-        "inflate": params["inflate"],
+        _INFLATE_TEXT: params[_INFLATE_TEXT],
         "background": color(params["bg_color"]),
         "color": color(params["fg_color"]),
         "first": params["inner"],
@@ -30,11 +33,11 @@ def register_plugins(registry):
             PluginFamily.SHADING,
             TextureKind.COLOR,
             (TextureKind.SDF,),
-            params=("fg_color", "bg_color", "inflate", "inner", "outer"),
+            params=("fg_color", "bg_color", _INFLATE_TEXT, "inner", "outer"),
             defaults={
                 "bg_color": (0.0, 0.0, 0.0, 1.0),
-                "inflate": 0.0,
-                "inner": -1.5,
+                _INFLATE_TEXT: 0.0,
+                "inner": -3 / 2,
                 "outer": 0.0,
             },
             shader=shader(
@@ -45,7 +48,7 @@ def register_plugins(registry):
                     output=ImageBinding("destTex", 0, write=True),
                     inputs=(ImageBinding("sdf", 1, read=True),),
                     uniforms=(
-                        Uniform("inflate", "float"), Uniform("color", "vec4"),
+                        Uniform(_INFLATE_TEXT, "float"), Uniform("color", "vec4"),
                         Uniform("background", "vec4"), Uniform("first", "float"),
                         Uniform("second", "float"),
                     ),

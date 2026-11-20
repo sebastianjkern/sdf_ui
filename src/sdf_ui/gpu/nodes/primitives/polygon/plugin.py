@@ -3,22 +3,14 @@ __docformat__ = "google"
 import numpy as np
 
 from sdf_ui.gpu.nodes.base import Plugin, PluginFamily, TextureKind
-
-
-def _polygon_area(points):
-    area = 0.0
-    for index, point in enumerate(points):
-        x0, y0 = point
-        x1, y1 = points[(index + 1) % len(points)]
-        area += x0 * y1 - x1 * y0
-    return area * 0.5
+from sdf_ui.gpu.nodes.common import polygon_signed_area as _polygon_area
 
 
 def _point_segment_distances(points_grid, a, b):
     ba = np.array(b, dtype=np.float32) - np.array(a, dtype=np.float32)
     pa = points_grid - np.array(a, dtype=np.float32)
     denom = float(np.dot(ba, ba))
-    if denom <= 1e-12:
+    if denom <= 1 / 1_000_000_000_000:
         return np.sum(pa * pa, axis=-1)
 
     h = np.clip(np.sum(pa * ba, axis=-1) / denom, 0.0, 1.0)
@@ -35,7 +27,7 @@ def _point_in_polygon(points_grid, points):
         x0, y0 = point
         x1, y1 = points[(index + 1) % len(points)]
         crosses = ((y0 > y) != (y1 > y)) & (
-            x < ((x1 - x0) * (y - y0) / (y1 - y0 + 1e-12) + x0)
+            x < ((x1 - x0) * (y - y0) / (y1 - y0 + 1 / 1_000_000_000_000) + x0)
         )
         inside ^= crosses
 
@@ -50,7 +42,7 @@ def render_polygon(renderer, inputs, params):
     if len(points) < 3:
         raise ValueError("polygon requires at least 3 points")
 
-    if abs(_polygon_area(points)) < 1e-9:
+    if abs(_polygon_area(points)) < 1 / 1_000_000_000:
         raise ValueError("polygon points must enclose a non-zero area")
 
     x, y, width, height = ctx._active_evaluation_rect or (0, 0, *ctx.size)

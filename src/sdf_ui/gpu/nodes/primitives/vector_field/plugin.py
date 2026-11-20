@@ -12,6 +12,18 @@ from sdf_ui.gpu.nodes.base import (
 )
 from sdf_ui.gpu.nodes.common import shader
 
+_CENTER = "center"
+_RADIUS = "radius"
+_STRENGTH = "strength"
+_VECTOR = "vector"
+_AMOUNT = "amount"
+_OCTAVES = "octaves"
+_FREQUENCY = "frequency"
+_AMPLITUDE = "amplitude"
+_LACUNARITY = "lacunarity"
+_FLOAT = "float"
+_FIELD0 = "field0"
+
 
 def _scalar_value(value):
     return value.item() if hasattr(value, "item") else value
@@ -61,41 +73,41 @@ def _field_shader(name, uniforms=(), input_names=()):
 
 
 def _center_uniforms(params):
-    center = _vector_uniform(params["center"], "center")
-    radius = _finite_uniform(params["radius"], "radius", positive=True)
-    strength = _finite_uniform(params["strength"], "strength")
-    return {"center": center, "radius": radius, "strength": strength}
+    center = _vector_uniform(params[_CENTER], _CENTER)
+    radius = _finite_uniform(params[_RADIUS], _RADIUS, positive=True)
+    strength = _finite_uniform(params[_STRENGTH], _STRENGTH)
+    return {_CENTER: center, _RADIUS: radius, _STRENGTH: strength}
 
 
 def _constant_uniforms(params):
-    vector = _vector_uniform(params["vector"], "vector")
-    return {"vector": vector}
+    vector = _vector_uniform(params[_VECTOR], _VECTOR)
+    return {_VECTOR: vector}
 
 
 def _scale_uniforms(params):
-    amount = _finite_uniform(params["amount"], "amount")
-    return {"amount": amount}
+    amount = _finite_uniform(params[_AMOUNT], _AMOUNT)
+    return {_AMOUNT: amount}
 
 
 def _turbulence_uniforms(params):
-    for name in ("octaves", "seed"):
+    for name in (_OCTAVES, "seed"):
         value = params[name]
         scalar = _scalar_value(value)
         if isinstance(scalar, bool) or int(scalar) != scalar:
             raise ValueError(f"{name} must be an integer")
 
-    frequency = _finite_uniform(params["frequency"], "frequency", positive=True)
-    amplitude = _finite_uniform(params["amplitude"], "amplitude")
-    lacunarity = _finite_uniform(params["lacunarity"], "lacunarity", positive=True)
+    frequency = _finite_uniform(params[_FREQUENCY], _FREQUENCY, positive=True)
+    amplitude = _finite_uniform(params[_AMPLITUDE], _AMPLITUDE)
+    lacunarity = _finite_uniform(params[_LACUNARITY], _LACUNARITY, positive=True)
     gain = _finite_uniform(params["gain"], "gain")
-    octaves, seed = int(_scalar_value(params["octaves"])), int(_scalar_value(params["seed"]))
+    octaves, seed = int(_scalar_value(params[_OCTAVES])), int(_scalar_value(params["seed"]))
     if octaves not in range(1, 9):
         raise ValueError("frequency and lacunarity must be positive; octaves must be 1..8")
     return {
-        "frequency": frequency,
-        "amplitude": amplitude,
-        "octaves": octaves,
-        "lacunarity": lacunarity,
+        _FREQUENCY: frequency,
+        _AMPLITUDE: amplitude,
+        _OCTAVES: octaves,
+        _LACUNARITY: lacunarity,
         "gain": gain,
         "seed": seed,
     }
@@ -103,67 +115,68 @@ def _turbulence_uniforms(params):
 
 def register_plugins(registry):
     field_type = TextureKind.FIELD
-    for name, uniforms, defaults, make_uniforms in (
+    for spec in (
         (
             "constant_field",
-            (Uniform("vector", "vec2"),),
-            {"vector": (0.0, 0.0)},
+            (Uniform(_VECTOR, "vec2"),),
+            {_VECTOR: (0.0, 0.0)},
             _constant_uniforms,
         ),
         (
             "radial_field",
-            (Uniform("center", "vec2"), Uniform("radius", "float"), Uniform("strength", "float")),
-            {"strength": 1.0},
+            (Uniform(_CENTER, "vec2"), Uniform(_RADIUS, _FLOAT), Uniform(_STRENGTH, _FLOAT)),
+            {_STRENGTH: 1.0},
             _center_uniforms,
         ),
         (
             "vortex_field",
-            (Uniform("center", "vec2"), Uniform("radius", "float"), Uniform("strength", "float")),
-            {"strength": 1.0},
+            (Uniform(_CENTER, "vec2"), Uniform(_RADIUS, _FLOAT), Uniform(_STRENGTH, _FLOAT)),
+            {_STRENGTH: 1.0},
             _center_uniforms,
         ),
         (
             "turbulence_field",
             (
-                Uniform("frequency", "float"), Uniform("amplitude", "float"),
-                Uniform("octaves", "int"), Uniform("lacunarity", "float"),
-                Uniform("gain", "float"), Uniform("seed", "int"),
+                Uniform(_FREQUENCY, _FLOAT), Uniform(_AMPLITUDE, _FLOAT),
+                Uniform(_OCTAVES, "int"), Uniform(_LACUNARITY, _FLOAT),
+                Uniform("gain", _FLOAT), Uniform("seed", "int"),
             ),
             {"frequency": 0.012, "amplitude": 24.0, "octaves": 4, "lacunarity": 2.0, "gain": 0.5, "seed": 0},
             _turbulence_uniforms,
         ),
     ):
-        params = {
-            "constant_field": ("vector",),
-            "radial_field": ("center", "radius", "strength"),
-            "vortex_field": ("center", "radius", "strength"),
-            "turbulence_field": ("frequency", "amplitude", "octaves", "lacunarity", "gain", "seed"),
-        }[name]
-        registry.register(
-            Plugin(
-                name, PluginFamily.PRIMITIVE, field_type, params=params,
-                defaults=defaults,
-                shader=_field_shader(
-                    name,
-                    uniforms,
-                    ("field0", "field1") if name == "field_add" else ("field0",) if name == "field_scale" else (),
-                ),
-                make_uniforms=make_uniforms,
-                public=True,
-            )
-        )
+        _register_source_field(registry, field_type, spec)
+    _register_field_combinators(registry, field_type)
 
+
+def _register_source_field(registry, field_type, spec):
+    name, uniforms, defaults, make_uniforms = spec
+    parameters = {
+        "constant_field": (_VECTOR,),
+        "radial_field": (_CENTER, _RADIUS, _STRENGTH),
+        "vortex_field": (_CENTER, _RADIUS, _STRENGTH),
+        "turbulence_field": (_FREQUENCY, _AMPLITUDE, _OCTAVES, _LACUNARITY, "gain", "seed"),
+    }[name]
+    registry.register(Plugin(
+        name, PluginFamily.PRIMITIVE, field_type, params=parameters,
+        defaults=defaults,
+        shader=_field_shader(name, uniforms),
+        make_uniforms=make_uniforms,
+        public=True,
+    ))
+
+
+def _register_field_combinators(registry, field_type):
     for name, params, uniforms, inputs, defaults in (
         ("field_add", (), (), (field_type, field_type), {}),
-        ("field_scale", ("amount",), (Uniform("amount", "float"),), (field_type,), {"amount": 1.0}),
+        ("field_scale", (_AMOUNT,), (Uniform(_AMOUNT, _FLOAT),), (field_type,), {_AMOUNT: 1.0}),
     ):
-        registry.register(
-            Plugin(
-                name, PluginFamily.PRIMITIVE, field_type, inputs, params=params,
-                defaults=defaults,
-                shader=_field_shader(name, uniforms, ("field0", "field1") if name == "field_add" else ("field0",)),
-                input_uniforms=("field0", "field1") if name == "field_add" else ("field0",),
-                make_uniforms=_scale_uniforms if name == "field_scale" else None,
-                method_of=(field_type,),
-            )
-        )
+        input_names = (_FIELD0, "field1") if name == "field_add" else (_FIELD0,)
+        registry.register(Plugin(
+            name, PluginFamily.PRIMITIVE, field_type, inputs, params=params,
+            defaults=defaults,
+            shader=_field_shader(name, uniforms, input_names),
+            input_uniforms=input_names,
+            make_uniforms=_scale_uniforms if name == "field_scale" else None,
+            method_of=(field_type,),
+        ))

@@ -59,87 +59,58 @@ def _jump_pass(seed_x, seed_y, step):
     return next_x, next_y
 
 
+def _empty_seeds(field, xx, yy):
+    shape = field.shape
+    seed_x = np.full(shape, -1.0, dtype=np.float32)
+    seed_y = np.full(shape, -1.0, dtype=np.float32)
+    best = np.full(shape, np.inf, dtype=np.float32)
+    zero = field == 0
+    _add_seeds(seed_x, seed_y, best, zero, xx, yy, np.zeros(shape, dtype=np.float32))
+    return seed_x, seed_y, best
+
+
+def _seed_horizontal_edges(field, inside, xx, yy, seeds):
+    seed_x, seed_y, best = seeds
+    left, right = field[:, :-1], field[:, 1:]
+    crossing = inside[:, :-1] != inside[:, 1:]
+    fraction = np.abs(left) / np.maximum(np.abs(left) + np.abs(right), 1e-20)
+    x, y = xx[:, :-1] + fraction, yy[:, :-1]
+    _add_seeds(seed_x[:, :-1], seed_y[:, :-1], best[:, :-1], crossing, x, y, fraction**2)
+    _add_seeds(seed_x[:, 1:], seed_y[:, 1:], best[:, 1:], crossing, x, y, (1.0 - fraction) ** 2)
+
+
+def _seed_vertical_edges(field, inside, xx, yy, seeds):
+    seed_x, seed_y, best = seeds
+    top, bottom = field[:-1, :], field[1:, :]
+    crossing = inside[:-1, :] != inside[1:, :]
+    fraction = np.abs(top) / np.maximum(np.abs(top) + np.abs(bottom), 1e-20)
+    x, y = xx[:-1, :], yy[:-1, :] + fraction
+    _add_seeds(seed_x[:-1, :], seed_y[:-1, :], best[:-1, :], crossing, x, y, fraction**2)
+    _add_seeds(seed_x[1:, :], seed_y[1:, :], best[1:, :], crossing, x, y, (1.0 - fraction) ** 2)
+
+
+def _propagate_seeds(seed_x, seed_y):
+    height, width = seed_x.shape
+    step = 1 << (max(height, width).bit_length() - 1)
+    while step >= 1:
+        seed_x, seed_y = _jump_pass(seed_x, seed_y, step)
+        step >>= 1
+    return _jump_pass(seed_x, seed_y, 1)
+
+
 def redistance(field):
     """Approximate signed distance to a sampled field's subpixel zero contour."""
     height, width = field.shape
     if min(field.shape) < 2:
         raise ValueError("redistance needs at least a 2x2 field")
     inside = field < 0
-    seed_x = np.full(field.shape, -1.0, dtype=np.float32)
-    seed_y = np.full(field.shape, -1.0, dtype=np.float32)
-    best_distance_sq = np.full(field.shape, np.inf, dtype=np.float32)
     yy, xx = np.mgrid[0:height, 0:width].astype(np.float32)
-
-    zero = field == 0
-    _add_seeds(
-        seed_x,
-        seed_y,
-        best_distance_sq,
-        zero,
-        xx,
-        yy,
-        np.zeros(field.shape, dtype=np.float32),
-    )
-
-    # Seed both endpoints of every sign-changing grid edge with the same
-    # linearly interpolated subpixel zero crossing.
-    left, right = field[:, :-1], field[:, 1:]
-    crossing = inside[:, :-1] != inside[:, 1:]
-    fraction = np.abs(left) / np.maximum(np.abs(left) + np.abs(right), 1e-20)
-    crossing_x = xx[:, :-1] + fraction
-    crossing_y = yy[:, :-1]
-    _add_seeds(
-        seed_x[:, :-1],
-        seed_y[:, :-1],
-        best_distance_sq[:, :-1],
-        crossing,
-        crossing_x,
-        crossing_y,
-        fraction * fraction,
-    )
-    _add_seeds(
-        seed_x[:, 1:],
-        seed_y[:, 1:],
-        best_distance_sq[:, 1:],
-        crossing,
-        crossing_x,
-        crossing_y,
-        (1.0 - fraction) ** 2,
-    )
-
-    top, bottom = field[:-1, :], field[1:, :]
-    crossing = inside[:-1, :] != inside[1:, :]
-    fraction = np.abs(top) / np.maximum(np.abs(top) + np.abs(bottom), 1e-20)
-    crossing_x = xx[:-1, :]
-    crossing_y = yy[:-1, :] + fraction
-    _add_seeds(
-        seed_x[:-1, :],
-        seed_y[:-1, :],
-        best_distance_sq[:-1, :],
-        crossing,
-        crossing_x,
-        crossing_y,
-        fraction * fraction,
-    )
-    _add_seeds(
-        seed_x[1:, :],
-        seed_y[1:, :],
-        best_distance_sq[1:, :],
-        crossing,
-        crossing_x,
-        crossing_y,
-        (1.0 - fraction) ** 2,
-    )
-
+    seeds = _empty_seeds(field, xx, yy)
+    _seed_horizontal_edges(field, inside, xx, yy, seeds)
+    _seed_vertical_edges(field, inside, xx, yy, seeds)
+    seed_x, seed_y, _best = seeds
     if not np.any(seed_x >= 0):
         raise ValueError("redistance requires a zero contour in the sampled field")
-
-    step = 1 << (max(height, width).bit_length() - 1)
-    while step >= 1:
-        seed_x, seed_y = _jump_pass(seed_x, seed_y, step)
-        step >>= 1
-    # JFA+1 improves nearest-feature propagation around competing boundaries.
-    seed_x, seed_y = _jump_pass(seed_x, seed_y, 1)
-
+    seed_x, seed_y = _propagate_seeds(seed_x, seed_y)
     distance = np.hypot(xx - seed_x, yy - seed_y)
     return np.where(inside, -distance, distance).astype(np.float32)

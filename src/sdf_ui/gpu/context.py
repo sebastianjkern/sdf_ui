@@ -20,6 +20,17 @@ from typing import TYPE_CHECKING, Any
 
 import wgpu
 
+from ._context_resources import (
+    _bind_resource,
+    _require_context_image,
+    _validated_image_region,
+    _wrap_gpu_buffer,
+    _wrap_gpu_image,
+)
+
+_ORIGIN_KEY = "origin"
+_TIMESTAMP_RESOLUTION = 1e-9
+
 if TYPE_CHECKING:
     from ..core.texture import Renderer
     from ..graph.runtime import FitResult
@@ -193,57 +204,34 @@ class Context:
     def __init__(
         self,
         size: tuple[int, int],
-        dispatch_config: DispatchConfig | dict[str, Any] | None = None,
+        dispatch_config: Any = None,
         *,
         power_preference: str = "high-performance",
         device_scale: float = 1.0,
         enable_gpu_timing: bool = False,
     ) -> None:
-        try:
-            values = tuple(size)
-        except TypeError as exc:
-            raise ValueError(
-                "size must be a pair of positive integer width and height values"
-            ) from exc
-        if len(values) != 2 or any(
-            isinstance(value, bool) or not isinstance(value, Integral)
-            for value in values
-        ):
-            raise ValueError(
-                "size must be a pair of positive integer width and height values"
-            )
-        self.logical_size = (int(values[0]), int(values[1]))
-        if min(self.logical_size) <= 0:
-            raise ValueError(
-                "size must be a pair of positive integer width and height values"
-            )
-        if (
-            isinstance(device_scale, bool)
-            or not isinstance(device_scale, Real)
-            or not math.isfinite(device_scale)
-            or device_scale <= 0
-        ):
-            raise ValueError("device_scale must be a finite positive number")
-        self.device_scale = float(device_scale)
-        self.size = tuple(
-            max(1, round(value * self.device_scale)) for value in self.logical_size
-        )
+        self.logical_size = _validated_logical_size(size)
+        self.device_scale = _validated_device_scale(device_scale)
+        self.size = _scaled_size(self.logical_size, self.device_scale)
         self._closed = False
         self.ctx = self
         self._training_graphs: weakref.WeakSet[Any] = weakref.WeakSet()
         self._image_generation = 0
-        self.dispatch_config = DispatchConfig.from_value(dispatch_config)
-        self.dispatch_groups = self.dispatch_config.groups_for_size(self.size)
+        self.dispatch_config, self.dispatch_groups = _dispatch_configuration(
+            dispatch_config, self.size
+        )
         self._active_progress = 0.0
+        self._initialize_device(power_preference, enable_gpu_timing)
+        self._initialize_render_state()
+
+    def _initialize_device(self, power_preference, enable_gpu_timing):
         self.adapter = wgpu.gpu.request_adapter_sync(power_preference=power_preference)
         if self.adapter is None:
             raise RuntimeError("No WebGPU adapter is available")
-        timestamp_features = {"timestamp-query", "timestamp-query-inside-passes"}
         if not isinstance(enable_gpu_timing, bool):
             raise TypeError("enable_gpu_timing must be a bool")
-        self.gpu_timing_supported = (
-            enable_gpu_timing and timestamp_features <= self.adapter.features
-        )
+        timestamp_features = {"timestamp-query", "timestamp-query-inside-passes"}
+        self.gpu_timing_supported = enable_gpu_timing and timestamp_features <= self.adapter.features
         self.device = self.adapter.request_device_sync(
             label="sdf-ui device",
             required_features=sorted(timestamp_features)
@@ -251,6 +239,8 @@ class Context:
             else (),
         )
         self.queue = self.device.queue
+
+    def _initialize_render_state(self):
         self._pipelines: dict[Any, Any] = {}
         self._pipeline_bindings: dict[int, Any] = {}
         self._uniform_buffers: dict[Any, Any] = {}
@@ -267,6 +257,7 @@ class Context:
         self._deferred_destroys = []
         self._batch_uniform_buffers = {}
         self._batch_transient_uniforms = []
+
 
     @property
     def device_info(self) -> dict[str, Any]:
@@ -410,20 +401,12 @@ class Context:
     def bind_group(self, pipeline, resources, *, group=0, label=""):
         """Create a bind group from binding-indexed buffers or image views."""
         self._check_open()
-        from .image import GPUImage
-        from .resources import GPUBuffer
-
         entries = []
         active = self._pipeline_bindings.get(id(pipeline), {}).get(group)
         for binding, resource in sorted(resources.items()):
             if active is not None and binding not in active:
                 continue
-            if isinstance(resource, GPUImage):
-                resource._check_open()
-                resource = resource.texture.create_view()
-            elif isinstance(resource, GPUBuffer):
-                resource._check_open()
-                resource = resource.buffer
+            resource = _bind_resource(resource)
             entries.append({"binding": binding, "resource": resource})
         return self.device.create_bind_group(
             label=label,
@@ -436,46 +419,48 @@ class Context:
     ):
         """Encode and submit one compute pass with its ordered bind groups."""
         self._check_open()
-        groups = (
-            self.dispatch_groups
-            if group_count is None
-            else _triple(group_count, "group_count")
-        )
+        groups = self.dispatch_groups if group_count is None else _triple(group_count, "group_count")
         stats = self._active_render_stats
-        measure = (
-            timestamp_name is not None
-            and stats is not None
-            and self.gpu_timing_supported
+        measurement = self._dispatch_measurement(timestamp_name, stats)
+        encoder = self._dispatch_encoder(label)
+        self._encode_dispatch(encoder, pipeline, bind_groups, groups, label, measurement)
+        if not self._command_batch_active:
+            self.queue.submit([encoder.finish()])
+        if measurement is not None:
+            stats._pending_gpu_timestamps.append((timestamp_name, *measurement))
+        return groups
+
+    def _dispatch_measurement(self, timestamp_name, stats):
+        if not (timestamp_name is not None and stats is not None and self.gpu_timing_supported):
+            return None
+        query_set = self.device.create_query_set(
+            label=f"{timestamp_name} timestamps", type="timestamp", count=2
         )
-        query_set = resolve_buffer = read_buffer = None
-        if measure:
-            query_set = self.device.create_query_set(
-                label=f"{timestamp_name} timestamps", type="timestamp", count=2
-            )
-            resolve_buffer = self.create_buffer(
-                16,
-                usage=wgpu.BufferUsage.QUERY_RESOLVE | wgpu.BufferUsage.COPY_SRC,
-                label=f"{timestamp_name} timestamp resolve",
-            )
-            read_buffer = self.create_buffer(
-                16,
-                usage=wgpu.BufferUsage.MAP_READ | wgpu.BufferUsage.COPY_DST,
-                label=f"{timestamp_name} timestamp readback",
-            )
+        resolve_buffer = self.create_buffer(
+            16, usage=wgpu.BufferUsage.QUERY_RESOLVE | wgpu.BufferUsage.COPY_SRC,
+            label=f"{timestamp_name} timestamp resolve",
+        )
+        read_buffer = self.create_buffer(
+            16, usage=wgpu.BufferUsage.MAP_READ | wgpu.BufferUsage.COPY_DST,
+            label=f"{timestamp_name} timestamp readback",
+        )
+        return query_set, resolve_buffer, read_buffer
+
+    def _dispatch_encoder(self, label):
         encoder = self._command_encoder
         if encoder is None:
             encoder = self.device.create_command_encoder(label=label)
             if self._command_batch_active:
                 self._command_encoder = encoder
-        timestamp_writes = (
-            {
-                "query_set": query_set,
-                "beginning_of_pass_write_index": 0,
-                "end_of_pass_write_index": 1,
-            }
-            if measure
-            else None
-        )
+        return encoder
+
+    @staticmethod
+    def _encode_dispatch(encoder, pipeline, bind_groups, groups, label, measurement):
+        timestamp_writes = None if measurement is None else {
+            "query_set": measurement[0],
+            "beginning_of_pass_write_index": 0,
+            "end_of_pass_write_index": 1,
+        }
         compute = encoder.begin_compute_pass(
             label=label, timestamp_writes=timestamp_writes
         )
@@ -484,16 +469,9 @@ class Context:
             compute.set_bind_group(index, bind_group)
         compute.dispatch_workgroups(*groups)
         compute.end()
-        if measure:
-            encoder.resolve_query_set(query_set, 0, 2, resolve_buffer, 0)
-            encoder.copy_buffer_to_buffer(resolve_buffer, 0, read_buffer, 0, 16)
-        if not self._command_batch_active:
-            self.queue.submit([encoder.finish()])
-        if measure:
-            stats._pending_gpu_timestamps.append(
-                (timestamp_name, query_set, resolve_buffer, read_buffer)
-            )
-        return groups
+        if measurement is not None:
+            encoder.resolve_query_set(measurement[0], 0, 2, measurement[1], 0)
+            encoder.copy_buffer_to_buffer(measurement[1], 0, measurement[2], 0, 16)
 
     def _resolve_shader_timings(self, stats):
         pending = stats._pending_gpu_timestamps
@@ -507,7 +485,7 @@ class Context:
                     start, end = struct.unpack("<QQ", read_buffer.read_mapped())
                     stats.shader_gpu_seconds_by_name[name] = (
                         stats.shader_gpu_seconds_by_name.get(name, 0.0)
-                        + max(0, end - start) * 1e-9
+                        + max(0, end - start) * _TIMESTAMP_RESOLUTION
                     )
                 finally:
                     read_buffer.unmap()
@@ -950,8 +928,6 @@ class Context:
         self._check_open()
         if isinstance(size, bool) or not isinstance(size, Integral) or size < 0:
             raise ValueError("buffer size must be a nonnegative integer")
-        from .resources import GPUBuffer
-
         buffer = self.device.create_buffer(
             label=label,
             size=max(4, (int(size) + 3) & ~3),
@@ -961,7 +937,7 @@ class Context:
                 | wgpu.BufferUsage.COPY_DST
             ),
         )
-        return GPUBuffer(self, buffer)
+        return _wrap_gpu_buffer(self, buffer)
 
     def create_image(
         self,
@@ -974,10 +950,18 @@ class Context:
     ) -> Any:
         """Allocate an owned image usable for storage, sampling, and copies."""
         self._check_open()
+        width, height, origin_value, canvas_size_value = self._image_extent(
+            size, origin, canvas_size
+        )
+        texture, reused = self._acquire_image(format, label, width, height)
+        self._record_image_allocation(format, reused)
+        return _wrap_gpu_image(self, texture, width, height, format, origin_value, canvas_size_value)
+
+    def _image_extent(self, size, origin, canvas_size):
         size_value = (
             None if size is None else _integer_pair(size, "size", positive=True)
         )
-        origin_value = _integer_pair(origin, "origin", positive=False)
+        origin_value = _integer_pair(origin, _ORIGIN_KEY, positive=False)
         canvas_size_value = _integer_pair(
             canvas_size
             if canvas_size is not None
@@ -998,6 +982,9 @@ class Context:
             or origin_value[1] + height > canvas_size_value[1]
         ):
             raise ValueError("image extent and origin must fit inside canvas_size")
+        return width, height, origin_value, canvas_size_value
+
+    def _acquire_image(self, format, label, width, height):
         pool_key = (format, int(width), int(height))
         pooled = self._image_pool.get(pool_key)
         texture = pooled.pop() if pooled else None
@@ -1019,8 +1006,9 @@ class Context:
                     | wgpu.TextureUsage.COPY_DST
                 ),
             )
-        from .image import GPUImage
+        return texture, reused
 
+    def _record_image_allocation(self, format, reused):
         stats = self._active_render_stats
         if stats is not None:
             if reused:
@@ -1029,14 +1017,6 @@ class Context:
                 stats.record_texture_allocation(
                     "sdf" if format == "r32float" else "color"
                 )
-        return GPUImage(
-            self,
-            texture,
-            size=(width, height),
-            format=format,
-            origin=origin_value,
-            canvas_size=canvas_size_value,
-        )
 
     @staticmethod
     def _image_byte_size(format, width, height):
@@ -1133,11 +1113,7 @@ class Context:
     def copy_image(self, image: Any, *, label: str = "image copy") -> Any:
         """Copy a GPU image without mapping or reading pixels on the CPU."""
         self._check_open()
-        from .image import GPUImage
-
-        if not isinstance(image, GPUImage) or image.context is not self:
-            raise ValueError("Image must belong to this WebGPU context")
-        image._check_open()
+        _require_context_image(image, self)
         self.flush_commands()
         result = self.create_image(
             image.size,
@@ -1148,8 +1124,8 @@ class Context:
         )
         encoder = self.device.create_command_encoder(label=label)
         encoder.copy_texture_to_texture(
-            {"texture": image.texture, "mip_level": 0, "origin": (0, 0, 0)},
-            {"texture": result.texture, "mip_level": 0, "origin": (0, 0, 0)},
+            {"texture": image.texture, "mip_level": 0, _ORIGIN_KEY: (0, 0, 0)},
+            {"texture": result.texture, "mip_level": 0, _ORIGIN_KEY: (0, 0, 0)},
             (image.size[0], image.size[1], 1),
         )
         self.queue.submit([encoder.finish()])
@@ -1157,41 +1133,37 @@ class Context:
 
     def copy_image_region(self, source: Any, destination: Any, rect) -> None:
         """Copy a cropped image into the matching rectangle of a full image."""
-        from .image import GPUImage
-        from .regions import normalize_rect
-
-        if (
-            not isinstance(source, GPUImage)
-            or not isinstance(destination, GPUImage)
-            or source.context is not self
-            or destination.context is not self
-        ):
-            raise ValueError("Images must belong to this WebGPU context")
-        source._check_open()
-        destination._check_open()
-        rect = normalize_rect(rect, destination.canvas_size)
+        rect = _validated_image_region(self, source, destination, rect)
         x, y, width, height = rect
-        if (
-            source.format != destination.format
-            or tuple(source.origin) != (x, y)
-            or tuple(source.size) != (width, height)
-            or tuple(destination.origin) != (0, 0)
-            or tuple(destination.size) != tuple(destination.canvas_size)
-        ):
-            raise ValueError("Source and destination extents do not match rect")
+        self._validate_image_region_extents(source, destination, rect)
         encoder = self._command_encoder
         if encoder is None:
             encoder = self.device.create_command_encoder(label="image region copy")
             if self._command_batch_active:
                 self._command_encoder = encoder
         encoder.copy_texture_to_texture(
-            {"texture": source.texture, "mip_level": 0, "origin": (0, 0, 0)},
-            {"texture": destination.texture, "mip_level": 0, "origin": (x, y, 0)},
+            {"texture": source.texture, "mip_level": 0, _ORIGIN_KEY: (0, 0, 0)},
+            {"texture": destination.texture, "mip_level": 0, _ORIGIN_KEY: (x, y, 0)},
             (width, height, 1),
         )
         destination.mark_modified()
         if not self._command_batch_active:
             self.queue.submit([encoder.finish()])
+
+    @staticmethod
+    def _validate_image_region_extents(source, destination, rect):
+        x, y, width, height = rect
+        source_matches = (
+            source.format == destination.format
+            and tuple(source.origin) == (x, y)
+            and tuple(source.size) == (width, height)
+        )
+        destination_matches = (
+            tuple(destination.origin) == (0, 0)
+            and tuple(destination.size) == tuple(destination.canvas_size)
+        )
+        if not source_matches or not destination_matches:
+            raise ValueError("Source and destination extents do not match rect")
 
     def close(self) -> None:
         if self._closed:
@@ -1283,3 +1255,38 @@ def _pack_uniform_field(payload, values, offset, fmt, name, glsl_type, count):
         raise ValueError(f"Uniform '{name}' requires {count} values")
     for index, component in enumerate(components):
         struct.pack_into("=" + fmt, payload, offset + index * 16, component)
+def _validated_logical_size(size):
+    try:
+        values = tuple(size)
+    except TypeError as exc:
+        raise ValueError(
+            "size must be a pair of positive integer width and height values"
+        ) from exc
+    valid_pair = len(values) == 2 and all(
+        not isinstance(value, bool) and isinstance(value, Integral) for value in values
+    )
+    if not valid_pair or min(values) <= 0:
+        raise ValueError("size must be a pair of positive integer width and height values")
+    return int(values[0]), int(values[1])
+
+
+def _validated_device_scale(device_scale):
+    if (
+        isinstance(device_scale, bool)
+        or not isinstance(device_scale, Real)
+        or not math.isfinite(device_scale)
+        or device_scale <= 0
+    ):
+        raise ValueError("device_scale must be a finite positive number")
+    return float(device_scale)
+
+
+def _scaled_size(logical_size, device_scale):
+    return tuple(max(1, round(value * device_scale)) for value in logical_size)
+
+
+
+
+def _dispatch_configuration(value, size):
+    config = DispatchConfig.from_value(value)
+    return config, config.groups_for_size(size)

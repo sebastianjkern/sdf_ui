@@ -9,13 +9,17 @@ and final MP4. Run from the repository root with::
 
 import argparse
 import math
-import shutil
-import subprocess
 import tempfile
-import wave
 from pathlib import Path
 from time import monotonic, strftime
 
+from examples._lagrange_short_audio import speak_clips
+from examples._lagrange_short_video import (
+    encode_silent_video,
+    mux_audio,
+    select_video_encoder,
+    write_subtitles,
+)
 from sdf_ui import Canvas, Plot, color, sdf
 from sdf_ui.anim import timeline_position
 from sdf_ui.widgets import Panel, progress_bar
@@ -38,7 +42,7 @@ TRANSPARENT = (0.0, 0.0, 0.0, 0.0)
 # The plot uses the lower-left canvas origin used by SDF UI geometry.
 PLOT_ORIGIN = (116.0, 92.0)
 PLOT_SCALE = 454.0
-PLOT = Plot((*PLOT_ORIGIN, 1.2 * PLOT_SCALE, 1.2 * PLOT_SCALE), (0, 1.2), (0, 1.2))
+PLOT = Plot((*PLOT_ORIGIN, 6 / 5 * PLOT_SCALE, 6 / 5 * PLOT_SCALE), (0, 6 / 5), (0, 6 / 5))
 
 NARRATION = (
     "Can you maximize a function if you can only move along a curve?",
@@ -105,87 +109,6 @@ def _log(message):
     print(f"[{strftime('%H:%M:%S')}] {message}", flush=True)
 
 
-def _speak_clips(directory, speed=150):
-    """Synthesize narration clips and return their timings and sample format."""
-    executable = shutil.which("espeak-ng")
-    if executable is None:
-        raise RuntimeError("espeak-ng is required to render the narrated short")
-
-    clips = []
-    durations = []
-    wave_params = None
-    _log(f"Synthesizing {len(NARRATION)} narration clips with espeak-ng")
-    for index, sentence in enumerate(NARRATION):
-        _log(f"Narration {index + 1}/{len(NARRATION)}: starting synthesis")
-        clip_started = monotonic()
-        path = directory / f"voice_{index:02d}.wav"
-        subprocess.run(
-            [
-                executable,
-                "-v",
-                "en-us+m3",
-                "-s",
-                str(speed),
-                "-p",
-                "44",
-                "-a",
-                "165",
-                "-w",
-                str(path),
-                sentence,
-            ],
-            check=True,
-            stdout=subprocess.DEVNULL,
-        )
-        with wave.open(str(path), "rb") as clip:
-            params = clip.getparams()
-            samples = clip.readframes(clip.getnframes())
-        if wave_params is None:
-            wave_params = params
-        elif (params.nchannels, params.sampwidth, params.framerate) != (
-            wave_params.nchannels,
-            wave_params.sampwidth,
-            wave_params.framerate,
-        ):
-            raise RuntimeError("speech clips were synthesized with mismatched formats")
-        clips.append(samples)
-        clip_duration = len(samples) / (
-            params.framerate * params.nchannels * params.sampwidth
-        )
-        durations.append(clip_duration)
-        _log(
-            f"Narration {index + 1}/{len(NARRATION)}: "
-            f"{clip_duration:.1f}s audio ready in {monotonic() - clip_started:.1f}s"
-        )
-
-    speech_duration = sum(durations)
-    if speech_duration >= DURATION - 1.0:
-        raise RuntimeError(
-            f"Narration is too long ({speech_duration:.1f}s); increase speech speed"
-        )
-
-    pause = (DURATION - speech_duration) / len(clips)
-    _log(
-        f"Narration totals {speech_duration:.1f}s; inserting "
-        f"{pause:.1f}s pauses to fill {DURATION:.0f}s"
-    )
-    starts = []
-    silence_frames = round(pause * wave_params.framerate)
-    silence = bytes(silence_frames * wave_params.nchannels * wave_params.sampwidth)
-    audio = bytearray()
-    elapsed = 0.0
-    for samples, clip_duration in zip(clips, durations):
-        starts.append(elapsed)
-        audio.extend(samples)
-        audio.extend(silence)
-        elapsed += clip_duration + pause
-
-    narration_path = directory / "lagrange_intuition_narration.wav"
-    with wave.open(str(narration_path), "wb") as output:
-        output.setparams(wave_params._replace(nframes=0))
-        output.writeframes(audio)
-    return narration_path, starts, durations, pause
-
 
 def _text(
     value,
@@ -218,327 +141,231 @@ def _formula(value, center, size=34, tint=GOLD):
 
 def _level_curve(level, tint, width=2.2, *, cache=True):
     # Keep the endpoints a little inside the viewport, clear of the labels.
-    curve = PLOT.curve(lambda x: level / x, domain=(level / 1.18, 1.18))
+    curve = PLOT.curve(lambda x: level / x, domain=(level / 59 / 50, 1.18))
     if not cache:
         curve = curve.uncached()
     layer = curve.stroke(width, tint)
     return layer if cache else layer.uncached()
 
 
-def _build_static_scenes():
-    """Build common plot layers and the seven reusable explanation panels."""
-    scene = color.clear(BG)
-
-    # Main heading and a compact problem statement.
-    scene = scene.over(
-        _text(
-            "A GEOMETRIC GUIDE TO OPTIMIZATION", (66, 665, 740, 28), size=17, tint=MUTED
-        )
-    )
-    scene = scene.over(
-        _formula(
-            "\\text{Maximize }f(x,y)=xy\\quad\\text{on}\\quad x^2+y^2=1",
-            (640, 641),
-            size=34,
-            tint=WHITE,
-        )
-    )
-
-    # Plot grid, axes, tick labels, and the unit-circle constraint.
-    scene = scene.over(
-        PLOT.axes(
-            x_ticks=(0, 0.5, 1),
-            y_ticks=(0.5, 1),
-            axis_color=MUTED,
-            grid_color=GRID,
-            x_label="x",
-            y_label="y",
-        )
-    )
-
+def _static_plot():
+    scene = color.clear(BG).over(
+        _text("A GEOMETRIC GUIDE TO OPTIMIZATION", (66, 665, 740, 28), size=17, tint=MUTED)
+    ).over(_formula(
+        r"\text{Maximize }f(x,y)=xy\quad\text{on}\quad x^2+y^2=1",
+        (640, 641), size=34, tint=WHITE,
+    )).over(PLOT.axes(
+        x_ticks=(0, 0.5, 1), y_ticks=(0.5, 1), axis_color=MUTED,
+        grid_color=GRID, x_label="x", y_label="y",
+    ))
     constraint = sdf.arc(PLOT_ORIGIN, PLOT_SCALE, 0.0, math.pi / 2).stroke(3.0, TEAL)
-    scene = scene.over(constraint)
-    scene = scene.over(
+    scene = scene.over(constraint).over(
         _formula("x^2+y^2=1", PLOT.point(0.62, 1.04), size=23, tint=TEAL)
-    )
-    scene = scene.over(_text("constraint", (450, 100, 125, 25), size=14, tint=TEAL))
+    ).over(_text("constraint", (450, 100, 125, 25), size=14, tint=TEAL))
+    return scene.cache("lagrange_short_plot")
 
-    common = scene.cache("lagrange_short_plot")
-    contour_scene = color.clear(TRANSPARENT)
-    for level in (0.08, 0.16, 0.24, 0.32, 0.40, 0.46):
-        contour = _level_curve(level, (1.0, 0.78, 0.47, 0.42), width=1.35)
-        contour_scene = contour_scene.over(contour)
-    contour_scene = contour_scene.cache("lagrange_short_contours")
 
+def _contour_scene():
+    scene = color.clear(TRANSPARENT)
+    for level in (0.08, 0.16, 0.24, 0.32, 2 / 5, 0.46):
+        scene = scene.over(_level_curve(level, (1.0, 0.78, 0.47, 0.42), width=1.35))
+    return scene.cache("lagrange_short_contours")
+
+
+def _story_panels(common, contours):
     card = Panel((700, 85, 520, 540), padding=(35, 24), radius=20)
     left, _, width, _ = card.content_box
-    panels = []
-    for index, (header, body, formulas, note) in enumerate(STORY):
-        panel = card.layer(PANEL)
-        panel = panel.over(_text(header, (left, 585, width, 36), size=19, tint=TEAL))
-        panel = panel.over(
-            _text(body, (left, 425, width, 132), size=25, tint=WHITE, valign="top")
-        )
-        for formula_index, expression in enumerate(formulas):
-            tint = (GOLD, TEAL, PURPLE)[formula_index % 3]
-            center_y = 330 - formula_index * 64
-            panel = panel.over(_formula(expression, (960, center_y), tint=tint))
-        if note:
-            panel = panel.over(
-                _text(note, (left, 98, width, 62), size=18, tint=MUTED, valign="top")
-            )
-        panels.append(panel.cache(f"lagrange_short_panel_{index}"))
-
     scenes = []
-    for index, panel in enumerate(panels):
-        base = common.over(panel)
+    for index, (header, body, formulas, note) in enumerate(STORY):
+        panel = card.layer(PANEL).over(_text(header, (left, 585, width, 36), size=19, tint=TEAL))
+        panel = panel.over(_text(body, (left, 425, width, 132), size=25, tint=WHITE, valign="top"))
+        for formula_index, expression in enumerate(formulas):
+            panel = panel.over(_formula(
+                expression, (960, 330 - formula_index * 64),
+                tint=(GOLD, TEAL, PURPLE)[formula_index % 3],
+            ))
+        if note:
+            panel = panel.over(_text(note, (left, 98, width, 62), size=18, tint=MUTED, valign="top"))
+        scene = common.over(panel)
         if index >= 2:
-            base = base.over(contour_scene)
-        scenes.append(base.cache(f"lagrange_short_section_{index}"))
+            scene = scene.over(contours)
+        scenes.append(scene.cache(f"lagrange_short_section_{index}"))
+    return scenes
 
+
+def _gradient_labels():
     optimum = 1 / math.sqrt(2)
-    short_end = PLOT.point(optimum + 0.2, optimum + 0.2)
-    long_end = PLOT.point(optimum + 0.4, optimum + 0.4)
-    gradient_labels = color.clear(TRANSPARENT)
-    gradient_labels = gradient_labels.over(
-        _formula(
-            "\\nabla f", (short_end[0] + 30, short_end[1] + 12), size=24, tint=GOLD
-        )
+    labels = color.clear(TRANSPARENT).over(_formula(
+        r"\nabla f", (PLOT.point(optimum + 1 / 5, optimum + 1 / 5)[0] + 30,
+        PLOT.point(optimum + 1 / 5, optimum + 1 / 5)[1] + 12), size=24, tint=GOLD,
+    ))
+    end = PLOT.point(optimum + 2 / 5, optimum + 2 / 5)
+    return labels.over(_formula(r"\nabla g", (end[0] + 30, end[1] + 12), size=24, tint=PURPLE)).cache(
+        "lagrange_short_gradient_labels"
     )
-    gradient_labels = gradient_labels.over(
-        _formula(
-            "\\nabla g", (long_end[0] + 30, long_end[1] + 12), size=24, tint=PURPLE
-        )
-    ).cache("lagrange_short_gradient_labels")
-    return scenes, gradient_labels
+
+
+def _build_static_scenes():
+    """Build common plot layers and the seven reusable explanation panels."""
+    common, contours = _static_plot(), _contour_scene()
+    return _story_panels(common, contours), _gradient_labels()
+
+
+def _frame_angle(section, local):
+    angles = (0.16, 4 / 25 + 13 / 50 * local, 21 / 50 + 7 / 25 * local,
+              7 / 10 + (math.pi / 4 - 7 / 10) * local, math.pi / 4)
+    return angles[min(section, len(angles) - 1)]
+
+
+
+def _gradient_arrows(scene, start, gradient_labels):
+    long_end = PLOT.point(start[0] + 4 / 10, start[1] + 4 / 10)
+    short_end = PLOT.point(start[0] + 2 / 10, start[1] + 2 / 10)
+    scene = scene.over(
+        sdf.arrow(start, long_end, width=3.2).fill(PURPLE, TRANSPARENT), cache=False
+    )
+    scene = scene.over(
+        sdf.arrow(start, short_end, width=3.2).fill(GOLD, TRANSPARENT), cache=False
+    )
+    return scene.over(gradient_labels, cache=False)
+
+def _tangent_layers(scene, section, angle, level, gradient_labels):
+    if section < 3:
+        return scene
+    optimum = 1 / math.sqrt(2)
+    optimum_pixel = PLOT.point(optimum, optimum)
+    ring = sdf.circle(optimum_pixel, 12).uncached().stroke(2, GOLD).uncached()
+    tangent = sdf.segment(
+        PLOT.point(optimum - 6 / 25, optimum + 6 / 25),
+        PLOT.point(optimum + 6 / 25, optimum - 6 / 25), 1.5,
+    ).uncached().fill(PURPLE, TRANSPARENT).uncached()
+    scene = scene.over(tangent, cache=False).over(ring, cache=False)
+    if section == 3 and level < 499 / 1_000:
+        other = PLOT.point(math.cos(math.pi / 2 - angle), math.sin(math.pi / 2 - angle))
+        marker = sdf.circle(other, 6).uncached().fill(GOLD, TRANSPARENT).uncached()
+        scene = scene.over(marker, cache=False)
+    if section >= 4:
+        scene = _gradient_arrows(scene, optimum_pixel, gradient_labels)
+    return scene
+
+
+def _point_annotations(scene, section, point, level):
+    if section < 2:
+        return scene
+    label_x = min(1.08, max(0.76, point[0] + 1 / 10))
+    label_y = min(1.13, max(0.13, level / label_x + 1 / 20))
+    return scene.over(PLOT.annotate(
+        (label_x, label_y), "xy = c", offset=(0, 7), size=16, tint=GOLD, cache=False
+    ), cache=False)
+
+
+def _frame_hud(scene, time):
+    scene = scene.over(progress_bar(
+        (67.5, 32.5, 1145, 5), time / DURATION,
+        track_color=GRID, fill_color=TEAL, cache=False,
+    ), cache=False)
+    clock = f"{int(time // 60):01d}:{int(time % 60):02d}"
+    return scene.over(_text(
+        clock, (1150, 8, 62, 20), size=13, tint=MUTED,
+        align="right", cache=False,
+    ), cache=False)
 
 
 def _frame_scene(time, starts, durations, static_scenes, gradient_labels):
     section, local = timeline_position(time, starts, durations)
-    if section == 0:
-        angle = 0.16
-    elif section == 1:
-        angle = 0.16 + 0.26 * local
-    elif section == 2:
-        angle = 0.42 + 0.28 * local
-    elif section == 3:
-        angle = 0.70 + (math.pi / 4 - 0.70) * local
-    else:
-        angle = math.pi / 4
-
+    angle = _frame_angle(section, local)
     point = (math.cos(angle), math.sin(angle))
     level = 0.5 * math.sin(2 * angle)
     scene = static_scenes[section]
-
     if section >= 1:
-        current = _level_curve(level, GOLD, width=3.0, cache=False)
-        scene = scene.over(current, cache=False)
-    if section >= 3:
-        optimum = 1 / math.sqrt(2)
-        optimum_pixel = PLOT.point(optimum, optimum)
-        ring = sdf.circle(optimum_pixel, 12).uncached().stroke(2, GOLD).uncached()
-        tangent = (
-            sdf.segment(
-                PLOT.point(optimum - 0.24, optimum + 0.24),
-                PLOT.point(optimum + 0.24, optimum - 0.24),
-                1.5,
-            )
-            .uncached()
-            .fill(PURPLE, TRANSPARENT)
-            .uncached()
-        )
-        scene = scene.over(tangent, cache=False)
-        scene = scene.over(ring, cache=False)
-        if section == 3 and level < 0.499:
-            other_angle = math.pi / 2 - angle
-            other_point = PLOT.point(math.cos(other_angle), math.sin(other_angle))
-            scene = scene.over(
-                sdf.circle(other_point, 6)
-                .uncached()
-                .fill(GOLD, TRANSPARENT)
-                .uncached(),
-                cache=False,
-            )
-        if section >= 4:
-            start = optimum_pixel
-            short_end = PLOT.point(optimum + 0.2, optimum + 0.2)
-            long_end = PLOT.point(optimum + 0.4, optimum + 0.4)
-            scene = scene.over(
-                sdf.arrow(start, long_end, width=3.2).fill(PURPLE, TRANSPARENT),
-                cache=False,
-            )
-            scene = scene.over(
-                sdf.arrow(start, short_end, width=3.2).fill(GOLD, TRANSPARENT),
-                cache=False,
-            )
-            scene = scene.over(gradient_labels, cache=False)
-
+        scene = scene.over(_level_curve(level, GOLD, width=3.0, cache=False), cache=False)
+    scene = _tangent_layers(scene, section, angle, level, gradient_labels)
     point_pixel = PLOT.point(*point)
-    scene = scene.over(
-        sdf.circle(point_pixel, 8).uncached().fill(WHITE, TRANSPARENT).uncached(),
-        cache=False,
-    )
-    if section >= 2:
-        label_x = min(1.08, max(0.76, point[0] + 0.10))
-        label_y = min(1.13, max(0.13, level / label_x + 0.05))
-        scene = scene.over(
-            PLOT.annotate(
-                (label_x, label_y),
-                "xy = c",
-                offset=(0, 7),
-                size=16,
-                tint=GOLD,
-                cache=False,
-            ),
-            cache=False,
-        )
-
-    scene = scene.over(
-        progress_bar(
-            (67.5, 32.5, 1145, 5),
-            time / DURATION,
-            track_color=GRID,
-            fill_color=TEAL,
-            cache=False,
-        ),
-        cache=False,
-    )
-    clock = f"{int(time // 60):01d}:{int(time % 60):02d}"
-    scene = scene.over(
-        _text(
-            clock, (1150, 8, 62, 20), size=13, tint=MUTED, align="right", cache=False
-        ),
-        cache=False,
-    )
-    return scene
+    marker = sdf.circle(point_pixel, 8).uncached().fill(WHITE, TRANSPARENT).uncached()
+    scene = scene.over(marker, cache=False)
+    scene = _point_annotations(scene, section, point, level)
+    return _frame_hud(scene, time)
 
 
-def _timestamp(seconds):
-    milliseconds = round(seconds * 1000)
-    hours, milliseconds = divmod(milliseconds, 3_600_000)
-    minutes, milliseconds = divmod(milliseconds, 60_000)
-    whole_seconds, milliseconds = divmod(milliseconds, 1000)
-    return f"{hours:02d}:{minutes:02d}:{whole_seconds:02d},{milliseconds:03d}"
 
 
-def _write_subtitles(path, starts, durations):
-    with Path(path).open("w", encoding="utf-8") as subtitles:
-        for index, (text, start, duration) in enumerate(
-            zip(NARRATION, starts, durations), start=1
-        ):
-            subtitles.write(
-                f"{index}\n{_timestamp(start)} --> "
-                f"{_timestamp(start + duration)}\n{text}\n\n"
-            )
 
 
-def _select_video_encoder():
-    ffmpeg = shutil.which("ffmpeg")
-    if ffmpeg is None:
-        raise RuntimeError("ffmpeg is required to encode the video")
-    # FFmpeg builds differ by platform: minimal distro builds often omit
-    # libx264 while retaining the built-in MPEG-4 Part 2 encoder.
-    encoders = subprocess.run(
-        [ffmpeg, "-hide_banner", "-encoders"],
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout
-    available = {
-        line.split()[1]
-        for line in encoders.splitlines()
-        if len(line.split()) >= 2 and line.split()[0][:1] in {"V", "."}
-    }
-    codec = next(
-        (
-            candidate
-            for candidate in ("libx264", "libopenh264", "mpeg4")
-            if candidate in available
-        ),
-        None,
-    )
-    if codec is None:
-        raise RuntimeError(
-            "This FFmpeg build has no supported video encoder "
-            "(tried libx264, libopenh264, and mpeg4). Install an FFmpeg build "
-            "with one of these encoders and rerun the render."
-        )
-    return ffmpeg, codec
 
 
-def _encode_silent_video(frame_directory, output, ffmpeg, codec):
-    _log(f"Encoding {FPS} fps silent MP4 from {frame_directory} with {codec}")
-    encode_started = monotonic()
+
+
+
+
+def _render_frame(renderer, frame_index, frame_count, starts, durations, static_scenes, gradient_labels, frame_directory, poster, frame_started):
+    time = frame_index / FPS
+    section, _ = timeline_position(time, starts, durations)
+    current = frame_index + 1
+    _log(f"Frame {current}/{frame_count} ({time:.2f}s, {STORY[section][0]}): rendering")
+    started = monotonic()
+    scene = _frame_scene(time, starts, durations, static_scenes, gradient_labels)
+    frame = renderer.render(scene)
     try:
-        subprocess.run(
-            [
-                ffmpeg,
-                "-y",
-                "-loglevel",
-                "error",
-                "-framerate",
-                str(FPS),
-                "-i",
-                str(frame_directory / "frame_%06d.png"),
-                "-c:v",
-                codec,
-                "-b:v",
-                "5000k",
-                "-pix_fmt",
-                "yuv420p",
-                "-movflags",
-                "+faststart",
-                str(output),
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
+        frame.save(frame_directory / f"frame_{frame_index:06d}.png")
+        if frame_index == round(31.0 * FPS):
+            frame.save(poster)
+        elapsed = monotonic() - frame_started
+        eta = elapsed / current * (frame_count - current)
+        stats = renderer.stats
+        entries = renderer.cache_info().entries
+        print(
+            f"[{strftime('%H:%M:%S')}] Frame {current}/{frame_count} complete in "
+            f"{monotonic() - started:.2f}s; elapsed {elapsed / 60:.1f}m, "
+            f"ETA {eta / 60:.1f}m; GPU images allocated/reused="
+            f"{stats.texture_allocations}/{stats.texture_reuses}, cache entries={entries}",
+            flush=True,
         )
-    except subprocess.CalledProcessError as error:
-        detail = error.stderr.strip() if error.stderr else str(error)
-        raise RuntimeError(
-            f"FFmpeg failed to encode the silent MP4: {detail}"
-        ) from error
-    _log(f"Silent MP4 encoded in {monotonic() - encode_started:.1f}s: {output}")
+    finally:
+        frame.close()
 
 
-def _mux_audio(video_path, audio_path, output_path):
-    ffmpeg = shutil.which("ffmpeg")
-    if ffmpeg is None:
-        raise RuntimeError("ffmpeg is required to mux the narration into the short")
-    _log(f"Muxing narration into {output_path}")
-    mux_started = monotonic()
-    subprocess.run(
-        [
-            ffmpeg,
-            "-y",
-            "-loglevel",
-            "error",
-            "-i",
-            str(video_path),
-            "-i",
-            str(audio_path),
-            "-c:v",
-            "copy",
-            "-c:a",
-            "aac",
-            "-b:a",
-            "160k",
-            "-t",
-            str(DURATION),
-            "-movflags",
-            "+faststart",
-            str(output_path),
-        ],
-        check=True,
-    )
-    _log(f"Audio mux completed in {monotonic() - mux_started:.1f}s")
+def _render_frames(static_scenes, gradient_labels, starts, durations, poster, frame_directory):
+    frame_count = round(FPS * DURATION)
+    frame_started = monotonic()
+    with Canvas(SIZE) as canvas:
+        with canvas.session(cache={}) as renderer:
+            for index in range(frame_count):
+                _render_frame(
+                    renderer, index, frame_count, starts, durations,
+                    static_scenes, gradient_labels, frame_directory, poster, frame_started,
+                )
+
+
+def _render_stages(output, poster, subtitles, ffmpeg, video_codec):
+    with tempfile.TemporaryDirectory(prefix="lagrange-short-") as temp_name:
+        temp_dir = Path(temp_name)
+        _log("Stage 1/5: synthesize narration")
+        audio_path, starts, durations, pause = speak_clips(
+            temp_dir, NARRATION, DURATION, _log
+        )
+        _log("Stage 2/5: write subtitle file")
+        write_subtitles(subtitles, NARRATION, starts, durations)
+        _log("Stage 3/5: build reusable SDF UI plot and section scenes")
+        scene_started = monotonic()
+        static_scenes, gradient_labels = _build_static_scenes()
+        _log(f"Static SDF UI scenes built in {monotonic() - scene_started:.1f}s")
+        silent_path = temp_dir / "lagrange_silent.mp4"
+        frame_directory = temp_dir / "frames"
+        frame_directory.mkdir()
+        _log("Stage 4/5: render and save SDF UI frames")
+        _render_frames(
+            static_scenes, gradient_labels, starts, durations, poster, frame_directory
+        )
+        _log("Stage 5/5: encode MP4 and mux audio")
+        encode_silent_video(frame_directory, silent_path, ffmpeg, video_codec, FPS, _log)
+        mux_audio(silent_path, audio_path, output, DURATION, _log)
+    return starts, durations, pause
 
 
 def render_short(output=OUTPUT):
     """Render the narrated short with SDF UI, plus a poster and subtitles."""
     render_started = monotonic()
-    ffmpeg, video_codec = _select_video_encoder()
+    ffmpeg, video_codec = select_video_encoder()
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     poster = output.with_name(output.stem + "_poster.png")
@@ -548,66 +375,9 @@ def render_short(output=OUTPUT):
         f"{DURATION:.0f}s at {FPS} fps ({round(FPS * DURATION)} frames)"
     )
     _log(f"Outputs: video={output}, poster={poster}, subtitles={subtitles}")
-    with tempfile.TemporaryDirectory(prefix="lagrange-short-") as temp_name:
-        temp_dir = Path(temp_name)
-        _log("Stage 1/5: synthesize narration")
-        audio_path, starts, durations, pause = _speak_clips(temp_dir)
-        _log("Stage 2/5: write subtitle file")
-        _write_subtitles(subtitles, starts, durations)
-        _log("Stage 3/5: build reusable SDF UI plot and section scenes")
-        scene_started = monotonic()
-        static_scenes, gradient_labels = _build_static_scenes()
-        _log(f"Static SDF UI scenes built in {monotonic() - scene_started:.1f}s")
-        silent_path = temp_dir / "lagrange_silent.mp4"
-        frame_directory = temp_dir / "frames"
-        frame_directory.mkdir()
-
-        _log("Stage 4/5: render and save SDF UI frames")
-        with Canvas(SIZE) as canvas:
-            with canvas.session(cache={}) as renderer:
-                poster_saved = False
-                frame_count = round(FPS * DURATION)
-                frame_started = monotonic()
-                for frame_index in range(frame_count):
-                    time = frame_index / FPS
-                    section, _ = timeline_position(time, starts, durations)
-                    current_frame = frame_index + 1
-                    _log(
-                        f"Frame {current_frame}/{frame_count} "
-                        f"({time:.2f}s, {STORY[section][0]}): rendering"
-                    )
-                    one_frame_started = monotonic()
-                    scene = _frame_scene(
-                        time, starts, durations, static_scenes, gradient_labels
-                    )
-                    frame = renderer.render(scene)
-                    try:
-                        frame_path = frame_directory / f"frame_{frame_index:06d}.png"
-                        frame.save(frame_path)
-                        if not poster_saved and time >= 31.0:
-                            frame.save(poster)
-                            poster_saved = True
-                    finally:
-                        frame.close()
-                    elapsed = monotonic() - frame_started
-                    average_frame_time = elapsed / current_frame
-                    eta = average_frame_time * (frame_count - current_frame)
-                    stats = renderer.stats
-                    cache_entries = renderer.cache_info().entries
-                    print(
-                        f"[{strftime('%H:%M:%S')}] Frame {current_frame}/{frame_count} "
-                        f"complete in {monotonic() - one_frame_started:.2f}s; "
-                        f"elapsed {elapsed / 60:.1f}m, ETA {eta / 60:.1f}m; "
-                        f"GPU images allocated/reused="
-                        f"{stats.texture_allocations}/{stats.texture_reuses}, "
-                        f"cache entries={cache_entries}",
-                        flush=True,
-                    )
-
-        _log("Stage 5/5: encode MP4 and mux audio")
-        _encode_silent_video(frame_directory, silent_path, ffmpeg, video_codec)
-        _mux_audio(silent_path, audio_path, output)
-
+    starts, durations, pause = _render_stages(
+        output, poster, subtitles, ffmpeg, video_codec
+    )
     _log(f"Render complete in {(monotonic() - render_started) / 60:.1f}m")
     return output, poster, subtitles, starts, durations, pause
 

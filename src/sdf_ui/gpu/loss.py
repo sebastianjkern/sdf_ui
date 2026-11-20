@@ -141,27 +141,17 @@ def mask_weight_sum(backend, image):
     return total
 
 
-def seed_pixel_loss(
-    backend, term, prediction, target, mask, adjoints, offset, values,
-    result_index, denominator=None,
-):
-    """Seed pixel adjoints and reduce the scalar objective on the GPU."""
-    backend._check()
-    if prediction.size != target.size or prediction.channels != target.channels:
-        raise ValueError("Prediction and target image shapes differ")
-    if mask is not None and (mask.size != prediction.size or mask.channels not in (1, 4)):
-        raise ValueError("Loss mask shape differs from prediction")
-    groups = _groups(prediction)
-    partials = backend.scratch_buffer("loss_partials", groups * 4)
-    config_buffer = backend._uniform_buffer(
-        "pixel loss config",
-        struct.pack(
-            "<2iIIIffI", prediction.size[0], prediction.size[1], int(offset),
-            ("mse", "mae", "huber").index(term.kind), int(mask is not None),
-            float(term.weight / (np.prod(prediction.shape) if denominator is None else denominator)),
-            float(term.delta), 0,
-        ),
+def _loss_config(backend, term, prediction, offset, mask, denominator):
+    normalization = np.prod(prediction.shape) if denominator is None else denominator
+    data = struct.pack(
+        "<2iIIIffI", prediction.size[0], prediction.size[1], int(offset),
+        ("mse", "mae", "huber").index(term.kind), int(mask is not None),
+        float(term.weight / normalization), float(term.delta), 0,
     )
+    return backend._uniform_buffer("pixel loss config", data)
+
+
+def _dispatch_loss(backend, prediction, target, mask, config_buffer, adjoints, partials, groups):
     backend.clear_status()
     source = _LOSS.replace("__CHANNELS__", str(prediction.channels))
     backend.canvas.run_compute(
@@ -174,6 +164,22 @@ def seed_pixel_loss(
     )
     backend.stats["loss_dispatches"] += 1
     backend.check_status()
+
+
+def seed_pixel_loss(
+    backend, term, prediction, target, mask, adjoints, offset, values,
+    result_index, denominator=None,
+):
+    """Seed pixel adjoints and reduce the scalar objective on the GPU."""
+    backend._check()
+    if prediction.size != target.size or prediction.channels != target.channels:
+        raise ValueError("Prediction and target image shapes differ")
+    if mask is not None and (mask.size != prediction.size or mask.channels not in (1, 4)):
+        raise ValueError("Loss mask shape differs from prediction")
+    groups = _groups(prediction)
+    partials = backend.scratch_buffer("loss_partials", groups * 4)
+    config = _loss_config(backend, term, prediction, offset, mask, denominator)
+    _dispatch_loss(backend, prediction, target, mask, config, adjoints, partials, groups)
     loss = _partial_sum(partials, groups)
     if not np.isfinite(loss):
         raise FloatingPointError("WebGPU pixel loss is nonfinite")

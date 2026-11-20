@@ -21,7 +21,7 @@ def test_per_cell_and_per_pixel_sample_distinct_coordinates():
                 assert distances[10, 10] == pytest.approx(-3)
                 distance = distances[10, 11]
                 if expected is None:
-                    assert distance < -2.3
+                    assert distance < -23 / 10
                 else:
                     assert distance == pytest.approx(expected)
 
@@ -48,18 +48,27 @@ def test_texture_channels_from_uploaded_image_drive_baked_rotation(tmp_path):
         stamp = sdf.rect((18, 18), (7, 2)).ink_linear((0.8, 0.3, 0.1, 1))
         scene = stamp.repeat_grid(2, 1, (18, 18), (18, 18), rotation=angle, baked=True)
         with canvas.render(scene) as result:
-            assert result.read()[18, 14, 3] > 0.9
-            assert result.read()[18, 32, 3] < 0.05
-            assert result.read()[23, 27, 3] > 0.9
-        whole, tiles = tmp_path / "whole.png", tmp_path / "tiles.png"
-        with canvas.render(stamp) as rendered_stamp:
-            saved_scene = rendered_stamp.repeat_grid(
-                2, 1, (18, 18), (18, 18), rotation=angle
-            ).finish()
-            canvas.save(saved_scene, whole)
-            canvas.save_tiled(saved_scene, tiles, tile_size=(13, 11))
-        with Image.open(whole) as full, Image.open(tiles) as tiled:
-            np.testing.assert_array_equal(np.asarray(full), np.asarray(tiled))
+            _assert_baked_rotation_pixels(result)
+        _assert_tiled_rotation_export(canvas, stamp, angle, tmp_path)
+
+
+def _assert_baked_rotation_pixels(result):
+    pixels = result.read()
+    assert pixels[18, 14, 3] > 9 / 10
+    assert pixels[18, 32, 3] < 1 / 20
+    assert pixels[23, 27, 3] > 9 / 10
+
+
+def _assert_tiled_rotation_export(canvas, stamp, angle, tmp_path):
+    whole, tiles = tmp_path / "whole.png", tmp_path / "tiles.png"
+    with canvas.render(stamp) as rendered_stamp:
+        saved_scene = rendered_stamp.repeat_grid(
+            2, 1, (18, 18), (18, 18), rotation=angle
+        ).finish()
+        canvas.save(saved_scene, whole)
+        canvas.save_tiled(saved_scene, tiles, tile_size=(13, 11))
+    with Image.open(whole) as full, Image.open(tiles) as tiled:
+        np.testing.assert_array_equal(np.asarray(full), np.asarray(tiled))
 
 
 def test_compiled_graph_reuses_plan_and_propagates_gradients_to_the_map():

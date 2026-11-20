@@ -1,17 +1,12 @@
 import unittest
 
 from sdf_ui import Canvas, sdf
-from sdf_ui.gpu.nodes.registry import registry
-from tests.helpers import rgba_array
+from tests.helpers import assert_public_plugin, rgba_array
 
 
 class NgonPluginTests(unittest.TestCase):
     def test_ngon_is_registered_and_public(self):
-        registry.ensure_loaded()
-
-        self.assertIn("ngon", registry.public_names())
-        self.assertIn("ngon", registry.method_names_for("sdf"))
-        self.assertEqual(registry.get("ngon").family, "primitive")
+        assert_public_plugin(self, "ngon", aliases=())
 
     def test_ngon_renders_a_visible_regular_polygon(self):
         with Canvas((96, 96)) as ctx:

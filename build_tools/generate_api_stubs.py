@@ -7,6 +7,26 @@ from pathlib import Path
 from types import UnionType
 from typing import Any, Union, get_args, get_origin
 
+_COLORNAMESPACE_TEXT = 'ColorNamespace'
+
+_COLORTEXTURE_TEXT = 'ColorTexture'
+
+_FIELDNAMESPACE_TEXT = 'FieldNamespace'
+
+_FIELDTEXTURE_TEXT = 'FieldTexture'
+
+_POSTNAMESPACE_TEXT = 'PostNamespace'
+
+_RENDERER_TEXT = 'Renderer'
+
+_SDFNAMESPACE_TEXT = 'SDFNamespace'
+
+_SDFTEXTURE_TEXT = 'SDFTexture'
+
+_TEXTURENODE_TEXT = 'TextureNode'
+
+_FROM___FUTURE___IMPORT_ANNOTATIONS_TEXT = 'from __future__ import annotations'
+
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "src"
 PACKAGE = SRC / "sdf_ui"
@@ -50,17 +70,17 @@ def _load_runtime_objects():
     registry._loaded = True
 
     return {
-        "ColorNamespace": ColorNamespace,
-        "FieldNamespace": FieldNamespace,
-        "FieldTexture": FieldTexture,
-        "SDFNamespace": SDFNamespace,
-        "ColorTexture": ColorTexture,
-        "SDFTexture": SDFTexture,
-        "PostNamespace": PostNamespace,
-        "Renderer": Renderer,
+        _COLORNAMESPACE_TEXT: ColorNamespace,
+        _FIELDNAMESPACE_TEXT: FieldNamespace,
+        _FIELDTEXTURE_TEXT: FieldTexture,
+        _SDFNAMESPACE_TEXT: SDFNamespace,
+        _COLORTEXTURE_TEXT: ColorTexture,
+        _SDFTEXTURE_TEXT: SDFTexture,
+        _POSTNAMESPACE_TEXT: PostNamespace,
+        _RENDERER_TEXT: Renderer,
         "RenderStats": RenderStats,
         "RenderCacheInfo": RenderCacheInfo,
-        "TextureNode": TextureNode,
+        _TEXTURENODE_TEXT: TextureNode,
         "TextureKind": TextureKind,
         "registry": registry,
     }
@@ -136,380 +156,411 @@ def _plugin_input_arg_names(plugin: Any) -> tuple[str, ...]:
     return plugin.method_input_names()
 
 
-def _render_class(
-    name: str, body_lines: list[str], *, properties: list[str] | None = None
-) -> str:
-    members = [*(properties or []), *body_lines]
-    body = "\n".join(members) if members else "    pass"
-    return f"class {name}:\n{body}\n"
+class _StubRenderer:
+    @staticmethod
+    def _render_class(
+        name: str, body_lines: list[str], *, properties: list[str] | None = None
+    ) -> str:
+        members = [*(properties or []), *body_lines]
+        body = "\n".join(members) if members else "    pass"
+        return f"class {name}:\n{body}\n"
 
 
-def _plugin_return_type(texture_kind: Any, plugin: Any) -> str:
-    if plugin.result == texture_kind.SDF:
-        return "SDFTexture"
-    if plugin.result == texture_kind.COLOR:
-        return "ColorTexture"
-    return "MultiOutputResult"
+    @staticmethod
+    def _plugin_return_type(texture_kind: Any, plugin: Any) -> str:
+        if plugin.result == texture_kind.SDF:
+            return _SDFTEXTURE_TEXT
+        if plugin.result == texture_kind.COLOR:
+            return _COLORTEXTURE_TEXT
+        return "MultiOutputResult"
 
 
-def _method_return_overrides() -> dict[str, dict[str, str]]:
-    return {
-        "TextureNode": {
-            "close": "None",
-            "__enter__": "Self",
-            "__exit__": "None",
-            "render": "Self",
-            "read": "NDArray[Any]",
-            "show": "None",
-            "save": "None",
-            "named": "Any",
-            "cache": "Any",
-            "uncached": "Any",
-        },
-        "Renderer": {
-            "__init__": "None",
-            "render": "Any",
-            "close": "None",
-            "cache_info": "RenderCacheInfo",
-            "__enter__": "Renderer",
-            "__exit__": "None",
-        },
-        "SDFTexture": {
-            "fill": "ColorTexture",
-            "__or__": "SDFTexture",
-            "__and__": "SDFTexture",
-            "__sub__": "SDFTexture",
-            "intersect": "SDFTexture",
-            "mask": "ColorTexture",
-            "debug_seams": "ColorTexture",
-            "debug_distance": "ColorTexture",
-            "debug_boolean": "ColorTexture",
-            "repeat_grid": "SDFTexture",
-            "warp": "SDFTexture",
-            "domain_warp": "SDFTexture",
-            "turbulence": "SDFTexture",
-        },
-        "SDFNamespace": {
-            "svg": "SDFTexture",
-            "math": "SDFTexture",
-        },
-        "FieldNamespace": {
-            "constant": "FieldTexture",
-            "radial": "FieldTexture",
-            "vortex": "FieldTexture",
-            "turbulence": "FieldTexture",
-        },
-        "FieldTexture": {
-            "scale": "FieldTexture",
-            "add": "FieldTexture",
-            "visualize": "ColorTexture",
-            "contours": "ColorTexture",
-        },
-        "ColorTexture": {
-            "warp": "ColorTexture",
-            "over": "ColorTexture",
-            "to_lab": "ColorTexture",
-            "to_rgb": "ColorTexture",
-        },
-        "PostNamespace": {
-            "to_lab": "ColorTexture",
-            "to_rgb": "ColorTexture",
-        },
-    }
+    @staticmethod
+    def _method_return_overrides() -> dict[str, dict[str, str]]:
+        return {
+            _TEXTURENODE_TEXT: {
+                "close": "None",
+                "__enter__": "Self",
+                "__exit__": "None",
+                "render": "Self",
+                "read": "NDArray[Any]",
+                "show": "None",
+                "save": "None",
+                "named": "Any",
+                "cache": "Any",
+                "uncached": "Any",
+            },
+            _RENDERER_TEXT: {
+                "__init__": "None",
+                "render": "Any",
+                "close": "None",
+                "cache_info": "RenderCacheInfo",
+                "__enter__": _RENDERER_TEXT,
+                "__exit__": "None",
+            },
+            _SDFTEXTURE_TEXT: {
+                "fill": _COLORTEXTURE_TEXT,
+                "__or__": _SDFTEXTURE_TEXT,
+                "__and__": _SDFTEXTURE_TEXT,
+                "__sub__": _SDFTEXTURE_TEXT,
+                "intersect": _SDFTEXTURE_TEXT,
+                "mask": _COLORTEXTURE_TEXT,
+                "debug_seams": _COLORTEXTURE_TEXT,
+                "debug_distance": _COLORTEXTURE_TEXT,
+                "debug_boolean": _COLORTEXTURE_TEXT,
+                "repeat_grid": _SDFTEXTURE_TEXT,
+                "warp": _SDFTEXTURE_TEXT,
+                "domain_warp": _SDFTEXTURE_TEXT,
+                "turbulence": _SDFTEXTURE_TEXT,
+            },
+            _SDFNAMESPACE_TEXT: {
+                "svg": _SDFTEXTURE_TEXT,
+                "math": _SDFTEXTURE_TEXT,
+            },
+            _FIELDNAMESPACE_TEXT: {
+                "constant": _FIELDTEXTURE_TEXT,
+                "radial": _FIELDTEXTURE_TEXT,
+                "vortex": _FIELDTEXTURE_TEXT,
+                "turbulence": _FIELDTEXTURE_TEXT,
+            },
+            _FIELDTEXTURE_TEXT: {
+                "scale": _FIELDTEXTURE_TEXT,
+                "add": _FIELDTEXTURE_TEXT,
+                "visualize": _COLORTEXTURE_TEXT,
+                "contours": _COLORTEXTURE_TEXT,
+            },
+            _COLORTEXTURE_TEXT: {
+                "warp": _COLORTEXTURE_TEXT,
+                "over": _COLORTEXTURE_TEXT,
+                "to_lab": _COLORTEXTURE_TEXT,
+                "to_rgb": _COLORTEXTURE_TEXT,
+            },
+            _POSTNAMESPACE_TEXT: {
+                "to_lab": _COLORTEXTURE_TEXT,
+                "to_rgb": _COLORTEXTURE_TEXT,
+            },
+        }
 
 
-def _collect_manual_methods(class_name: str, cls: Any) -> list[str]:
-    overrides = _method_return_overrides().get(class_name, {})
-    methods = []
-    for name, value in cls.__dict__.items():
-        if (
-            name.startswith("_")
-            and name
-            not in {
-                "__enter__",
-                "__exit__",
-                "__or__",
-                "__and__",
-                "__sub__",
-            }
-            and not (class_name == "Renderer" and name == "__init__")
-        ):
-            continue
-        if isinstance(value, property) or not callable(value):
-            continue
-        return_type = overrides.get(name, "Any")
-        methods.append(_format_manual_method(name, value, return_type))
-    return methods
+    @staticmethod
+    def _collect_manual_methods(class_name: str, cls: Any) -> list[str]:
+        overrides = _method_return_overrides().get(class_name, {})
+        methods = []
+        for name, value in cls.__dict__.items():
+            if (
+                name.startswith("_")
+                and name
+                not in {
+                    "__enter__",
+                    "__exit__",
+                    "__or__",
+                    "__and__",
+                    "__sub__",
+                }
+                and not (class_name == _RENDERER_TEXT and name == "__init__")
+            ):
+                continue
+            if isinstance(value, property) or not callable(value):
+                continue
+            return_type = overrides.get(name, "Any")
+            methods.append(_format_manual_method(name, value, return_type))
+        return methods
 
 
-def _collect_plugin_methods(class_name: str, runtime: dict[str, Any]) -> list[str]:
-    registry = runtime["registry"]
-    texture_kind = runtime["TextureKind"]
-    namespace_kinds = {
-        "SDFNamespace": texture_kind.SDF,
-        "ColorNamespace": texture_kind.COLOR,
-    }
-    if class_name in namespace_kinds:
-        plugins = [
-            registry.get(name)
-            for name in registry.factory_names_for(namespace_kinds[class_name])
+    @staticmethod
+    def _collect_plugin_methods(class_name: str, runtime: dict[str, Any]) -> list[str]:
+        registry = runtime["registry"]
+        texture_kind = runtime["TextureKind"]
+        namespace_kinds = {
+            _SDFNAMESPACE_TEXT: texture_kind.SDF,
+            _COLORNAMESPACE_TEXT: texture_kind.COLOR,
+        }
+        if class_name in namespace_kinds:
+            plugins = [
+                registry.get(name)
+                for name in registry.factory_names_for(namespace_kinds[class_name])
+            ]
+        else:
+            plugins = [
+                plugin
+                for plugin in registry._plugins.values()
+                if _plugin_matches_class(class_name, plugin, texture_kind)
+            ]
+        plugins.sort(key=lambda plugin: plugin.name)
+        return [
+            _format_plugin_method(plugin, _plugin_return_type(texture_kind, plugin))
+            for plugin in plugins
         ]
-    else:
-        plugins = [
-            plugin
-            for plugin in registry._plugins.values()
-            if _plugin_matches_class(class_name, plugin, texture_kind)
-        ]
-    plugins.sort(key=lambda plugin: plugin.name)
-    return [
-        _format_plugin_method(plugin, _plugin_return_type(texture_kind, plugin))
-        for plugin in plugins
-    ]
 
 
-def _plugin_matches_class(class_name, plugin, texture_kind):
-    match class_name:
-        case "SDFTexture":
-            return texture_kind.SDF in plugin.method_of
-        case "ColorTexture":
-            return texture_kind.COLOR in plugin.method_of
-        case "PostNamespace":
-            return (
-                plugin.family == "postprocessing"
-                and texture_kind.COLOR in plugin.method_of
-            )
-        case _:
-            return False
+    @staticmethod
+    def _plugin_matches_class(class_name, plugin, texture_kind):
+        match class_name:
+            case "SDFTexture":
+                return texture_kind.SDF in plugin.method_of
+            case "ColorTexture":
+                return texture_kind.COLOR in plugin.method_of
+            case "PostNamespace":
+                return (
+                    plugin.family == "postprocessing"
+                    and texture_kind.COLOR in plugin.method_of
+                )
+            case _:
+                return False
 
 
-def _merge_methods(class_name: str, cls: Any, runtime: dict[str, Any]) -> list[str]:
-    manual = _collect_manual_methods(class_name, cls)
-    existing_names = {
-        line.split("def ", 1)[1].split("(", 1)[0]
-        for line in manual
-        if line.lstrip().startswith("def ")
-    }
+    @staticmethod
+    def _merge_methods(class_name: str, cls: Any, runtime: dict[str, Any]) -> list[str]:
+        manual = _collect_manual_methods(class_name, cls)
+        existing_names = {
+            line.split("def ", 1)[1].split("(", 1)[0]
+            for line in manual
+            if line.lstrip().startswith("def ")
+        }
 
-    merged = list(manual)
-    for line in _collect_plugin_methods(class_name, runtime):
-        name = line.split("def ", 1)[1].split("(", 1)[0]
-        if name not in existing_names:
-            merged.append(line)
-            existing_names.add(name)
-    return merged
-
-
-def _render_texture_stub(runtime: dict[str, Any]) -> str:
-    lines = [
-        "from __future__ import annotations",
-        "",
-        "from collections.abc import Iterable, Mapping",
-        "from pathlib import Path",
-        "from typing import TYPE_CHECKING, Any, Iterator, Optional, Self, overload",
-        "",
-        "from numpy.typing import NDArray",
-        "",
-        "if TYPE_CHECKING:",
-        "    from .color import ColorTexture",
-        "",
-        _render_class(
-            "TextureNode",
-            _collect_manual_methods("TextureNode", runtime["TextureNode"]),
-            properties=[
-                "    tex: Any",
-                "    context: Any",
-                "    op: str | None",
-                "    inputs: tuple[Any, ...]",
-                "    params: Any",
-                "    label: str | None",
-                "    should_cache: bool",
-                "    size: tuple[int, int]",
-                "    origin: tuple[int, int]",
-                "    canvas_size: tuple[int, int]",
-                "    @overload",
-                "    def __init__(self, tex: Any, context: Any, *, op: str | None = ..., inputs: Iterable[Any] = ..., params: Mapping[str, Any] | Iterable[Any] | None = ..., label: str | None = ..., should_cache: bool = ...) -> None: ...",
-                "    @overload",
-                "    def __init__(self, *, op: str, inputs: Iterable[Any] = ..., params: Mapping[str, Any] | Iterable[Any] | None = ..., label: str | None = ..., should_cache: bool = ...) -> None: ...",
-            ],
-        ).rstrip(),
-        "",
-        _render_class(
-            "PostNamespace",
-            _merge_methods("PostNamespace", runtime["PostNamespace"], runtime),
-        ).rstrip(),
-        "",
-        _render_class(
-            "RenderStats",
-            [
-                "    shader_dispatches: int",
-                "    shader_dispatches_by_name: dict[str, int]",
-                "    cache_hits: int",
-                "    cache_misses: int",
-                "    cache_writes: int",
-                "    cache_skips: int",
-                "    texture_allocations: int",
-                "    texture_allocations_by_kind: dict[str, int]",
-                "    texture_reuses: int",
-                "    render_calls: int",
-                "    elapsed_seconds: float",
-                "    def as_dict(self) -> dict[str, Any]: ...",
-            ],
-        ).rstrip(),
-        "",
-        _render_class(
-            "RenderCacheInfo",
-            [
-                "    entries: int",
-                "    hits: int",
-                "    misses: int",
-                "    writes: int",
-                "    skips: int",
-            ],
-        ).rstrip(),
-        "",
-        _render_class(
-            "Renderer",
-            _collect_manual_methods("Renderer", runtime["Renderer"]),
-            properties=["    stats: RenderStats"],
-        ).rstrip(),
-        "",
-        _render_class(
-            "MultiOutputResult",
-            [
-                "    op: str",
-                "    inputs: tuple[Any, ...]",
-                "    params: tuple[Any, ...]",
-                "    label: Optional[str]",
-                "    should_cache: bool",
-                "    kind: str",
-                "    def render(self, ctx: Any, params: Optional[dict[str, Any]] = ..., cache: Any = ...) -> Any: ...",
-                "    def __iter__(self) -> Iterator[Any]: ...",
-            ],
-        ).rstrip(),
-        "",
-    ]
-    return "\n".join(lines)
+        merged = list(manual)
+        for line in _collect_plugin_methods(class_name, runtime):
+            name = line.split("def ", 1)[1].split("(", 1)[0]
+            if name not in existing_names:
+                merged.append(line)
+                existing_names.add(name)
+        return merged
 
 
-def _render_color_stub(runtime: dict[str, Any]) -> str:
-    methods = [
-        "    kind: str",
-        "    mode: str",
-        "    @overload",
-        "    def __init__(self, tex: Any, context: Any, *, mode: str = ..., op: str | None = ..., inputs: Any = ..., params: Any = ..., label: str | None = ..., should_cache: bool = ...) -> None: ...",
-        "    @overload",
-        "    def __init__(self, *, op: str, mode: str = ..., inputs: Any = ..., params: Any = ..., label: str | None = ..., should_cache: bool = ...) -> None: ...",
-        "    @property",
-        "    def post(self) -> PostNamespace: ...",
-    ]
-    methods.extend(_merge_methods("ColorTexture", runtime["ColorTexture"], runtime))
-    lines = [
-        "from __future__ import annotations",
-        "",
-        "from typing import Any, overload",
-        "",
-        "from .texture import PostNamespace, TextureNode",
-        "",
-        "class ColorSpaceMode:",
-        "    LAB: str",
-        "    RGB: str",
-        "",
-        _render_class("ColorTexture(TextureNode)", methods).rstrip(),
-        "",
-    ]
-    return "\n".join(lines)
-
-
-def _render_field_stub(runtime: dict[str, Any]) -> str:
-    methods = ["    kind: str"]
-    methods.extend(_merge_methods("FieldTexture", runtime["FieldTexture"], runtime))
-    lines = [
-        "from __future__ import annotations",
-        "",
-        "from typing import Any",
-        "",
-        "from .color import ColorTexture",
-        "from .texture import TextureNode",
-        "",
-        _render_class("FieldTexture(TextureNode)", methods).rstrip(),
-        "",
-    ]
-    return "\n".join(lines)
-
-
-def _render_sdf_stub(runtime: dict[str, Any]) -> str:
-    methods = ["    kind: str"]
-    methods.extend(_merge_methods("SDFTexture", runtime["SDFTexture"], runtime))
-    lines = [
-        "from __future__ import annotations",
-        "",
-        "from typing import Any",
-        "",
-        "from .color import ColorTexture",
-        "from .texture import MultiOutputResult, TextureNode",
-        "",
-        _render_class("SDFTexture(TextureNode)", methods).rstrip(),
-        "",
-    ]
-    return "\n".join(lines)
-
-
-def _render_api_stub(runtime: dict[str, Any]) -> str:
-    sdf_methods = _merge_methods("SDFNamespace", runtime["SDFNamespace"], runtime)
-    color_methods = _merge_methods("ColorNamespace", runtime["ColorNamespace"], runtime)
-    field_methods = _merge_methods("FieldNamespace", runtime["FieldNamespace"], runtime)
-    lines = [
-        "from __future__ import annotations",
-        "",
-        "from typing import Any",
-        "",
-        "from .color import ColorTexture",
-        "from .field import FieldTexture",
-        "from .sdf import SDFTexture",
-        "from .texture import MultiOutputResult",
-        "",
-        _render_class("SDFNamespace", sdf_methods).rstrip(),
-        "",
-        _render_class("ColorNamespace", color_methods).rstrip(),
-        "",
-        _render_class("FieldNamespace", field_methods).rstrip(),
-        "",
-    ]
-    return "\n".join(lines)
-
-
-def _render_core_init_stub() -> str:
-    return "\n".join(
-        [
-            "from .color import ColorSpaceMode as ColorSpaceMode, ColorTexture as ColorTexture",
-            "from .expressions import Expr as Expr, cos as cos, input_value as input_value, param as param, percent as percent, percent_of_min as percent_of_min, percent_x as percent_x, percent_y as percent_y, sin as sin",
-            "from .field import FieldNamespace as FieldNamespace, FieldTexture as FieldTexture",
-            "from .sdf import SDFTexture as SDFTexture",
+    @staticmethod
+    def _render_texture_stub(runtime: dict[str, Any]) -> str:
+        lines = [
+            _FROM___FUTURE___IMPORT_ANNOTATIONS_TEXT,
+            "",
+            "from collections.abc import Iterable, Mapping",
+            "from pathlib import Path",
+            "from typing import TYPE_CHECKING, Any, Iterator, Optional, Self, overload",
+            "",
+            "from numpy.typing import NDArray",
+            "",
+            "if TYPE_CHECKING:",
+            "    from .color import ColorTexture",
+            "",
+            _render_class(
+                _TEXTURENODE_TEXT,
+                _collect_manual_methods(_TEXTURENODE_TEXT, runtime[_TEXTURENODE_TEXT]),
+                properties=[
+                    "    tex: Any",
+                    "    context: Any",
+                    "    op: str | None",
+                    "    inputs: tuple[Any, ...]",
+                    "    params: Any",
+                    "    label: str | None",
+                    "    should_cache: bool",
+                    "    size: tuple[int, int]",
+                    "    origin: tuple[int, int]",
+                    "    canvas_size: tuple[int, int]",
+                    "    @overload",
+                    "    def __init__(self, tex: Any, context: Any, *, op: str | None = ..., inputs: Iterable[Any] = ..., params: Mapping[str, Any] | Iterable[Any] | None = ..., label: str | None = ..., should_cache: bool = ...) -> None: ...",
+                    "    @overload",
+                    "    def __init__(self, *, op: str, inputs: Iterable[Any] = ..., params: Mapping[str, Any] | Iterable[Any] | None = ..., label: str | None = ..., should_cache: bool = ...) -> None: ...",
+                ],
+            ).rstrip(),
+            "",
+            _render_class(
+                _POSTNAMESPACE_TEXT,
+                _merge_methods(_POSTNAMESPACE_TEXT, runtime[_POSTNAMESPACE_TEXT], runtime),
+            ).rstrip(),
+            "",
+            _render_class(
+                "RenderStats",
+                [
+                    "    shader_dispatches: int",
+                    "    shader_dispatches_by_name: dict[str, int]",
+                    "    cache_hits: int",
+                    "    cache_misses: int",
+                    "    cache_writes: int",
+                    "    cache_skips: int",
+                    "    texture_allocations: int",
+                    "    texture_allocations_by_kind: dict[str, int]",
+                    "    texture_reuses: int",
+                    "    render_calls: int",
+                    "    elapsed_seconds: float",
+                    "    def as_dict(self) -> dict[str, Any]: ...",
+                ],
+            ).rstrip(),
+            "",
+            _render_class(
+                "RenderCacheInfo",
+                [
+                    "    entries: int",
+                    "    hits: int",
+                    "    misses: int",
+                    "    writes: int",
+                    "    skips: int",
+                ],
+            ).rstrip(),
+            "",
+            _render_class(
+                _RENDERER_TEXT,
+                _collect_manual_methods(_RENDERER_TEXT, runtime[_RENDERER_TEXT]),
+                properties=["    stats: RenderStats"],
+            ).rstrip(),
+            "",
+            _render_class(
+                "MultiOutputResult",
+                [
+                    "    op: str",
+                    "    inputs: tuple[Any, ...]",
+                    "    params: tuple[Any, ...]",
+                    "    label: Optional[str]",
+                    "    should_cache: bool",
+                    "    kind: str",
+                    "    def render(self, ctx: Any, params: Optional[dict[str, Any]] = ..., cache: Any = ...) -> Any: ...",
+                    "    def __iter__(self) -> Iterator[Any]: ...",
+                ],
+            ).rstrip(),
             "",
         ]
-    )
+        return "\n".join(lines)
 
 
-def _render_root_init_stub() -> str:
-    return "\n".join(
-        [
+    @staticmethod
+    def _render_color_stub(runtime: dict[str, Any]) -> str:
+        methods = [
+            "    kind: str",
+            "    mode: str",
+            "    @overload",
+            "    def __init__(self, tex: Any, context: Any, *, mode: str = ..., op: str | None = ..., inputs: Any = ..., params: Any = ..., label: str | None = ..., should_cache: bool = ...) -> None: ...",
+            "    @overload",
+            "    def __init__(self, *, op: str, mode: str = ..., inputs: Any = ..., params: Any = ..., label: str | None = ..., should_cache: bool = ...) -> None: ...",
+            "    @property",
+            "    def post(self) -> PostNamespace: ...",
+        ]
+        methods.extend(_merge_methods(_COLORTEXTURE_TEXT, runtime[_COLORTEXTURE_TEXT], runtime))
+        lines = [
+            _FROM___FUTURE___IMPORT_ANNOTATIONS_TEXT,
+            "",
+            "from typing import Any, overload",
+            "",
+            "from .texture import PostNamespace, TextureNode",
+            "",
+            "class ColorSpaceMode:",
+            "    LAB: str",
+            "    RGB: str",
+            "",
+            _render_class("ColorTexture(TextureNode)", methods).rstrip(),
+            "",
+        ]
+        return "\n".join(lines)
+
+
+    @staticmethod
+    def _render_field_stub(runtime: dict[str, Any]) -> str:
+        methods = ["    kind: str"]
+        methods.extend(_merge_methods(_FIELDTEXTURE_TEXT, runtime[_FIELDTEXTURE_TEXT], runtime))
+        lines = [
+            _FROM___FUTURE___IMPORT_ANNOTATIONS_TEXT,
+            "",
             "from typing import Any",
             "",
-            "from . import core as core, learning as learning",
-            "from .gpu.context import Context as Context, DispatchConfig as DispatchConfig",
-            "from .core import ColorTexture as ColorTexture, FieldTexture as FieldTexture, SDFTexture as SDFTexture",
-            "from .core.api import ColorNamespace, SDFNamespace",
-            "from .core.field import FieldNamespace",
-            "from .core.expressions import Expr as Expr, cos as cos, input_value as input_value, param as param, percent as percent, percent_of_min as percent_of_min, percent_x as percent_x, percent_y as percent_y, sin as sin",
+            "from .color import ColorTexture",
+            "from .texture import TextureNode",
             "",
-            "Canvas = Context",
-            "sdf: SDFNamespace",
-            "color: ColorNamespace",
-            "field: FieldNamespace",
-            "logger: Any",
+            _render_class("FieldTexture(TextureNode)", methods).rstrip(),
             "",
         ]
-    )
+        return "\n".join(lines)
+
+
+    @staticmethod
+    def _render_sdf_stub(runtime: dict[str, Any]) -> str:
+        methods = ["    kind: str"]
+        methods.extend(_merge_methods(_SDFTEXTURE_TEXT, runtime[_SDFTEXTURE_TEXT], runtime))
+        lines = [
+            _FROM___FUTURE___IMPORT_ANNOTATIONS_TEXT,
+            "",
+            "from typing import Any",
+            "",
+            "from .color import ColorTexture",
+            "from .texture import MultiOutputResult, TextureNode",
+            "",
+            _render_class("SDFTexture(TextureNode)", methods).rstrip(),
+            "",
+        ]
+        return "\n".join(lines)
+
+
+    @staticmethod
+    def _render_api_stub(runtime: dict[str, Any]) -> str:
+        sdf_methods = _merge_methods(_SDFNAMESPACE_TEXT, runtime[_SDFNAMESPACE_TEXT], runtime)
+        color_methods = _merge_methods(_COLORNAMESPACE_TEXT, runtime[_COLORNAMESPACE_TEXT], runtime)
+        field_methods = _merge_methods(_FIELDNAMESPACE_TEXT, runtime[_FIELDNAMESPACE_TEXT], runtime)
+        lines = [
+            _FROM___FUTURE___IMPORT_ANNOTATIONS_TEXT,
+            "",
+            "from typing import Any",
+            "",
+            "from .color import ColorTexture",
+            "from .field import FieldTexture",
+            "from .sdf import SDFTexture",
+            "from .texture import MultiOutputResult",
+            "",
+            _render_class(_SDFNAMESPACE_TEXT, sdf_methods).rstrip(),
+            "",
+            _render_class(_COLORNAMESPACE_TEXT, color_methods).rstrip(),
+            "",
+            _render_class(_FIELDNAMESPACE_TEXT, field_methods).rstrip(),
+            "",
+        ]
+        return "\n".join(lines)
+
+
+    @staticmethod
+    def _render_core_init_stub() -> str:
+        return "\n".join(
+            [
+                "from .color import ColorSpaceMode as ColorSpaceMode, ColorTexture as ColorTexture",
+                "from .expressions import Expr as Expr, cos as cos, input_value as input_value, param as param, percent as percent, percent_of_min as percent_of_min, percent_x as percent_x, percent_y as percent_y, sin as sin",
+                "from .field import FieldNamespace as FieldNamespace, FieldTexture as FieldTexture",
+                "from .sdf import SDFTexture as SDFTexture",
+                "",
+            ]
+        )
+
+
+    @staticmethod
+    def _render_root_init_stub() -> str:
+        return "\n".join(
+            [
+                "from typing import Any",
+                "",
+                "from . import core as core, learning as learning",
+                "from .gpu.context import Context as Context, DispatchConfig as DispatchConfig",
+                "from .core import ColorTexture as ColorTexture, FieldTexture as FieldTexture, SDFTexture as SDFTexture",
+                "from .core.api import ColorNamespace, SDFNamespace",
+                "from .core.field import FieldNamespace",
+                "from .core.expressions import Expr as Expr, cos as cos, input_value as input_value, param as param, percent as percent, percent_of_min as percent_of_min, percent_x as percent_x, percent_y as percent_y, sin as sin",
+                "",
+                "Canvas = Context",
+                "sdf: SDFNamespace",
+                "color: ColorNamespace",
+                "field: FieldNamespace",
+                "logger: Any",
+                "",
+            ]
+        )
+
+
+_render_class = _StubRenderer._render_class
+_plugin_return_type = _StubRenderer._plugin_return_type
+_method_return_overrides = _StubRenderer._method_return_overrides
+_collect_manual_methods = _StubRenderer._collect_manual_methods
+_collect_plugin_methods = _StubRenderer._collect_plugin_methods
+_plugin_matches_class = _StubRenderer._plugin_matches_class
+_merge_methods = _StubRenderer._merge_methods
+_render_texture_stub = _StubRenderer._render_texture_stub
+_render_color_stub = _StubRenderer._render_color_stub
+_render_field_stub = _StubRenderer._render_field_stub
+_render_sdf_stub = _StubRenderer._render_sdf_stub
+_render_api_stub = _StubRenderer._render_api_stub
+_render_core_init_stub = _StubRenderer._render_core_init_stub
+_render_root_init_stub = _StubRenderer._render_root_init_stub
 
 
 def generate_api_stubs(*, check: bool = False) -> bool:

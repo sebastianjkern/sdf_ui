@@ -236,6 +236,29 @@ fn compute_main(@builtin(global_invocation_id) id: vec3<u32>,
 """
 
 
+def _shader_file(name, path, kernel, node, constants, kinds):
+    arguments = tuple(
+        ShaderArgument(f"tex_{index}", () if kind == "sdf" else (4,), _PORTS[kind])
+        for index, kind in enumerate(kinds)
+    )
+    contract = ShaderDifferentiation(
+        name, path, arguments,
+        (ShaderArgument("values", (len(constants),), "float"),),
+        (ShaderArgument("dest", () if node.kind == "sdf" else (4,), _PORTS[node.kind]),),
+        sampling="spatial",
+        notes="GPU pullback uses centered differences through the fused parameter program.",
+    )
+    interface = ShaderInterface(
+        ImageBinding("dest", 0, write=True),
+        tuple(ImageBinding(arg.name, index + 1, read=True)
+              for index, arg in enumerate(arguments)),
+        (Uniform("values", f"float[{len(constants)}]"),),
+    )
+    return ShaderFile(
+        name, path, derivative_contract=contract, interface=interface, wgsl=kernel
+    ), arguments
+
+
 def emit_spatial(builder, node):
     """Lower the procedural template with its map textures as graph inputs."""
     from ..learning.render import _tensor
@@ -249,40 +272,12 @@ def emit_spatial(builder, node):
         "\n".join(compiler.functions), target, kinds, node.kind, len(constants)
     )
     name = "spatial_" + sha256(repr(kernel).encode()).hexdigest()
-    arguments = tuple(
-        ShaderArgument(f"tex_{i}", () if kind == "sdf" else (4,), _PORTS[kind])
-        for i, kind in enumerate(kinds)
-    )
-    path = f"generated/{name}.wgsl"
-    contract = ShaderDifferentiation(
-        name,
-        path,
-        arguments,
-        (ShaderArgument("values", (len(constants),), "float"),),
-        (
-            ShaderArgument(
-                "dest", () if node.kind == "sdf" else (4,), _PORTS[node.kind]
-            ),
-        ),
-        sampling="spatial",
-        notes="GPU pullback uses centered differences through the fused parameter program.",
-    )
-    shader = ShaderFile(
-        name,
-        path,
-        derivative_contract=contract,
-        interface=ShaderInterface(
-            ImageBinding("dest", 0, write=True),
-            tuple(
-                ImageBinding(arg.name, i + 1, read=True)
-                for i, arg in enumerate(arguments)
-            ),
-            (Uniform("values", f"float[{len(constants)}]"),),
-        ),
-        wgsl=kernel,
+    shader, arguments = _shader_file(
+        name, f"generated/{name}.wgsl", kernel, node, constants, kinds
     )
     builder.structure.append((name, builder.signature(constants)))
-    ports = {arg.name: builder.node(dep) for arg, dep in zip(arguments, maps)}
+    ports = {argument.name: builder.node(dependency)
+             for argument, dependency in zip(arguments, maps)}
 
     def uniforms(resolve):
         return {"values": _tensor(tuple(resolve(value) for value in constants))}

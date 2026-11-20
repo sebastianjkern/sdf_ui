@@ -9,7 +9,7 @@ from itertools import pairwise
 from numbers import Real
 from typing import TYPE_CHECKING, Any
 
-from ._plot_sampling import Point, _ordered_range, _path_points, _sample_path
+from ._plot_sampling import Point, _ordered_range, _sample_path
 from .core.color import ColorTexture
 from .core.expressions import (
     _lazy_scalar,
@@ -24,6 +24,8 @@ if TYPE_CHECKING:
 
 Box = tuple[float, float, float, float]
 DataPoint = tuple[Any, Any]
+_LEADER_INNER = -3 / 2
+_LEADER_OUTER = 0.0
 
 
 def _nonnegative_literal(value, name):
@@ -230,34 +232,7 @@ class Plot:
             for index, (a, b) in enumerate(pairwise(samples)):
                 if a is None or b is None:
                     continue
-                xa, low_a = self.point(a[0], a[1])
-                _, high_a = self.point(a[0], a[2])
-                xb, low_b = self.point(b[0], b[1])
-                _, high_b = self.point(b[0], b[2])
-                dx = xb - xa
-                sign = _select_positive(dx, 1.0, -1.0)
-                # Overlap neighboring spans by one canvas unit to keep ink
-                # antialiasing from exposing the shared vertical edge.
-                pad_a = 1.0 if index and samples[index - 1] is not None else 0.0
-                pad_b = (
-                    1.0
-                    if index + 2 < len(samples) and samples[index + 2] is not None
-                    else 0.0
-                )
-                x0 = _scalar_minimum(xa, xb) - _select_positive(dx, pad_a, pad_b)
-                x1 = _scalar_maximum(xa, xb) + _select_positive(dx, pad_b, pad_a)
-                bottom = sdf.half_plane((xa, low_a), (sign * (low_b - low_a), -abs(dx)))
-                top = sdf.half_plane((xa, high_a), (sign * (high_a - high_b), abs(dx)))
-                left = sdf.half_plane((x0, 0.0), (-1, 0))
-                right = sdf.half_plane((x1, 0.0), (1, 0))
-                yield (
-                    bottom.uncached()
-                    .intersection(top.uncached())
-                    .uncached()
-                    .intersection(left.uncached())
-                    .uncached()
-                    .intersection(right.uncached())
-                )
+                yield _ribbon_span(sdf, self, samples, index, a, b)
 
         return _combine_marks(marks(), "ribbon")
 
@@ -356,89 +331,25 @@ class Plot:
         to change where the axes cross. By default each axis passes through
         zero when visible and follows the lower edge of its range otherwise.
         """
-        from . import color, sdf
+        from ._plot_axes import draw_axes
 
-        xmin, xmax = self.x_range
-        ymin, ymax = self.y_range
-        left, bottom, width, height = self.box
-        right, top = left + width, bottom + height
-        x_axis = (
-            (0.0 if ymin <= 0 <= ymax else ymin) if x_axis_at is None else x_axis_at
+        return draw_axes(
+            self,
+            x_ticks=x_ticks,
+            y_ticks=y_ticks,
+            axis_color=axis_color,
+            grid_color=grid_color,
+            label_color=label_color,
+            axis_width=axis_width,
+            grid_width=grid_width,
+            label_size=label_size,
+            x_label=x_label,
+            y_label=y_label,
+            x_format=x_format,
+            y_format=y_format,
+            x_axis_at=x_axis_at,
+            y_axis_at=y_axis_at,
         )
-        y_axis = (
-            (0.0 if xmin <= 0 <= xmax else xmin) if y_axis_at is None else y_axis_at
-        )
-        if not ymin <= x_axis <= ymax:
-            raise ValueError("x_axis_at must be within y_range")
-        if not xmin <= y_axis <= xmax:
-            raise ValueError("y_axis_at must be within x_range")
-        axis_x, axis_y = self.point(y_axis, x_axis)
-        x_ticks = _auto_ticks(self.x_range) if x_ticks is None else x_ticks
-        y_ticks = _auto_ticks(self.y_range) if y_ticks is None else y_ticks
-        xt = [
-            (value, self.point(value, ymin)[0])
-            for value in x_ticks
-            if xmin <= value <= xmax
-        ]
-        yt = [
-            (value, self.point(xmin, value)[1])
-            for value in y_ticks
-            if ymin <= value <= ymax
-        ]
-
-        grid = _path_points(
-            [((x, bottom), (x, top)) for value, x in xt if value != y_axis]
-            + [((left, y), (right, y)) for value, y in yt if value != x_axis]
-        )
-        layers = []
-        if grid:
-            layers.append(sdf.polyline(grid).stroke(grid_width, grid_color))
-        lines = ((left, axis_y), (right, axis_y), None, (axis_x, bottom), (axis_x, top))
-        layers.append(sdf.polyline(lines).stroke(axis_width, axis_color))
-
-        tint = axis_color if label_color is None else label_color
-
-        def label(value, x, y, align):
-            label_width = max(1, len(value)) * label_size
-            if align == "center":
-                x -= label_width / 2
-            elif align == "right":
-                x -= label_width
-            return sdf.text(
-                value,
-                size=label_size,
-                box=(x, y, label_width, 1.5 * label_size),
-                align=align,
-            ).ink(tint, inflate=0.2)
-
-        for value, x in xt:
-            layers.append(
-                label(
-                    x_format(value) if x_format else f"{value:g}",
-                    x,
-                    bottom - 2.2 * label_size,
-                    "center",
-                )
-            )
-        for value, y in yt:
-            layers.append(
-                label(
-                    y_format(value) if y_format else f"{value:g}",
-                    left - 6,
-                    y - 0.75 * label_size,
-                    "right",
-                )
-            )
-        if x_label:
-            y = (
-                bottom - 2.2 * label_size
-                if axis_y == bottom
-                else axis_y - 0.75 * label_size
-            )
-            layers.append(label(x_label, right + 4, y, "left"))
-        if y_label:
-            layers.append(label(y_label, axis_x - 6, top - 0.25 * label_size, "right"))
-        return color.clear((0.0, 0.0, 0.0, 0.0)).over(*layers)
 
     def annotate(
         self,
@@ -468,21 +379,63 @@ class Plot:
         anchor = self.point(*point)
         dx, dy = map(_lazy_scalar, offset)
         x, y = anchor[0] + dx, anchor[1] + dy
-        if isinstance(label, SDFTexture):
-            origin_x, origin_y = label_origin
-            glyphs = label.translate((x - origin_x, y - origin_y))
-        else:
-            glyphs = sdf.text(label, size=size, ox=x, oy=y)
-        if not cache:
-            glyphs = glyphs.uncached()
-        ink = glyphs.ink(tint, inflate=0.2)
-        if leader_width is None:
-            return ink if cache else ink.uncached()
+        return _annotation_layer(
+            sdf, anchor, (x, y), label, label_origin, size, tint, leader_width, cache
+        )
 
-        line = sdf.segment(anchor, (x, y), _lazy_scalar(leader_width) / 2)
-        if not cache:
-            line = line.uncached()
-            ink = ink.uncached()
-        leader = line.ink(tint, inner=-1.5, outer=0.0)
-        layer = (leader if cache else leader.uncached()).alpha_overlay(ink)
-        return layer if cache else layer.uncached()
+
+def _annotation_layer(sdf, anchor, target, label, origin, size, tint, leader_width, cache):
+    glyphs = _annotation_glyphs(sdf, target, label, origin, size)
+    glyphs = glyphs if cache else glyphs.uncached()
+    ink = glyphs.ink(tint, inflate=0.2)
+    if leader_width is None:
+        return ink if cache else ink.uncached()
+    line = sdf.segment(anchor, target, _lazy_scalar(leader_width) / 2)
+    return _annotation_composite(line, ink, tint, cache)
+
+
+def _annotation_glyphs(sdf, target, label, origin, size):
+    x, y = target
+    if isinstance(label, SDFTexture):
+        origin_x, origin_y = origin
+        return label.translate((x - origin_x, y - origin_y))
+    return sdf.text(label, size=size, ox=x, oy=y)
+
+
+def _annotation_composite(line, ink, tint, cache):
+    line = line if cache else line.uncached()
+    ink = ink if cache else ink.uncached()
+    leader = line.ink(tint, inner=_LEADER_INNER, outer=_LEADER_OUTER)
+    layer = (leader if cache else leader.uncached()).alpha_overlay(ink)
+    return layer if cache else layer.uncached()
+
+
+def _ribbon_span(sdf, plot, samples, index, a, b):
+    xa, low_a = plot.point(a[0], a[1])
+    _, high_a = plot.point(a[0], a[2])
+    xb, low_b = plot.point(b[0], b[1])
+    _, high_b = plot.point(b[0], b[2])
+    dx = xb - xa
+    sign = _select_positive(dx, 1.0, -1.0)
+    pad_a = _ribbon_padding(samples, index, previous=True)
+    pad_b = _ribbon_padding(samples, index, previous=False)
+    x0 = _scalar_minimum(xa, xb) - _select_positive(dx, pad_a, pad_b)
+    x1 = _scalar_maximum(xa, xb) + _select_positive(dx, pad_b, pad_a)
+    bottom = sdf.half_plane((xa, low_a), (sign * (low_b - low_a), -abs(dx)))
+    top = sdf.half_plane((xa, high_a), (sign * (high_a - high_b), abs(dx)))
+    left = sdf.half_plane((x0, 0.0), (-1, 0))
+    right = sdf.half_plane((x1, 0.0), (1, 0))
+    return (
+        bottom.uncached()
+        .intersection(top.uncached())
+        .uncached()
+        .intersection(left.uncached())
+        .uncached()
+        .intersection(right.uncached())
+    )
+
+
+def _ribbon_padding(samples, index, *, previous):
+    neighbor_index = index - 1 if previous else index + 2
+    in_bounds = neighbor_index >= 0 if previous else neighbor_index < len(samples)
+    return 1.0 if in_bounds and samples[neighbor_index] is not None else 0.0

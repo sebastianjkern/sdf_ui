@@ -1,4 +1,4 @@
-__docformat__ = "google"
+
 
 from math import isfinite
 
@@ -7,6 +7,9 @@ from sdf_ui.gpu.nodes.common import lower_composite, shader
 
 from .implementation import CONTRACT, INTERFACE, PROGRAM
 
+_CENTER_TEXT = 'center'
+
+__docformat__ = "google"
 
 def _render_transform(renderer, source, uniforms):
     from sdf_ui.core.sdf import SDFTexture
@@ -37,7 +40,7 @@ def _render_translate(renderer, inputs, params):
 
 def _render_scale(renderer, inputs, params):
     factor = float(params["factor"])
-    if not isfinite(factor) or abs(factor) < 1e-12:
+    if not isfinite(factor) or abs(factor) < 1 / 1_000_000_000_000:
         raise ValueError("scale factor must be finite and non-zero")
 
     return _render_transform(
@@ -45,7 +48,7 @@ def _render_scale(renderer, inputs, params):
         inputs[0],
         {
             "transform_kind": 1.0,
-            "center": params["center"],
+            _CENTER_TEXT: params[_CENTER_TEXT],
             "factor": factor,
         },
     )
@@ -57,7 +60,7 @@ def _render_rotate(renderer, inputs, params):
         inputs[0],
         {
             "transform_kind": 2.0,
-            "center": params["center"],
+            _CENTER_TEXT: params[_CENTER_TEXT],
             "angle": float(params["angle"]),
         },
     )
@@ -68,7 +71,7 @@ def _render_skew(renderer, inputs, params):
     skew_x = float(skew_x)
     skew_y = float(skew_y)
     det = 1.0 - skew_x * skew_y
-    if not isfinite(det) or abs(det) < 1e-12:
+    if not isfinite(det) or abs(det) < 1 / 1_000_000_000_000:
         raise ValueError("skew values produce a singular transform")
 
     return _render_transform(
@@ -76,7 +79,7 @@ def _render_skew(renderer, inputs, params):
         inputs[0],
         {
             "transform_kind": 3.0,
-            "center": params["center"],
+            _CENTER_TEXT: params[_CENTER_TEXT],
             "skew": (skew_x, skew_y),
         },
     )
@@ -104,8 +107,8 @@ def register_plugins(registry):
             PluginFamily.PRIMITIVE,
             TextureKind.SDF,
             (TextureKind.SDF,),
-            params=("factor", "center"),
-            defaults={"center": (0.0, 0.0)},
+            params=("factor", _CENTER_TEXT),
+            defaults={_CENTER_TEXT: (0.0, 0.0)},
             shader=descriptor,
             render_func=_render_scale,
             lowering_func=lower_composite,
@@ -119,8 +122,8 @@ def register_plugins(registry):
             PluginFamily.PRIMITIVE,
             TextureKind.SDF,
             (TextureKind.SDF,),
-            params=("angle", "center"),
-            defaults={"center": (0.0, 0.0)},
+            params=("angle", _CENTER_TEXT),
+            defaults={_CENTER_TEXT: (0.0, 0.0)},
             shader=descriptor,
             render_func=_render_rotate,
             lowering_func=lower_composite,
@@ -134,8 +137,8 @@ def register_plugins(registry):
             PluginFamily.PRIMITIVE,
             TextureKind.SDF,
             (TextureKind.SDF,),
-            params=("skew", "center"),
-            defaults={"center": (0.0, 0.0)},
+            params=("skew", _CENTER_TEXT),
+            defaults={_CENTER_TEXT: (0.0, 0.0)},
             shader=descriptor,
             render_func=_render_skew,
             lowering_func=lower_composite,

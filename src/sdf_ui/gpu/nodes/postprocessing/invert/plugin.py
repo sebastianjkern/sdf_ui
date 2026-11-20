@@ -1,20 +1,19 @@
 __docformat__ = "google"
 
-from sdf_ui.gpu.nodes.base import Plugin, PluginFamily, TextureKind
-from sdf_ui.gpu.nodes.common import shader
+from functools import partial
+
+from sdf_ui.gpu.nodes.base import PluginFamily, TextureKind
+from sdf_ui.gpu.nodes.common import register_single_texture_shader
 
 from .implementation import CONTRACT, INTERFACE, PROGRAM
 
-
-def register_plugins(registry):
-    registry.register(
-        Plugin(
-            "invert",
-            PluginFamily.POSTPROCESSING,
-            TextureKind.COLOR,
-            (TextureKind.COLOR,),
-            shader=shader("invert", "postprocessing/invert/shader.glsl", derivative_contract=CONTRACT, program=PROGRAM, interface=INTERFACE),
-            input_uniforms=("origTex",),
-            method_of=(TextureKind.COLOR,),
-        )
-    )
+register_plugins = partial(
+    register_single_texture_shader,
+    name="invert",
+    family=PluginFamily.POSTPROCESSING,
+    texture_kind=TextureKind.COLOR,
+    shader_path="postprocessing/invert/shader.glsl",
+    contract=CONTRACT,
+    program=PROGRAM,
+    interface=INTERFACE,
+)

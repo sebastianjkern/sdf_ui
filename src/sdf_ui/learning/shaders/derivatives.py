@@ -31,47 +31,64 @@ def _implementation(contract):
     return ShaderOperation(contract.name, contract.path, contract).reference_rule()
 
 
-def _prepare(contract, size, inputs, params, independent):
-    from ..render import DifferentiableRenderer, _tensor
-
-    context = DifferentiableRenderer(size)
-    rule, defaults = _implementation(contract)
+def _validated_arguments(contract, inputs, params):
     inputs = {} if inputs is None else dict(inputs)
     params = {} if params is None else dict(params)
-    if set(inputs) != {argument.name for argument in contract.inputs}:
+    expected_inputs = {argument.name for argument in contract.inputs}
+    if set(inputs) != expected_inputs:
         raise ValueError(
             f"Shader '{contract.name}' needs inputs "
             f"{tuple(argument.name for argument in contract.inputs)}"
         )
-    unknown = set(params) - {argument.name for argument in contract.parameters}
+    expected_params = {argument.name for argument in contract.parameters}
+    unknown = set(params) - expected_params
     if unknown:
         raise ValueError(f"Unknown shader uniforms: {sorted(unknown)}")
+    return inputs, params
+
+
+def _convert_arguments(contract, context, defaults, inputs, params, independent):
+    from ..render import _tensor
+
     textures, uniforms = {}, {}
-    for arguments, source, target, is_image in (
+    groups = (
         (contract.inputs, inputs, textures, True),
         (contract.parameters, params, uniforms, False),
-    ):
+    )
+    for arguments, source, target, is_image in groups:
         for argument in arguments:
-            expected = (
-                (context.size[1], context.size[0]) if is_image else ()
-            ) + argument.shape
-            value = source.get(
-                argument.name, defaults.get(argument.name, np.zeros(expected))
-            )
+            spatial_shape = (context.size[1], context.size[0]) if is_image else ()
+            expected = spatial_shape + argument.shape
+            value = source.get(argument.name, defaults.get(argument.name, np.zeros(expected)))
             tensor = _tensor(value)
             if tensor.shape != expected:
                 raise ValueError(
                     f"Shader argument '{argument.name}' has shape {tensor.shape}; expected {expected}"
                 )
-            if independent:
-                tensor = Tensor(
-                    tensor.numpy(),
-                    requires_grad=(
-                        is_image
-                        or argument.name not in contract.zero_gradient_parameters
-                    ),
-                )
-            target[argument.name] = tensor
+            target[argument.name] = _independent_tensor(
+                tensor, contract, argument, is_image, independent
+            )
+    return textures, uniforms
+
+
+def _independent_tensor(tensor, contract, argument, is_image, independent):
+    if not independent:
+        return tensor
+    return Tensor(
+        tensor.numpy(),
+        requires_grad=is_image or argument.name not in contract.zero_gradient_parameters,
+    )
+
+
+def _prepare(contract, size, inputs, params, independent):
+    from ..render import DifferentiableRenderer
+
+    context = DifferentiableRenderer(size)
+    rule, defaults = _implementation(contract)
+    inputs, params = _validated_arguments(contract, inputs, params)
+    textures, uniforms = _convert_arguments(
+        contract, context, defaults, inputs, params, independent
+    )
     return context, rule, textures, uniforms
 
 

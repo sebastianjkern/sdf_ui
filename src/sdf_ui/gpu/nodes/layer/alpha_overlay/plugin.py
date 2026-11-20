@@ -70,25 +70,21 @@ def render_alpha_overlay_pair(renderer, inputs, params):
     return ColorTexture(tex=output, context=ctx, mode=ColorSpaceMode.RGB)
 
 
-def render_alpha_overlay_batch(renderer, base, tops, *, output_indices=None):
-    """Composite ordered overlays, materializing selected intermediate steps."""
-    from sdf_ui.core.color import ColorSpaceMode, ColorTexture
+def _output_steps(tops, output_indices):
+    if output_indices is None:
+        return tuple(range(len(tops)))
+    return tuple(sorted(set(output_indices)))
 
-    tops = tuple(tops)
+
+def _validate_batch(tops, output_indices):
     if not 1 <= len(tops) <= MAX_BATCH_OVERLAYS:
         raise ValueError("overlay batch size must be between one and three")
-    output_indices = (
-        tuple(range(len(tops)))
-        if output_indices is None
-        else tuple(sorted(set(output_indices)))
-    )
     if not output_indices or any(index < 0 or index >= len(tops) for index in output_indices):
         raise ValueError("output_indices must select at least one overlay step")
 
-    outputs = tuple(renderer.ctx.rgba8() for _ in output_indices)
-    output_bindings = {
-        stage: binding for binding, stage in enumerate(output_indices)
-    }
+
+def _batch_source(base, tops, outputs, output_bindings):
+    from sdf_ui.core.color import ColorSpaceMode
     replacements = {
         "{{OUTPUT_BINDINGS}}": "\n".join(
             f"@group(0) @binding({binding})\n"
@@ -103,40 +99,60 @@ def render_alpha_overlay_batch(renderer, base, tops, *, output_indices=None):
         ),
         "const BASE_IS_LAB: bool = false;": (
             "const BASE_IS_LAB: bool = "
-            + str(base.mode == ColorSpaceMode.LAB).lower()
-            + ";"
+            + str(base.mode == ColorSpaceMode.LAB).lower() + ";"
         ),
         "{{TOP_FLAGS}}": "\n".join(
-            f"const TOP{index}_IS_LAB: bool = "
-            f"{str(top.mode == ColorSpaceMode.LAB).lower()};"
+            f"const TOP{index}_IS_LAB: bool = {str(top.mode == ColorSpaceMode.LAB).lower()};"
             for index, top in enumerate(tops)
         ),
         "{{STEPS}}": "\n".join(
-            _batch_step(index, output_bindings.get(index))
-            for index in range(len(tops))
+            _batch_step(index, output_bindings.get(index)) for index in range(len(tops))
         ),
     }
     source = _BATCH_OVERLAY
     for token, replacement in replacements.items():
         source = source.replace(token, replacement)
+    return source
 
+
+def _batch_resources(outputs, base, tops):
     resources = {binding: outputs[binding] for binding in range(len(outputs))}
     resources[len(outputs)] = base.tex
     resources.update(
         (len(outputs) + index + 1, top.tex) for index, top in enumerate(tops)
     )
-    try:
-        renderer.ctx.run_shader("overlay", resources, source_code=source)
-    except BaseException:
-        for output in outputs:
-            output.close()
-        raise
+    return resources
+
+
+def _output_textures(renderer, outputs, output_bindings):
+    from sdf_ui.core.color import ColorSpaceMode, ColorTexture
+
     return {
         stage: ColorTexture(
             tex=outputs[binding], context=renderer.ctx, mode=ColorSpaceMode.RGB
         )
         for stage, binding in output_bindings.items()
     }
+
+
+def render_alpha_overlay_batch(renderer, base, tops, *, output_indices=None):
+    """Composite ordered overlays, materializing selected intermediate steps."""
+
+    tops = tuple(tops)
+    output_indices = _output_steps(tops, output_indices)
+    _validate_batch(tops, output_indices)
+    outputs = tuple(renderer.ctx.rgba8() for _ in output_indices)
+    output_bindings = {stage: binding for binding, stage in enumerate(output_indices)}
+    source = _batch_source(base, tops, outputs, output_bindings)
+    try:
+        renderer.ctx.run_shader(
+            "overlay", _batch_resources(outputs, base, tops), source_code=source
+        )
+    except BaseException:
+        for output in outputs:
+            output.close()
+        raise
+    return _output_textures(renderer, outputs, output_bindings)
 
 
 def _batch_step(index, output_binding):

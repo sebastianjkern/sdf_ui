@@ -1,5 +1,7 @@
 """Isoline shader's layout and differentiable color-band rules."""
 
+
+
 from sdf_ui.gpu.nodes.base import ImageBinding, ShaderInterface, Uniform
 from sdf_ui.gpu.nodes.differentiation import (
     ShaderArgument,
@@ -9,6 +11,7 @@ from sdf_ui.gpu.nodes.shader_expression import ShaderProgram
 
 from ..glsl import RGBA
 
+_FLOAT_TEXT = 'float'
 
 def reference(context, inputs, params):
     import numpy as np
@@ -25,7 +28,7 @@ def reference(context, inputs, params):
     wrapped = where(wrapped.data < 0.0, wrapped + period, wrapped)
     band = minimum(wrapped, period - wrapped)
     half_width = maximum(_tensor(params["line_width"]) * 0.5, 0.0)
-    aa = 1.5001 + maximum(_tensor(params["feather"]), 0.0)
+    aa = 15_001 / 10_000 + maximum(_tensor(params["feather"]), 0.0)
     line = 1.0 - _smoothstep(maximum(half_width - aa, 0.0), half_width + aa, band)
     line = where(valid, line, 0.0)
     return _mix(
@@ -37,16 +40,16 @@ def reference(context, inputs, params):
 INTERFACE = ShaderInterface(
     ImageBinding("destTex", 0, write=True), (ImageBinding("sdf", 1, read=True),),
     (Uniform("background", "vec4"), Uniform("line_color", "vec4"),
-     Uniform("inflate", "float"), Uniform("spacing", "float"),
-     Uniform("line_width", "float"), Uniform("feather", "float"), Uniform("phase", "float")),
+     Uniform("inflate", _FLOAT_TEXT), Uniform("spacing", _FLOAT_TEXT),
+     Uniform("line_width", _FLOAT_TEXT), Uniform("feather", _FLOAT_TEXT), Uniform("phase", _FLOAT_TEXT)),
 )
 CONTRACT = ShaderDifferentiation(
     "isolines", "gpu/nodes/shading/isolines/shader.glsl",
     (ShaderArgument("sdf", (), "r32f"),),
     (ShaderArgument("background", (4,), "vec4"), ShaderArgument("line_color", (4,), "vec4"),
-     ShaderArgument("inflate", (), "float"), ShaderArgument("spacing", (), "float"),
-     ShaderArgument("line_width", (), "float"), ShaderArgument("feather", (), "float"),
-     ShaderArgument("phase", (), "float")),
+     ShaderArgument("inflate", (), _FLOAT_TEXT), ShaderArgument("spacing", (), _FLOAT_TEXT),
+     ShaderArgument("line_width", (), _FLOAT_TEXT), ShaderArgument("feather", (), _FLOAT_TEXT),
+     ShaderArgument("phase", (), _FLOAT_TEXT)),
     (ShaderArgument("destTex", (4,), "rgba8"),),
     notes="Piecewise derivatives; min/max ties split adjoints equally.", reference=reference,
 )

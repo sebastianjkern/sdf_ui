@@ -6,651 +6,647 @@ from PIL import Image
 
 from examples.lagrange_intuition_short import SIZE, _build_static_scenes
 from sdf_ui import Canvas, color, sdf
-from tests.helpers import render, rgba_array
+from tests.helpers import render, rgba_array, tracked_texture_close
 
+_FFFFFF_TEXT = '#ffffff'
 
-@pytest.mark.parametrize(
-    ("factory_name", "args"),
-    [
-        ("circle", ((16, 16), 5)),
-        ("disc", ((16, 16), 5)),
-        ("rect", ((16, 16), (10, 10), (2, 2, 2, 2))),
-        ("rounded_rect", ((16, 16), (10, 10), (2, 2, 2, 2))),
-        ("line", ((0, 0), (15, 15))),
-        ("bezier", ((0, 0), (8, 12), (15, 0))),
-        ("triangle", ((0, 0), (15, 0), (8, 15))),
-        ("grid", ((8, 8), (4, 4))),
-        ("clear", ("#ffffff",)),
-        ("clear_color", ("#ffffff",)),
-        ("linear_gradient", ((0, 8), (15, 8), (255, 0, 0, 255), (0, 0, 255, 255))),
-        ("radial_gradient", ((8, 8), (255, 0, 0, 255), (0, 0, 255, 255))),
-        ("noise", ()),
-        ("perlin_noise", ()),
-        ("film_grain", ()),
-    ],
-)
-def test_public_factories_render_successfully(factory_name, args):
-    namespace = sdf if hasattr(sdf, factory_name) else color
-    texture = render(getattr(namespace, factory_name)(*args), size=(16, 16))
-
-    assert texture.tex.size == (16, 16)
-    assert texture.kind in {"sdf", "color"}
-
-
-def test_clear_color_renders_solid_white():
-    pixels = rgba_array(render(color.clear("#ffffff").to_rgb(), size=(8, 8)))
-
-    assert pixels.shape == (8, 8, 4)
-    assert np.all(pixels == 255)
-
-
-def test_circle_fill_has_distinct_inside_and_outside_pixels():
-    pixels = rgba_array(
-        render(
-            sdf.circle((8, 8), 5).fill((255, 255, 255, 255), (0, 0, 0, 255)).to_rgb(),
-            size=(16, 16),
-        )
+class TestSlopLintCases:
+    @pytest.mark.parametrize(
+        ("factory_name", "args"),
+        [
+            ("circle", ((16, 16), 5)),
+            ("disc", ((16, 16), 5)),
+            ("rect", ((16, 16), (10, 10), (2, 2, 2, 2))),
+            ("rounded_rect", ((16, 16), (10, 10), (2, 2, 2, 2))),
+            ("line", ((0, 0), (15, 15))),
+            ("bezier", ((0, 0), (8, 12), (15, 0))),
+            ("triangle", ((0, 0), (15, 0), (8, 15))),
+            ("grid", ((8, 8), (4, 4))),
+            ("clear", (_FFFFFF_TEXT,)),
+            ("clear_color", (_FFFFFF_TEXT,)),
+            ("linear_gradient", ((0, 8), (15, 8), (255, 0, 0, 255), (0, 0, 255, 255))),
+            ("radial_gradient", ((8, 8), (255, 0, 0, 255), (0, 0, 255, 255))),
+            ("noise", ()),
+            ("perlin_noise", ()),
+            ("film_grain", ()),
+        ],
     )
+    def test_public_factories_render_successfully(self, factory_name, args):
+        namespace = sdf if hasattr(sdf, factory_name) else color
+        texture = render(getattr(namespace, factory_name)(*args), size=(16, 16))
 
-    assert pixels[8, 8, 0] > 200
-    assert pixels[0, 0, 0] < 20
+        assert texture.tex.size == (16, 16)
+        assert texture.kind in {"sdf", "color"}
 
+    def test_clear_color_renders_solid_white(self):
+        pixels = rgba_array(render(color.clear(_FFFFFF_TEXT).to_rgb(), size=(8, 8)))
 
-def test_lagrange_panel_leaves_heading_and_plot_visible():
-    pytest.importorskip("matplotlib")
-    scenes, _gradient_labels = _build_static_scenes()
+        assert pixels.shape == (8, 8, 4)
+        assert np.all(pixels == 255)
 
-    with Canvas(SIZE, device_scale=0.25) as canvas, canvas.session() as renderer:
-        pixels = rgba_array(renderer.render(scenes[0]))
-
-    # The panel starts at x=700. The plot's right-hand side stays clear and
-    # the centered equation sits entirely above the panel.
-    assert pixels[100, 160, 0] < pixels[100, 180, 0]
-    assert pixels[16:24, 130:190, 0].max() > 190
-
-
-def test_small_text_fades_on_both_sides_of_its_contour():
-    text = sdf.text("Thin", size=15, ox=3.2, oy=6.4)
-    with Canvas((36, 24)) as canvas, canvas.session() as renderer:
-        distance = np.frombuffer(renderer.render(text).tex.read(), dtype=np.float32)
-        alpha = rgba_array(renderer.render(text.fill("#ffffff", "#ffffff00")))[::-1, :, 3]
-
-    # The default inflation moves the contour to 0.2. Pixels just outside it
-    # still contribute coverage to small glyphs.
-    outside_edge = (distance > 0.2) & (distance < 0.5)
-    assert np.any(outside_edge)
-    edge_alpha = alpha.ravel()[outside_edge]
-    assert np.all((edge_alpha > 0) & (edge_alpha <= 128))
-
-
-def test_percentage_expressions_are_resolved_during_render():
-    pixels = rgba_array(
-        render(
-            sdf.circle(("50%x", "50%y"), "25%min")
-            .fill((255, 255, 255, 255), (0, 0, 0, 255))
-            .to_rgb(),
-            size=(40, 20),
-        )
-    )
-
-    assert pixels[10, 20, 0] > 200
-    assert pixels[0, 0, 0] < 20
-
-
-def test_fill_from_texture_maps_a_layer_through_an_sdf():
-    pixels = rgba_array(
-        render(
-            sdf.circle((8, 8), 5).fill_from_texture(
-                color.clear((255, 0, 0, 255)), background=(0, 0, 0, 255)
-            ),
-            size=(16, 16),
-        )
-    )
-
-    assert pixels[8, 8, 0] > 200
-    assert pixels[0, 0, 0] < 20
-
-
-def test_alpha_overlay_and_mask_layers_change_pixels():
-    overlay_pixels = rgba_array(
-        render(
-            color.clear((0, 0, 0, 0))
-            .alpha_overlay(sdf.circle((8, 8), 5).fill((255, 0, 0, 255), (0, 0, 0, 0)))
-            .to_rgb(),
-            size=(16, 16),
-        )
-    )
-    mask_pixels = rgba_array(
-        render(
-            color.clear((0, 0, 0, 0))
-            .mask(
-                color.clear((255, 0, 0, 255)),
-                sdf.circle((8, 8), 5).generate_mask(),
+    def test_circle_fill_has_distinct_inside_and_outside_pixels(self):
+        pixels = rgba_array(
+            render(
+                sdf.circle((8, 8), 5).fill((255, 255, 255, 255), (0, 0, 0, 255)).to_rgb(),
+                size=(16, 16),
             )
-            .to_rgb(),
-            size=(16, 16),
         )
-    )
 
-    assert overlay_pixels[8, 8, 3] == 255
-    assert overlay_pixels[0, 0, 3] == 0
-    assert mask_pixels[8, 8, 3] < 10
-    assert mask_pixels[0, 0, 3] > 200
+        assert pixels[8, 8, 0] > 200
+        assert pixels[0, 0, 0] < 20
 
+    def test_lagrange_panel_leaves_heading_and_plot_visible(self):
+        pytest.importorskip("matplotlib")
+        scenes, _gradient_labels = _build_static_scenes()
 
-@pytest.mark.parametrize("base_rgb", [False, True])
-@pytest.mark.parametrize("top_rgb", [False, True])
-def test_alpha_overlay_fuses_lab_conversion_without_pixel_changes(base_rgb, top_rgb):
-    base = sdf.circle((9, 11), 8).fill(
-        (0.72, 0.18, 0.33, 0.47), (0.12, 0.45, 0.82, 0.61)
-    )
-    top = sdf.circle((15, 10), 7).fill(
-        (0.91, 0.64, 0.09, 0.38), (0.34, 0.08, 0.54, 0.29)
-    )
-    if base_rgb:
-        base = base.to_rgb()
-    if top_rgb:
-        top = top.to_rgb()
+        with Canvas(SIZE, device_scale=0.25) as canvas, canvas.session() as renderer:
+            pixels = rgba_array(renderer.render(scenes[0]))
 
-    fused = render(base.alpha_overlay(top).to_rgb(), size=(24, 20))
-    reference = render(
-        base.to_rgb().alpha_overlay(top.to_rgb()).to_rgb(), size=(24, 20)
-    )
-    try:
-        np.testing.assert_array_equal(fused.tex.read(), reference.tex.read())
-        dispatches = fused.context.last_render_stats.shader_dispatches_by_name
-        assert dispatches.get("overlay", 0) == 1
-        assert dispatches.get("to_rgb", 0) == int(base_rgb) + int(top_rgb)
-    finally:
-        fused.close()
-        reference.close()
+        # The panel starts at x=700. The plot's right-hand side stays clear and
+        # the centered equation sits entirely above the panel.
+        assert pixels[100, 160, 0] < pixels[100, 180, 0]
+        assert pixels[16:24, 130:190, 0].max() > 190
 
+    def test_small_text_fades_on_both_sides_of_its_contour(self):
+        text = sdf.text("Thin", size=15, ox=3.2, oy=6.4)
+        with Canvas((36, 24)) as canvas, canvas.session() as renderer:
+            distance = np.frombuffer(renderer.render(text).tex.read(), dtype=np.float32)
+            alpha = rgba_array(renderer.render(text.fill(_FFFFFF_TEXT, "#ffffff00")))[::-1, :, 3]
 
-def test_color_compositing_and_transparency_render_predictably():
-    multiply_pixels = rgba_array(
-        render(
-            color.clear((255, 0, 0, 255))
-            .multiply(color.clear((0, 255, 0, 255)))
-            .to_rgb(),
-            size=(8, 8),
+        # The default inflation moves the contour to 0.2. Pixels just outside it
+        # still contribute coverage to small glyphs.
+        outside_edge = (distance > 1 / 5) & (distance < 0.5)
+        assert np.any(outside_edge)
+        edge_alpha = alpha.ravel()[outside_edge]
+        assert np.all((edge_alpha > 0) & (edge_alpha <= 128))
+
+    def test_percentage_expressions_are_resolved_during_render(self):
+        pixels = rgba_array(
+            render(
+                sdf.circle(("50%x", "50%y"), "25%min")
+                .fill((255, 255, 255, 255), (0, 0, 0, 255))
+                .to_rgb(),
+                size=(40, 20),
+            )
         )
-    )
-    transparency_pixels = rgba_array(
-        render(color.clear("#ffffff").transparency(0.5).to_rgb(), size=(8, 8))
-    )
 
-    assert multiply_pixels[0, 0, 0] < 5
-    assert multiply_pixels[0, 0, 1] < 5
-    assert multiply_pixels[0, 0, 2] < 5
-    assert transparency_pixels[0, 0, 3] == 128
+        assert pixels[10, 20, 0] > 200
+        assert pixels[0, 0, 0] < 20
 
-
-def test_rgb_layer_operations_normalize_tuple_colors():
-    red = color.clear((255, 0, 0, 255))
-    blue = color.clear((0, 0, 255, 255))
-
-    clear_pixels = rgba_array(render(red.to_rgb(), size=(8, 8)))
-    overlay_pixels = rgba_array(
-        render(color.clear((0, 0, 0, 0)).alpha_overlay(red), size=(8, 8))
-    )
-    mask_pixels = rgba_array(
-        render(
-            color.clear((0, 0, 0, 255)).mask(
-                blue, sdf.circle((4, 4), 3).generate_mask()
-            ),
-            size=(8, 8),
+    def test_fill_from_texture_maps_a_layer_through_an_sdf(self):
+        pixels = rgba_array(
+            render(
+                sdf.circle((8, 8), 5).fill_from_texture(
+                    color.clear((255, 0, 0, 255)), background=(0, 0, 0, 255)
+                ),
+                size=(16, 16),
+            )
         )
+
+        assert pixels[8, 8, 0] > 200
+        assert pixels[0, 0, 0] < 20
+
+    def test_alpha_overlay_and_mask_layers_change_pixels(self):
+        overlay_pixels = rgba_array(
+            render(
+                color.clear((0, 0, 0, 0))
+                .alpha_overlay(sdf.circle((8, 8), 5).fill((255, 0, 0, 255), (0, 0, 0, 0)))
+                .to_rgb(),
+                size=(16, 16),
+            )
+        )
+        mask_pixels = rgba_array(
+            render(
+                color.clear((0, 0, 0, 0))
+                .mask(
+                    color.clear((255, 0, 0, 255)),
+                    sdf.circle((8, 8), 5).generate_mask(),
+                )
+                .to_rgb(),
+                size=(16, 16),
+            )
+        )
+
+        assert overlay_pixels[8, 8, 3] == 255
+        assert overlay_pixels[0, 0, 3] == 0
+        assert mask_pixels[8, 8, 3] < 10
+        assert mask_pixels[0, 0, 3] > 200
+
+    @pytest.mark.parametrize("base_rgb", [False, True])
+    @pytest.mark.parametrize("top_rgb", [False, True])
+    def test_alpha_overlay_fuses_lab_conversion_without_pixel_changes(self, base_rgb, top_rgb):
+        base = sdf.circle((9, 11), 8).fill(
+            (0.72, 0.18, 0.33, 0.47), (0.12, 0.45, 0.82, 0.61)
+        )
+        top = sdf.circle((15, 10), 7).fill(
+            (0.91, 0.64, 0.09, 0.38), (0.34, 0.08, 0.54, 0.29)
+        )
+        if base_rgb:
+            base = base.to_rgb()
+        if top_rgb:
+            top = top.to_rgb()
+
+        fused = render(base.alpha_overlay(top).to_rgb(), size=(24, 20))
+        reference = render(
+            base.to_rgb().alpha_overlay(top.to_rgb()).to_rgb(), size=(24, 20)
+        )
+        try:
+            np.testing.assert_array_equal(fused.tex.read(), reference.tex.read())
+            dispatches = fused.context.last_render_stats.shader_dispatches_by_name
+            assert dispatches.get("overlay", 0) == 1
+            assert dispatches.get("to_rgb", 0) == int(base_rgb) + int(top_rgb)
+        finally:
+            fused.close()
+            reference.close()
+
+    def test_color_compositing_and_transparency_render_predictably(self):
+        multiply_pixels = rgba_array(
+            render(
+                color.clear((255, 0, 0, 255))
+                .multiply(color.clear((0, 255, 0, 255)))
+                .to_rgb(),
+                size=(8, 8),
+            )
+        )
+        transparency_pixels = rgba_array(
+            render(color.clear(_FFFFFF_TEXT).transparency(0.5).to_rgb(), size=(8, 8))
+        )
+
+        assert multiply_pixels[0, 0, 0] < 5
+        assert multiply_pixels[0, 0, 1] < 5
+        assert multiply_pixels[0, 0, 2] < 5
+        assert transparency_pixels[0, 0, 3] == 128
+
+    def test_rgb_layer_operations_normalize_tuple_colors(self):
+        red = color.clear((255, 0, 0, 255))
+        blue = color.clear((0, 0, 255, 255))
+
+        clear_pixels = rgba_array(render(red.to_rgb(), size=(8, 8)))
+        overlay_pixels = rgba_array(
+            render(color.clear((0, 0, 0, 0)).alpha_overlay(red), size=(8, 8))
+        )
+        mask_pixels = rgba_array(
+            render(
+                color.clear((0, 0, 0, 255)).mask(
+                    blue, sdf.circle((4, 4), 3).generate_mask()
+                ),
+                size=(8, 8),
+            )
+        )
+
+        assert int(clear_pixels[0, 0, 0]) == pytest.approx(255, abs=2)
+        assert int(clear_pixels[0, 0, 1]) == pytest.approx(0, abs=2)
+        assert int(clear_pixels[0, 0, 2]) == pytest.approx(0, abs=2)
+        assert int(clear_pixels[0, 0, 3]) == 255
+        assert int(overlay_pixels[0, 0, 0]) == pytest.approx(255, abs=2)
+        assert int(overlay_pixels[0, 0, 1]) == pytest.approx(0, abs=2)
+        assert int(overlay_pixels[0, 0, 2]) == pytest.approx(0, abs=2)
+        assert int(overlay_pixels[0, 0, 3]) == 255
+        assert mask_pixels[4, 4, 2] < 20
+        assert mask_pixels[0, 0, 2] > 200
+
+    @pytest.mark.parametrize(
+        "factory_name", ["blur", "blur_9", "blur_13", "dithering", "dither_1bit", "invert"]
     )
+    def test_color_postprocessing_methods_render_successfully(self, factory_name):
+        texture = render(getattr(color.clear(_FFFFFF_TEXT), factory_name)(), size=(8, 8))
 
-    assert int(clear_pixels[0, 0, 0]) == pytest.approx(255, abs=2)
-    assert int(clear_pixels[0, 0, 1]) == pytest.approx(0, abs=2)
-    assert int(clear_pixels[0, 0, 2]) == pytest.approx(0, abs=2)
-    assert int(clear_pixels[0, 0, 3]) == 255
-    assert int(overlay_pixels[0, 0, 0]) == pytest.approx(255, abs=2)
-    assert int(overlay_pixels[0, 0, 1]) == pytest.approx(0, abs=2)
-    assert int(overlay_pixels[0, 0, 2]) == pytest.approx(0, abs=2)
-    assert int(overlay_pixels[0, 0, 3]) == 255
-    assert mask_pixels[4, 4, 2] < 20
-    assert mask_pixels[0, 0, 2] > 200
+        assert texture.tex.size == (8, 8)
 
+    def test_blur_preserves_a_solid_white_image(self):
+        pixels = rgba_array(render(color.clear(_FFFFFF_TEXT).blur().to_rgb(), size=(8, 8)))
 
-@pytest.mark.parametrize(
-    "factory_name", ["blur", "blur_9", "blur_13", "dithering", "dither_1bit", "invert"]
-)
-def test_color_postprocessing_methods_render_successfully(factory_name):
-    texture = render(getattr(color.clear("#ffffff"), factory_name)(), size=(8, 8))
+        assert pixels.min() >= 245
 
-    assert texture.tex.size == (8, 8)
+    def test_evaluation_rect_returns_matching_cropped_pixels(self):
+        scene = (
+            sdf.circle((14, 12), 7)
+            .union(sdf.circle((20, 12), 5))
+            .fill((255, 80, 20, 255), (0, 0, 0, 0))
+            .to_rgb()
+        )
+        rect = (7, 5, 13, 11)
+        with Canvas((32, 24)) as canvas:
+            full = scene.render(canvas)
+            cropped = scene.render(canvas, evaluation_rect=rect)
 
+            assert cropped.tex.size == (rect[2], rect[3])
+            assert cropped.tex.origin == rect[:2]
+            assert cropped.tex.canvas_size == canvas.size
+            assert cropped.size == (rect[2], rect[3])
+            assert cropped.origin == rect[:2]
+            assert cropped.canvas_size == canvas.size
+            np.testing.assert_array_equal(cropped.tex.read(), full.tex.read()[5:16, 7:20])
+            roundtrip = cropped.to_lab().to_rgb().render(canvas)
+            np.testing.assert_array_equal(roundtrip.tex.read(), cropped.tex.read())
 
-def test_blur_preserves_a_solid_white_image():
-    pixels = rgba_array(render(color.clear("#ffffff").blur().to_rgb(), size=(8, 8)))
+    def test_evaluation_rect_rejects_invalid_rectangles_and_nonpointwise_nodes(self):
+        with Canvas((16, 16)) as canvas:
+            with pytest.raises(TypeError, match="four integers"):
+                sdf.circle((8, 8), 4).render(canvas, evaluation_rect=(0, 0, 4.0, 4))
+            with pytest.raises(TypeError, match="four integers"):
+                sdf.circle((8, 8), 4).render(canvas, evaluation_rect=(0, 0, True, 4))
+            with pytest.raises(ValueError, match="inside the canvas"):
+                sdf.circle((8, 8), 4).render(canvas, evaluation_rect=(14, 14, 4, 4))
+            with pytest.raises(NotImplementedError, match="host-rendered node"):
+                color.clear(_FFFFFF_TEXT).blur().render(canvas, evaluation_rect=(4, 4, 8, 8))
 
-    assert pixels.min() >= 245
+    def test_create_image_validates_size_and_canvas_coordinates(self):
+        with Canvas((16, 16)) as canvas:
+            with pytest.raises(ValueError, match="size must contain two integer"):
+                canvas.create_image((8.5, 8))
+            with pytest.raises(ValueError, match="origin must contain two nonnegative"):
+                canvas.create_image((8, 8), origin=(-1, 0))
+            with pytest.raises(ValueError, match="fit inside canvas_size"):
+                canvas.create_image((8, 8), origin=(4, 4), canvas_size=(8, 8))
 
-
-def test_evaluation_rect_returns_matching_cropped_pixels():
-    scene = (
-        sdf.circle((14, 12), 7)
-        .union(sdf.circle((20, 12), 5))
-        .fill((255, 80, 20, 255), (0, 0, 0, 0))
-        .to_rgb()
-    )
-    rect = (7, 5, 13, 11)
-    with Canvas((32, 24)) as canvas:
-        full = scene.render(canvas)
-        cropped = scene.render(canvas, evaluation_rect=rect)
-
-        assert cropped.tex.size == (rect[2], rect[3])
-        assert cropped.tex.origin == rect[:2]
-        assert cropped.tex.canvas_size == canvas.size
-        assert cropped.size == (rect[2], rect[3])
-        assert cropped.origin == rect[:2]
-        assert cropped.canvas_size == canvas.size
-        np.testing.assert_array_equal(cropped.tex.read(), full.tex.read()[5:16, 7:20])
-        roundtrip = cropped.to_lab().to_rgb().render(canvas)
-        np.testing.assert_array_equal(roundtrip.tex.read(), cropped.tex.read())
-
-
-def test_evaluation_rect_rejects_invalid_rectangles_and_nonpointwise_nodes():
-    with Canvas((16, 16)) as canvas:
-        with pytest.raises(TypeError, match="four integers"):
-            sdf.circle((8, 8), 4).render(canvas, evaluation_rect=(0, 0, 4.0, 4))
-        with pytest.raises(TypeError, match="four integers"):
-            sdf.circle((8, 8), 4).render(canvas, evaluation_rect=(0, 0, True, 4))
-        with pytest.raises(ValueError, match="inside the canvas"):
-            sdf.circle((8, 8), 4).render(canvas, evaluation_rect=(14, 14, 4, 4))
-        with pytest.raises(NotImplementedError, match="host-rendered node"):
-            color.clear("#ffffff").blur().render(canvas, evaluation_rect=(4, 4, 8, 8))
-
-
-def test_create_image_validates_size_and_canvas_coordinates():
-    with Canvas((16, 16)) as canvas:
-        with pytest.raises(ValueError, match="size must contain two integer"):
-            canvas.create_image((8.5, 8))
-        with pytest.raises(ValueError, match="origin must contain two nonnegative"):
-            canvas.create_image((8, 8), origin=(-1, 0))
-        with pytest.raises(ValueError, match="fit inside canvas_size"):
-            canvas.create_image((8, 8), origin=(4, 4), canvas_size=(8, 8))
-
-
-def test_buffer_api_validates_sizes_offsets_and_data_types():
-    with Canvas((4, 4)) as canvas:
-        for invalid_size in (-1, 1.5, True):
-            with pytest.raises(ValueError, match="buffer size"):
-                canvas.create_buffer(invalid_size, usage=1)
-            with pytest.raises(ValueError, match="buffer size"):
-                canvas.allocate_buffer(invalid_size)
-        with pytest.raises(TypeError, match="bytes-like"):
-            canvas.create_buffer("four", usage=1)
-
-        with canvas.allocate_buffer(8) as buffer:
-            buffer.write(b"abcd")
-            assert buffer.read(4) == b"abcd"
-            with pytest.raises(ValueError, match="offset"):
-                buffer.write(b"abcd", offset=1.5)
+    def test_buffer_api_validates_sizes_offsets_and_data_types(self):
+        with Canvas((4, 4)) as canvas:
+            for invalid_size in (-1, 1.5, True):
+                with pytest.raises(ValueError, match="buffer size"):
+                    canvas.create_buffer(invalid_size, usage=1)
+                with pytest.raises(ValueError, match="buffer size"):
+                    canvas.allocate_buffer(invalid_size)
             with pytest.raises(TypeError, match="bytes-like"):
-                buffer.write([1, 2, 3, 4])
-            with pytest.raises(ValueError, match="size"):
-                buffer.read(1.5)
+                canvas.create_buffer("four", usage=1)
 
+            with canvas.allocate_buffer(8) as buffer:
+                buffer.write(b"abcd")
+                assert buffer.read(4) == b"abcd"
+                with pytest.raises(ValueError, match="offset"):
+                    buffer.write(b"abcd", offset=1.5)
+                with pytest.raises(TypeError, match="bytes-like"):
+                    buffer.write([1, 2, 3, 4])
+                with pytest.raises(ValueError, match="size"):
+                    buffer.read(1.5)
 
-def test_save_with_size_uses_and_closes_a_temporary_context(tmp_path, monkeypatch):
-    from sdf_ui.core import texture as texture_module
+    def test_save_with_size_uses_and_closes_a_temporary_context(self, tmp_path, monkeypatch):
+        from sdf_ui.core import texture as texture_module
 
-    contexts = []
-    original_context = texture_module.Context
+        contexts = []
+        original_context = texture_module.Context
 
-    class TrackingContext(original_context):
-        def __init__(self, size):
-            super().__init__(size)
-            contexts.append(self)
+        class TrackingContext(original_context):
+            def __init__(self, size):
+                super().__init__(size)
+                contexts.append(self)
 
-    monkeypatch.setattr(texture_module, "Context", TrackingContext)
-    output = tmp_path / "saved.png"
+        monkeypatch.setattr(texture_module, "Context", TrackingContext)
+        output = tmp_path / "saved.png"
 
-    sdf.circle((8, 8), 5).fill("#ffffff").save(output, size=(16, 16))
+        sdf.circle((8, 8), 5).fill(_FFFFFF_TEXT).save(output, size=(16, 16))
 
-    assert output.exists()
-    assert len(contexts) == 1
-    assert contexts[0]._closed
+        assert output.exists()
+        assert len(contexts) == 1
+        assert contexts[0]._closed
 
+    def test_save_closes_only_textures_it_materializes(self, tmp_path, monkeypatch):
+        from sdf_ui.core.texture import TextureNode
 
-def test_save_closes_only_textures_it_materializes(tmp_path, monkeypatch):
-    from sdf_ui.core.texture import TextureNode
+        closed, tracking_close = tracked_texture_close(TextureNode)
+        monkeypatch.setattr(TextureNode, "close", tracking_close)
+        output = tmp_path / "saved.png"
 
-    closed = []
-    original_close = TextureNode.close
+        with Canvas((8, 8)) as canvas:
+            color.clear(_FFFFFF_TEXT).save(output, ctx=canvas)
+            assert len(closed) == 2  # rendered input and temporary RGB conversion
 
-    def tracking_close(self):
-        if self.tex is not None:
-            closed.append(self)
-        original_close(self)
+            materialized = color.clear("#000000").render(canvas)
+            materialized.save(output, ctx=canvas)
+            assert not materialized.tex.closed
 
-    monkeypatch.setattr(TextureNode, "close", tracking_close)
-    output = tmp_path / "saved.png"
+        assert output.exists()
 
-    with Canvas((8, 8)) as canvas:
-        color.clear("#ffffff").save(output, ctx=canvas)
+    def test_show_closes_textures_it_materializes(self, monkeypatch):
+        from PIL import Image
+
+        from sdf_ui.core.texture import TextureNode
+
+        closed, tracking_close = tracked_texture_close(TextureNode)
+        monkeypatch.setattr(Image.Image, "show", lambda self, *args, **kwargs: None)
+        monkeypatch.setattr(TextureNode, "close", tracking_close)
+
+        with Canvas((8, 8)) as canvas:
+            color.clear(_FFFFFF_TEXT).show(ctx=canvas)
+
         assert len(closed) == 2  # rendered input and temporary RGB conversion
 
-        materialized = color.clear("#000000").render(canvas)
-        materialized.save(output, ctx=canvas)
-        assert not materialized.tex.closed
-
-    assert output.exists()
-
-
-def test_show_closes_textures_it_materializes(monkeypatch):
-    from PIL import Image
-
-    from sdf_ui.core.texture import TextureNode
-
-    closed = []
-    original_close = TextureNode.close
-    monkeypatch.setattr(Image.Image, "show", lambda self, *args, **kwargs: None)
-
-    def tracking_close(self):
-        if self.tex is not None:
-            closed.append(self)
-        original_close(self)
-
-    monkeypatch.setattr(TextureNode, "close", tracking_close)
-
-    with Canvas((8, 8)) as canvas:
-        color.clear("#ffffff").show(ctx=canvas)
-
-    assert len(closed) == 2  # rendered input and temporary RGB conversion
-
-
-def test_materialized_texture_can_be_closed_explicitly():
-    with Canvas((8, 8)) as canvas:
-        cache = {}
-        scene = sdf.circle((4, 4), 3)
-        texture = scene.render(canvas, cache=cache)
-        image = texture.tex
-        np.testing.assert_array_equal(texture.read(), image.read())
-
-        texture.close()
-        texture.close()
-
-        assert image.closed
-        with pytest.raises(RuntimeError, match="GPU image is closed"):
-            image.read()
-        with pytest.raises(RuntimeError, match="closed texture node"):
-            texture.render()
-        with pytest.raises(RuntimeError, match="closed texture node"):
-            _ = texture.size
-
-        rerendered = scene.render(canvas, cache=cache)
-        assert rerendered is not texture
-        assert not rerendered.tex.closed
-
-
-def test_materialized_texture_context_manager_closes_image():
-    with Canvas((8, 8)) as canvas:
-        with sdf.circle((4, 4), 3).render(canvas) as texture:
+    def test_materialized_texture_can_be_closed_explicitly(self):
+        with Canvas((8, 8)) as canvas:
+            cache = {}
+            scene = sdf.circle((4, 4), 3)
+            texture = scene.render(canvas, cache=cache)
             image = texture.tex
-            assert not image.closed
+            np.testing.assert_array_equal(texture.read(), image.read())
 
-        assert image.closed
+            texture.close()
+            texture.close()
 
+            assert image.closed
+            with pytest.raises(RuntimeError, match="GPU image is closed"):
+                image.read()
+            with pytest.raises(RuntimeError, match="closed texture node"):
+                texture.render()
+            with pytest.raises(RuntimeError, match="closed texture node"):
+                _ = texture.size
 
-def test_read_returns_image_shaped_arrays_for_sdf_and_color():
-    with Canvas((8, 6)) as canvas:
-        sdf_pixels = sdf.circle((4, 3), 2).render(canvas).read()
-        color_pixels = color.clear("#ffffff").to_rgb().render(canvas).read()
+            rerendered = scene.render(canvas, cache=cache)
+            assert rerendered is not texture
+            assert not rerendered.tex.closed
 
-    assert sdf_pixels.shape == (6, 8)
-    assert sdf_pixels.dtype == np.float32
-    assert color_pixels.shape == (6, 8, 4)
-    assert color_pixels.dtype == np.uint8
+    def test_materialized_texture_context_manager_closes_image(self):
+        with Canvas((8, 8)) as canvas:
+            with sdf.circle((4, 4), 3).render(canvas) as texture:
+                image = texture.tex
+                assert not image.closed
 
+            assert image.closed
 
-def test_invert_turns_white_into_black():
-    pixels = rgba_array(render(color.clear("#ffffff").invert().to_rgb(), size=(8, 8)))
+    def test_read_returns_image_shaped_arrays_for_sdf_and_color(self):
+        with Canvas((8, 6)) as canvas:
+            sdf_pixels = sdf.circle((4, 3), 2).render(canvas).read()
+            color_pixels = color.clear(_FFFFFF_TEXT).to_rgb().render(canvas).read()
 
-    assert np.all(pixels[..., :3] < 5)
-    assert np.all(pixels[..., 3] == 255)
+        assert sdf_pixels.shape == (6, 8)
+        assert sdf_pixels.dtype == np.float32
+        assert color_pixels.shape == (6, 8, 4)
+        assert color_pixels.dtype == np.uint8
 
+    def test_invert_turns_white_into_black(self):
+        pixels = rgba_array(render(color.clear(_FFFFFF_TEXT).invert().to_rgb(), size=(8, 8)))
 
-@pytest.mark.parametrize(
-    ("factory_name", "point_a", "point_b"),
-    [
-        ("radial", (8, 8), (0, 0)),
-        ("linear", (0, 8), (8, 8)),
-    ],
-)
-def test_gradient_factories_produce_distinct_pixels(factory_name, point_a, point_b):
-    if factory_name == "radial":
-        scene = color.radial_gradient(
-            (8, 8), (255, 0, 0, 255), (0, 0, 255, 255), inner=0, outer=8
-        )
-    else:
-        scene = color.linear_gradient(
-            (0, 8), (15, 8), (255, 0, 0, 255), (0, 0, 255, 255)
-        )
+        assert np.all(pixels[..., :3] < 5)
+        assert np.all(pixels[..., 3] == 255)
 
-    pixels = rgba_array(render(scene.to_rgb(), size=(16, 16)))
-
-    assert not np.array_equal(pixels[point_a], pixels[point_b])
-
-
-def test_outline_shadow_light_and_partial_derivative_render_distinct_features():
-    outline_pixels = rgba_array(
-        render(
-            sdf.circle((8, 8), 5)
-            .outline((255, 255, 255, 255), (0, 0, 0, 255), inflate=1)
-            .to_rgb(),
-            size=(16, 16),
-        )
+    @pytest.mark.parametrize(
+        ("factory_name", "point_a", "point_b"),
+        [
+            ("radial", (8, 8), (0, 0)),
+            ("linear", (0, 8), (8, 8)),
+        ],
     )
-    shadow_pixels = rgba_array(
-        render(
-            sdf.circle((8, 8), 5)
-            .shadow(distance=3, inflate=0, transparency=0.5)
-            .to_rgb(),
-            size=(16, 16),
-        )
-    )
-    light_pixels = rgba_array(
-        render(
-            sdf.circle((16, 16), 10).light(
-                (80, 180, 220, 255),
-                (0, 0, 0, 255),
-                light_dir=(-0.7, -0.7, 0.8),
-                ambient=0.2,
-                diffuse=0.45,
-                specular=0.0,
-                normal_strength=4.0,
-                bevel=8.0,
-                shade_background=True,
-                background_bevel=8.0,
-            ),
-            size=(32, 32),
-        )
-    )
-    derivative_pixels = rgba_array(
-        render(sdf.circle((8, 8), 5).partial_derivative(), size=(16, 16))
-    )
+    def test_gradient_factories_produce_distinct_pixels(self, factory_name, point_a, point_b):
+        if factory_name == "radial":
+            scene = color.radial_gradient(
+                (8, 8), (255, 0, 0, 255), (0, 0, 255, 255), inner=0, outer=8
+            )
+        else:
+            scene = color.linear_gradient(
+                (0, 8), (15, 8), (255, 0, 0, 255), (0, 0, 255, 255)
+            )
 
-    assert outline_pixels[8, 2, 0] > 200
-    assert outline_pixels[8, 8, 0] < 20
-    assert shadow_pixels[8, 8, 3] > shadow_pixels[0, 0, 3]
-    assert shadow_pixels[8, 2, 3] > shadow_pixels[0, 0, 3]
-    assert light_pixels[5, 16, 2] > light_pixels[27, 16, 2]
-    assert light_pixels[16, 5, 2] > light_pixels[16, 27, 2]
-    assert light_pixels[8, 8, 2] > light_pixels[24, 24, 2]
-    assert light_pixels[16, 16, 2] > light_pixels[0, 0, 2]
-    light_alpha_pixels = rgba_array(
-        render(
-            sdf.circle((16, 16), 10).light(
-                (255, 255, 255, 255),
-                (0, 0, 0, 255),
-                ambient=1.0,
-                diffuse=0.0,
-                specular=0.0,
-            ),
-            size=(32, 32),
-        )
-    )
-    antialias_values = light_alpha_pixels[..., 0]
-    assert np.count_nonzero((antialias_values > 0) & (antialias_values < 255)) > 0
-    soft_profile_pixels = rgba_array(
-        render(
-            sdf.circle((16, 16), 10).light(
-                (80, 180, 255, 255),
-                (0, 0, 0, 255),
-                light_dir=(-0.7, -0.7, 0.8),
-                ambient=0.2,
-                diffuse=0.9,
-                specular=0.0,
-                normal_strength=7.0,
-                height_profile="soft",
-                height_gamma=0.6,
-            ),
-            size=(32, 32),
-        )
-    )
-    assert not np.array_equal(light_pixels, soft_profile_pixels)
-    background_lit_pixels = rgba_array(
-        render(
-            sdf.circle((16, 16), 8).light(
-                (255, 255, 255, 255),
-                (128, 128, 128, 255),
-                light_dir=(-0.6, -0.7, 0.45),
-                ambient=0.5,
-                diffuse=0.8,
-                specular=0.0,
-                normal_strength=6.0,
-                height=0.6,
-                shade_background=True,
-                background_bevel=8.0,
-            ),
-            size=(32, 32),
-        )
-    )
-    assert not np.array_equal(background_lit_pixels[16, 6], background_lit_pixels[0, 0])
-    assert np.array_equal(background_lit_pixels[0, 0], [128, 128, 128, 255])
-    groove_pixels = rgba_array(
-        render(
-            sdf.rounded_rect((16, 16), (13, 10), (3, 3, 3, 3))
-            .subtract(sdf.circle((16, 16), 5))
-            .light(
-                (255, 255, 255, 255),
-                (128, 128, 128, 255),
-                light_dir=(-0.6, -0.7, 0.45),
-                ambient=0.5,
-                diffuse=0.8,
-                specular=0.0,
-                normal_strength=6.0,
-                bevel=3.0,
-                height=0.6,
-                shade_background=True,
-                background_bevel=3.0,
-            ),
-            size=(32, 32),
-        )
-    )
-    assert np.array_equal(groove_pixels[16, 16], [128, 128, 128, 255])
-    assert not np.array_equal(groove_pixels[16, 11], groove_pixels[16, 16])
-    assert derivative_pixels[0, 0, 0] > derivative_pixels[8, 8, 0]
+        pixels = rgba_array(render(scene.to_rgb(), size=(16, 16)))
 
+        assert not np.array_equal(pixels[point_a], pixels[point_b])
 
-def test_sdf_boolean_and_transform_methods_render_successfully():
-    base = sdf.circle((8, 8), 5)
-    other = sdf.circle((10, 8), 5)
+    def test_outline_shadow_light_and_partial_derivative_render_distinct_features(self):
+        outline_pixels = _render_outline_pixels()
+        shadow_pixels = _render_shadow_pixels()
+        light_pixels = _render_light_pixels()
+        derivative_pixels = _render_derivative_pixels()
 
-    scenes = [
-        base.abs(),
-        base.repeat(),
-        base.union(other),
-        base.intersection(other),
-        base.subtract(other),
-        base.smooth_union(other, k=2.0),
-        base.interpolate(other, t=0.25),
-    ]
+        assert outline_pixels[8, 2, 0] > 200
+        assert outline_pixels[8, 8, 0] < 20
+        assert shadow_pixels[8, 8, 3] > shadow_pixels[0, 0, 3]
+        assert shadow_pixels[8, 2, 3] > shadow_pixels[0, 0, 3]
+        assert light_pixels[5, 16, 2] > light_pixels[27, 16, 2]
+        assert light_pixels[16, 5, 2] > light_pixels[16, 27, 2]
+        assert light_pixels[8, 8, 2] > light_pixels[24, 24, 2]
+        assert light_pixels[16, 16, 2] > light_pixels[0, 0, 2]
+        light_alpha_pixels = _render_light_alpha_pixels()
+        antialias_values = light_alpha_pixels[..., 0]
+        assert np.count_nonzero((antialias_values > 0) & (antialias_values < 255)) > 0
+        soft_profile_pixels = _render_soft_profile_pixels()
+        assert not np.array_equal(light_pixels, soft_profile_pixels)
+        background_lit_pixels = _render_background_lit_pixels()
+        assert not np.array_equal(background_lit_pixels[16, 6], background_lit_pixels[0, 0])
+        assert np.array_equal(background_lit_pixels[0, 0], [128, 128, 128, 255])
+        groove_pixels = _render_groove_pixels()
+        assert np.array_equal(groove_pixels[16, 16], [128, 128, 128, 255])
+        assert not np.array_equal(groove_pixels[16, 11], groove_pixels[16, 16])
+        assert derivative_pixels[0, 0, 0] > derivative_pixels[8, 8, 0]
 
-    for scene in scenes:
-        texture = render(scene, size=(16, 16))
-        assert texture.tex.size == (16, 16)
+    def test_sdf_boolean_and_transform_methods_render_successfully(self):
+        base = sdf.circle((8, 8), 5)
+        other = sdf.circle((10, 8), 5)
 
+        scenes = [
+            base.abs(),
+            base.repeat(),
+            base.union(other),
+            base.intersection(other),
+            base.subtract(other),
+            base.smooth_union(other, k=2.0),
+            base.interpolate(other, t=0.25),
+        ]
 
-def test_masked_union_renders_both_outputs():
-    result = sdf.circle((8, 8), 5).masked_union(sdf.circle((10, 8), 5))
-    sdf_texture, color_texture = result
+        for scene in scenes:
+            texture = render(scene, size=(16, 16))
+            assert texture.tex.size == (16, 16)
 
-    assert render(sdf_texture, size=(16, 16)).tex.size == (16, 16)
-    assert render(color_texture, size=(16, 16)).tex.size == (16, 16)
+    def test_masked_union_renders_both_outputs(self):
+        result = sdf.circle((8, 8), 5).masked_union(sdf.circle((10, 8), 5))
+        sdf_texture, color_texture = result
+
+        assert render(sdf_texture, size=(16, 16)).tex.size == (16, 16)
+        assert render(color_texture, size=(16, 16)).tex.size == (16, 16)
+
+    def test_save_round_trips_color_and_sdf_outputs(self, tmp_path):
+        color_path = tmp_path / "color.png"
+        sdf_path = tmp_path / "sdf.png"
+
+        color.clear(_FFFFFF_TEXT).save(str(color_path), size=(8, 8))
+        sdf.circle((8, 8), 5).save(str(sdf_path), size=(16, 16))
+
+        with Image.open(color_path) as image:
+            assert image.mode == "RGBA"
+            assert image.size == (8, 8)
+
+        with Image.open(sdf_path) as image:
+            assert image.mode == "L"
+            assert image.size == (16, 16)
+
+    def test_canvas_session_cache_reuses_rendered_texture_objects(self):
+        scene = color.clear(_FFFFFF_TEXT).cache("white")
+        cache = {}
+
+        with Canvas((8, 8)) as ctx:
+            first = scene.render(ctx, cache=cache)
+            second = scene.render(ctx, cache=cache)
+            with ctx.session(cache=cache) as renderer:
+                third = renderer.render(scene)
+
+            uncached = scene.uncached().render(ctx, cache=cache)
+
+        assert first is second is third
+        assert uncached is not first
+
+    def test_canvas_session_exposes_render_stats_and_cache_info(self):
+        scene = color.clear(_FFFFFF_TEXT).to_rgb()
+        cache = {}
+
+        with Canvas((8, 8)) as ctx:
+            with ctx.session(cache=cache) as renderer:
+                first = renderer.render(scene)
+                second = renderer.render(scene)
+                cache_info = renderer.cache_info()
+                stats = renderer.stats
+
+            assert ctx.last_render_stats is stats
+
+        assert first is second
+        assert cache_info.entries == 2
+        assert cache_info.hits >= 1
+        assert cache_info.misses >= 2
+        assert stats.shader_dispatches == 2
+        assert stats.texture_allocations == 2
+        assert stats.render_calls == 2
+        assert stats.elapsed_seconds > 0
+        assert stats.as_dict()["shader_dispatches_by_name"] == {
+            "clear_color": 1,
+            "to_rgb": 1,
+        }
+
+    def test_canvas_session_can_collect_per_shader_gpu_timings(self):
+        with Canvas((8, 8), enable_gpu_timing=True) as ctx:
+            with ctx.session() as renderer:
+                renderer.render(color.clear(_FFFFFF_TEXT).to_rgb())
+                stats = renderer.stats
+
+        if stats.gpu_timing_supported:
+            assert set(stats.shader_gpu_seconds_by_name) == {"clear_color", "to_rgb"}
+            assert all(value >= 0 for value in stats.shader_gpu_seconds_by_name.values())
+        else:
+            assert stats.shader_gpu_seconds_by_name == {}
 
 
-def test_save_round_trips_color_and_sdf_outputs(tmp_path):
-    color_path = tmp_path / "color.png"
-    sdf_path = tmp_path / "sdf.png"
-
-    color.clear("#ffffff").save(str(color_path), size=(8, 8))
-    sdf.circle((8, 8), 5).save(str(sdf_path), size=(16, 16))
-
-    with Image.open(color_path) as image:
-        assert image.mode == "RGBA"
-        assert image.size == (8, 8)
-
-    with Image.open(sdf_path) as image:
-        assert image.mode == "L"
-        assert image.size == (16, 16)
+def _render_outline_pixels():
+    return rgba_array(
+                render(
+                    sdf.circle((8, 8), 5)
+                    .outline((255, 255, 255, 255), (0, 0, 0, 255), inflate=1)
+                    .to_rgb(),
+                    size=(16, 16),
+                )
+            )
 
 
-def test_canvas_session_cache_reuses_rendered_texture_objects():
-    scene = color.clear("#ffffff").cache("white")
-    cache = {}
 
-    with Canvas((8, 8)) as ctx:
-        first = scene.render(ctx, cache=cache)
-        second = scene.render(ctx, cache=cache)
-        with ctx.session(cache=cache) as renderer:
-            third = renderer.render(scene)
-
-        uncached = scene.uncached().render(ctx, cache=cache)
-
-    assert first is second is third
-    assert uncached is not first
+def _render_shadow_pixels():
+    return rgba_array(
+                render(
+                    sdf.circle((8, 8), 5)
+                    .shadow(distance=3, inflate=0, transparency=0.5)
+                    .to_rgb(),
+                    size=(16, 16),
+                )
+            )
 
 
-def test_canvas_session_exposes_render_stats_and_cache_info():
-    scene = color.clear("#ffffff").to_rgb()
-    cache = {}
 
-    with Canvas((8, 8)) as ctx:
-        with ctx.session(cache=cache) as renderer:
-            first = renderer.render(scene)
-            second = renderer.render(scene)
-            cache_info = renderer.cache_info()
-            stats = renderer.stats
-
-        assert ctx.last_render_stats is stats
-
-    assert first is second
-    assert cache_info.entries == 2
-    assert cache_info.hits >= 1
-    assert cache_info.misses >= 2
-    assert stats.shader_dispatches == 2
-    assert stats.texture_allocations == 2
-    assert stats.render_calls == 2
-    assert stats.elapsed_seconds > 0
-    assert stats.as_dict()["shader_dispatches_by_name"] == {
-        "clear_color": 1,
-        "to_rgb": 1,
-    }
+def _render_light_pixels():
+    return rgba_array(
+                render(
+                    sdf.circle((16, 16), 10).light(
+                        (80, 180, 220, 255),
+                        (0, 0, 0, 255),
+                        light_dir=(-7 / 10, -7 / 10, 0.8),
+                        ambient=0.2,
+                        diffuse=0.45,
+                        specular=0.0,
+                        normal_strength=4.0,
+                        bevel=8.0,
+                        shade_background=True,
+                        background_bevel=8.0,
+                    ),
+                    size=(32, 32),
+                )
+            )
 
 
-def test_canvas_session_can_collect_per_shader_gpu_timings():
-    with Canvas((8, 8), enable_gpu_timing=True) as ctx:
-        with ctx.session() as renderer:
-            renderer.render(color.clear("#ffffff").to_rgb())
-            stats = renderer.stats
 
-    if stats.gpu_timing_supported:
-        assert set(stats.shader_gpu_seconds_by_name) == {"clear_color", "to_rgb"}
-        assert all(value >= 0 for value in stats.shader_gpu_seconds_by_name.values())
-    else:
-        assert stats.shader_gpu_seconds_by_name == {}
+def _render_derivative_pixels():
+    return rgba_array(
+                render(sdf.circle((8, 8), 5).partial_derivative(), size=(16, 16))
+            )
+
+
+
+def _render_light_alpha_pixels():
+    return rgba_array(
+                render(
+                    sdf.circle((16, 16), 10).light(
+                        (255, 255, 255, 255),
+                        (0, 0, 0, 255),
+                        ambient=1.0,
+                        diffuse=0.0,
+                        specular=0.0,
+                    ),
+                    size=(32, 32),
+                )
+            )
+
+
+
+def _render_soft_profile_pixels():
+    return rgba_array(
+                render(
+                    sdf.circle((16, 16), 10).light(
+                        (80, 180, 255, 255),
+                        (0, 0, 0, 255),
+                        light_dir=(-7 / 10, -7 / 10, 0.8),
+                        ambient=0.2,
+                        diffuse=0.9,
+                        specular=0.0,
+                        normal_strength=7.0,
+                        height_profile="soft",
+                        height_gamma=3 / 5,
+                    ),
+                    size=(32, 32),
+                )
+            )
+
+
+
+def _render_background_lit_pixels():
+    return rgba_array(
+                render(
+                    sdf.circle((16, 16), 8).light(
+                        (255, 255, 255, 255),
+                        (128, 128, 128, 255),
+                        light_dir=(-3 / 5, -7 / 10, 0.45),
+                        ambient=0.5,
+                        diffuse=0.8,
+                        specular=0.0,
+                        normal_strength=6.0,
+                        height=3 / 5,
+                        shade_background=True,
+                        background_bevel=8.0,
+                    ),
+                    size=(32, 32),
+                )
+            )
+
+
+
+def _render_groove_pixels():
+    return rgba_array(
+                render(
+                    sdf.rounded_rect((16, 16), (13, 10), (3, 3, 3, 3))
+                    .subtract(sdf.circle((16, 16), 5))
+                    .light(
+                        (255, 255, 255, 255),
+                        (128, 128, 128, 255),
+                        light_dir=(-3 / 5, -7 / 10, 0.45),
+                        ambient=0.5,
+                        diffuse=0.8,
+                        specular=0.0,
+                        normal_strength=6.0,
+                        bevel=3.0,
+                        height=3 / 5,
+                        shade_background=True,
+                        background_bevel=3.0,
+                    ),
+                    size=(32, 32),
+                )
+            )

@@ -1,40 +1,57 @@
 """Reference behavior and shader contracts for floating-point vector fields."""
 
+
+
 import numpy as np
 
 from sdf_ui.gpu.nodes.differentiation import ShaderArgument, ShaderDifferentiation
 
+_RADIAL_FIELD_TEXT = 'radial_field'
+
+_STRENGTH_TEXT = 'strength'
+
 _FIELD = ShaderArgument("field0", (4,), "rgba32float")
 
 
+def _constant_components(context, params):
+    from sdf_ui.learning.autodiff import stack
+
+    vector = params["vector"]
+    x, y = context.x * 0 + vector[0], context.y * 0 + vector[1]
+    return stack((x, y, x * 0, x * 0), axis=-1)
+
+
+def _radial_components(name, context, params):
+    from sdf_ui.learning.autodiff import stack
+    from sdf_ui.learning.render import _tensor
+
+    center = params["center"]
+    dx, dy = context.x - center[0], context.y - center[1]
+    radius = _tensor(params["radius"])
+    attenuation = (-(dx * dx + dy * dy) / (2 * radius * radius)).exp()
+    if name == _RADIAL_FIELD_TEXT:
+        x, y = dx / radius * params[_STRENGTH_TEXT] * attenuation, dy / radius * params[_STRENGTH_TEXT] * attenuation
+    else:
+        x, y = -dy / radius * params[_STRENGTH_TEXT] * attenuation, dx / radius * params[_STRENGTH_TEXT] * attenuation
+    zero = x * 0
+    return stack((x, y, zero, zero), axis=-1)
+
+
 def _reference(name, context, inputs, params):
-    from sdf_ui.learning.autodiff import Tensor, stack
+    from sdf_ui.learning.autodiff import Tensor
     from sdf_ui.learning.render import _tensor
 
     if name == "constant_field":
-        vector = params["vector"]
-        x, y = context.x * 0 + vector[0], context.y * 0 + vector[1]
-    elif name in {"radial_field", "vortex_field"}:
-        center = params["center"]
-        dx, dy = context.x - center[0], context.y - center[1]
-        radius = _tensor(params["radius"])
-        attenuation = (-(dx * dx + dy * dy) / (2 * radius * radius)).exp()
-        if name == "radial_field":
-            x = dx / radius * params["strength"] * attenuation
-            y = dy / radius * params["strength"] * attenuation
-        else:
-            x = -dy / radius * params["strength"] * attenuation
-            y = dx / radius * params["strength"] * attenuation
-    elif name == "turbulence_field":
-        value = _noise_array(context.x.shape, context.x.data, context.y.data, params)
-        return Tensor(value)
-    elif name == "field_add":
+        return _constant_components(context, params)
+    if name in {_RADIAL_FIELD_TEXT, "vortex_field"}:
+        return _radial_components(name, context, params)
+    if name == "turbulence_field":
+        return Tensor(_noise_array(context.x.shape, context.x.data, context.y.data, params))
+    if name == "field_add":
         return inputs["field0"] + inputs["field1"]
-    elif name == "field_scale":
+    if name == "field_scale":
         return inputs["field0"] * _tensor(params["amount"])
-    else:
-        raise ValueError(f"Unknown field operation {name}")
-    return stack((x, y, x * 0, x * 0), axis=-1)
+    raise ValueError(f"Unknown field operation {name}")
 
 
 def _hash(x, y, seed):
@@ -81,7 +98,7 @@ def _noise_array(shape, x, y, params):
         f = np.float32(frequency * lacunarity**octave)
         a = weight
         result_x += _value_noise(x * f, y * f, seed + octave) * a
-        result_y += _value_noise((x + 37.1) * f, (y - 19.7) * f, seed + octave + 101) * a
+        result_y += _value_noise((x + 371 / 10) * f, (y - 197 / 10) * f, seed + octave + 101) * a
         total += a
         weight *= gain
     result_x *= amplitude / total
@@ -92,8 +109,8 @@ def _noise_array(shape, x, y, params):
 def _params_for(name):
     return {
         "constant_field": ("vector",),
-        "radial_field": ("center", "radius", "strength"),
-        "vortex_field": ("center", "radius", "strength"),
+        _RADIAL_FIELD_TEXT: ("center", "radius", _STRENGTH_TEXT),
+        "vortex_field": ("center", "radius", _STRENGTH_TEXT),
         "turbulence_field": ("frequency", "amplitude", "octaves", "lacunarity", "gain", "seed"),
         "field_add": (),
         "field_scale": ("amount",),
@@ -112,8 +129,8 @@ def contract_for(name):
     )
     if name == "constant_field":
         params = (ShaderArgument("vector", (2,), "vec2"),)
-    if name in {"radial_field", "vortex_field"}:
-        params = (ShaderArgument("center", (2,), "vec2"), ShaderArgument("radius", (), "float"), ShaderArgument("strength", (), "float"))
+    if name in {_RADIAL_FIELD_TEXT, "vortex_field"}:
+        params = (ShaderArgument("center", (2,), "vec2"), ShaderArgument("radius", (), "float"), ShaderArgument(_STRENGTH_TEXT, (), "float"))
     def reference(context, images, values):
         return _reference(name, context, images, values)
     zero = _params_for(name) if name == "turbulence_field" else ()
@@ -130,8 +147,8 @@ def contract_for(name):
         reference=reference,
         defaults={
             "constant_field": {"vector": (0.0, 0.0)},
-            "radial_field": {"strength": 1.0},
-            "vortex_field": {"strength": 1.0},
+            _RADIAL_FIELD_TEXT: {_STRENGTH_TEXT: 1.0},
+            "vortex_field": {_STRENGTH_TEXT: 1.0},
             "turbulence_field": {"frequency": 0.012, "amplitude": 24.0, "octaves": 4, "lacunarity": 2.0, "gain": 0.5, "seed": 0},
             "field_add": {},
             "field_scale": {"amount": 1.0},

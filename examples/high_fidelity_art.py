@@ -13,43 +13,38 @@ OUTPUT = Path("out/generative_art/high_fidelity")
 STILL_SIZE = (960, 640)
 
 
+def _ember_rings(center, current):
+    rings = [
+        sdf.circle((center[0] + offset, center[1] - offset * 9 / 50), radius).subtract(
+            sdf.circle((center[0] + offset, center[1] - offset * 9 / 50), radius - 3)
+        )
+        for offset, radius in ((-44, 145), (-29, 166), (-9, 189), (18, 213), (34, 234))
+    ]
+    threads = sdf.union_all(rings).warp(current, strength=1.4, steps=12)
+    orbit = sdf.circle((474, 345), 104).subtract(sdf.circle((474, 345), 101))
+    rim = orbit.warp(current, strength=1.5, steps=12).ink_linear((1.7, 0.68, 0.22, 0.92))
+    return threads.ink_linear((0.85, 0.19, 0.075, 0.84)), rim
+
+
+def _ember_sparks():
+    points = (((620, 437), 9), ((343, 464), 5), ((293, 222), 4), ((564, 164), 6))
+    return sdf.union_all(sdf.circle(point, radius) for point, radius in points).ink_linear(
+        (3.8, 1.25, 0.27, 1)
+    )
+
+
 def ember_current():
     """A tile-compatible study with procedural light and warped geometry."""
     center = (480, 320)
     scale = param("flow_scale", 1.0)
     current = field.vortex((545, 325), 260, 32 * scale).add(
-        field.turbulence(frequency=0.016 / scale, amplitude=5 * scale, seed=27)
+        field.turbulence(frequency=2 / 125 / scale, amplitude=5 * scale, seed=27)
     )
     background = sdf.circle((475, 326), 0).fill_linear(
-        (0.075, 0.035, 0.12, 1),
-        (0.006, 0.014, 0.036, 1),
-        inner=24,
-        outer=525,
+        (0.075, 0.035, 0.12, 1), (0.006, 0.014, 0.036, 1), inner=24, outer=525
     )
-    rings = [
-        sdf.circle((center[0] + offset, center[1] - offset * 0.18), radius).subtract(
-            sdf.circle((center[0] + offset, center[1] - offset * 0.18), radius - 3)
-        )
-        for offset, radius in ((-44, 145), (-29, 166), (-9, 189), (18, 213), (34, 234))
-    ]
-    threads = sdf.union_all(rings).warp(current, strength=1.4, steps=12)
-    ink = threads.ink_linear((0.85, 0.19, 0.075, 0.84))
-    orbit = sdf.circle((474, 345), 104).subtract(sdf.circle((474, 345), 101))
-    rim = orbit.warp(current, strength=1.5, steps=12).ink_linear(
-        (1.7, 0.68, 0.22, 0.92)
-    )
-    sparks = sdf.union_all(
-        sdf.circle(point, radius)
-        for point, radius in (
-            ((620, 437), 9),
-            ((343, 464), 5),
-            ((293, 222), 4),
-            ((564, 164), 6),
-        )
-    ).ink_linear((3.8, 1.25, 0.27, 1))
-    return (
-        background.over(ink, rim, sparks).bloom(amount=0.65, passes=3).finish(tone=0.85)
-    )
+    ink, rim = _ember_rings(center, current)
+    return background.over(ink, rim, _ember_sparks()).bloom(amount=0.65, passes=3).finish(tone=0.85)
 
 
 def render(output, scale, tile_size, *, skip_reference=False):

@@ -1,10 +1,8 @@
 """Weighted multi-scene training and held-out evaluation on a shared context."""
 
-import json
 import math
 from dataclasses import dataclass
 from numbers import Real
-from pathlib import Path
 
 from ..learning.objective import Objective
 from .runtime import GraphTrainer, RenderGraph
@@ -207,12 +205,6 @@ class GraphDatasetTrainer:
         for case in self.cases:
             case.graph.set_inputs(inputs[case.name])
         self.last_metrics = None
-
-    def save(self, path):
-        Path(path).write_text(json.dumps(self.state_dict(), indent=2), encoding="utf-8")
-
-    def load(self, path):
-        self.load_state_dict(json.loads(Path(path).read_text(encoding="utf-8")))
 
     def close(self):
         self._trainer.close()

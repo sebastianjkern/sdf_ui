@@ -6,6 +6,7 @@ import numpy as np
 import wgpu
 
 from ..core.image import Image
+from ._lifecycle import ContextResource
 
 _FORMATS = {
     "r32float": (1, np.dtype("float32")),
@@ -14,13 +15,15 @@ _FORMATS = {
 }
 
 
-class GPUImage(Image):
+class GPUImage(Image, ContextResource):
     """A context-owned image with an extent and canvas-space origin.
 
     For cropped evaluation, ``size`` is the allocated crop size, ``origin`` is
     its top-left position on the logical canvas, and ``canvas_size`` is the
     full logical canvas extent.
     """
+
+    _resource_name = "image"
 
     def __init__(
         self,
@@ -52,11 +55,6 @@ class GPUImage(Image):
         self.closed = False
         context._image_generation += 1
         self.generation = context._image_generation
-
-    def _check_open(self):
-        if self.closed:
-            raise RuntimeError("GPU image is closed")
-        self.context._check_open()
 
     def mark_modified(self):
         """Advance the content version after a GPU-side write."""

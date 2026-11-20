@@ -1,5 +1,7 @@
 """Repeat shader's integer sampling and differentiable implementation."""
 
+
+
 from sdf_ui.gpu.nodes.base import ImageBinding, ShaderInterface, Uniform
 from sdf_ui.gpu.nodes.differentiation import (
     ShaderArgument,
@@ -9,6 +11,7 @@ from sdf_ui.gpu.nodes.shader_expression import ShaderProgram
 
 from ..segment_math import minimum_candidates
 
+_REPEAT_TEXT = 'repeat'
 
 def reference(context, inputs, params):
     import numpy as np
@@ -22,7 +25,7 @@ def reference(context, inputs, params):
         valid = (ix >= 0) & (ix < width) & (iy >= 0) & (iy < height)
         return where(valid, source[np.clip(iy, 0, height - 1), np.clip(ix, 0, width - 1)], 0.0)
 
-    spacing = _tensor(params["repeat"])
+    spacing = _tensor(params[_REPEAT_TEXT])
     if spacing.item() == 0.0:
         raise ValueError("repeat spacing must be non-zero")
     x, y, s = context.x.data, context.y.data, spacing.item()
@@ -39,13 +42,13 @@ def reference(context, inputs, params):
 
 INTERFACE = ShaderInterface(
     ImageBinding("destTex", 0, write=True), (ImageBinding("sdf0", 1, read=True),),
-    (Uniform("repeat", "float"),),
+    (Uniform(_REPEAT_TEXT, "float"),),
 )
 CONTRACT = ShaderDifferentiation(
-    "repeat", "gpu/nodes/primitives/repeat/shader.glsl",
-    (ShaderArgument("sdf0", (), "r32f"),), (ShaderArgument("repeat", (), "float"),),
+    _REPEAT_TEXT, "gpu/nodes/primitives/repeat/shader.glsl",
+    (ShaderArgument("sdf0", (), "r32f"),), (ShaderArgument(_REPEAT_TEXT, (), "float"),),
     (ShaderArgument("destTex", (), "r32f"),),
-    zero_gradient_parameters=("repeat",), sampling="integer_zero_outside",
+    zero_gradient_parameters=(_REPEAT_TEXT,), sampling="integer_zero_outside",
     notes="Integer imageLoad addresses: spacing derivative zero away from jumps, source gradients accumulate.",
     reference=reference,
 )
@@ -68,4 +71,4 @@ void evaluate(ivec2 pos,out D o[8]) {
     o[0]=D(value,derivative/count);
 }
 """
-PROGRAM = ShaderProgram("repeat", BODY)
+PROGRAM = ShaderProgram(_REPEAT_TEXT, BODY)

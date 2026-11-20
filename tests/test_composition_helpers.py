@@ -1,3 +1,4 @@
+
 import pytest
 
 from sdf_ui import color, sdf
@@ -5,6 +6,7 @@ from sdf_ui.core.expressions import evaluate_expr, param
 from sdf_ui.graph import lower_graph
 from sdf_ui.learning import Parameter
 
+_WIDTH_TEXT = 'width'
 
 def test_union_all_composes_any_nonempty_iterable():
     first = sdf.circle((4, 5), 3)
@@ -58,23 +60,23 @@ def test_over_keeps_lazy_parameters_in_composed_graphs():
 def test_full_size_rectangle_helpers_convert_dimensions_and_keep_lazy_values(
     factory, operation
 ):
-    shape = factory((param("x"), 12), (param("width"), 8), 2)
+    shape = factory((param("x"), 12), (param(_WIDTH_TEXT), 8), 2)
     params = dict(shape.params)
 
     assert shape.op == operation
     assert evaluate_expr(params["center"][0], None, {"x": 20}) == 20
-    assert evaluate_expr(params["size"][0], None, {"width": 18}) == 9
+    assert evaluate_expr(params["size"][0], None, {_WIDTH_TEXT: 18}) == 9
     assert params["size"][1] == 4
     assert params["corner_radius"] == 2
 
     plan = lower_graph({"shape": shape})
-    assert set(plan.parameter_names) == {"width", "x"}
+    assert set(plan.parameter_names) == {_WIDTH_TEXT, "x"}
 
 
 def test_full_size_rectangles_keep_direct_parameter_leaves_live():
-    width = Parameter("width", 18.0)
+    width = Parameter(_WIDTH_TEXT, 18.0)
     shape = sdf.rounded_rect_from_size((10, 12), (width, 8), 2)
 
     plan = lower_graph({"shape": shape})
 
-    assert plan.parameter_names == ("width",)
+    assert plan.parameter_names == (_WIDTH_TEXT,)

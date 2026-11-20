@@ -1,4 +1,3 @@
-from functools import reduce
 from pathlib import Path
 
 from sdf_ui import Canvas, sdf
@@ -23,9 +22,6 @@ def masked_union_example():
         discs = [sdf.circle(point, 50).cache(f"disc_{index}") for index, point in enumerate(points)]
 
         combined_discs = sdf.union_all(discs).cache("combined_discs")
-        masks = [mask for _, mask in (discs[0].masked_union(disc) for disc in discs[1:])]
-
-        mask = reduce(lambda m1, m2: m1.multiply(m2), masks).uncached()
         cache = {}
 
         combined_discs.save(OUTPUT_DIR / "masked_union_square.png", canvas=ctx, cache=cache)

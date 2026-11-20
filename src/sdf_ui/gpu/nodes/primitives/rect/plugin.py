@@ -1,4 +1,4 @@
-__docformat__ = "google"
+
 
 from numbers import Real
 
@@ -7,16 +7,21 @@ from sdf_ui.gpu.nodes.common import shader
 
 from .implementation import CONTRACT, INTERFACE, PROGRAM
 
+_ANGLE_TEXT = 'angle'
+
+_CORNER_RADIUS_TEXT = 'corner_radius'
+
+__docformat__ = "google"
 
 def _uniforms(params):
-    radius = params["corner_radius"]
+    radius = params[_CORNER_RADIUS_TEXT]
     if isinstance(radius, Real):
         radius = (radius,) * 4
     return {
         "offset": params["center"],
         "size": params["size"],
-        "corner_radius": radius,
-        "angle": params["angle"],
+        _CORNER_RADIUS_TEXT: radius,
+        _ANGLE_TEXT: params[_ANGLE_TEXT],
     }
 
 
@@ -27,8 +32,8 @@ def register_plugins(registry):
             "rect",
             PluginFamily.PRIMITIVE,
             TextureKind.SDF,
-            params=("center", "size", "corner_radius", "angle"),
-            defaults={"corner_radius": 0.0, "angle": 0.0},
+            params=("center", "size", _CORNER_RADIUS_TEXT, _ANGLE_TEXT),
+            defaults={_CORNER_RADIUS_TEXT: 0.0, _ANGLE_TEXT: 0.0},
             shader=descriptor,
             make_uniforms=_uniforms,
             public=True,
@@ -39,8 +44,8 @@ def register_plugins(registry):
             "rounded_rect",
             PluginFamily.PRIMITIVE,
             TextureKind.SDF,
-            params=("center", "size", "corner_radius", "angle"),
-            defaults={"angle": 0.0},
+            params=("center", "size", _CORNER_RADIUS_TEXT, _ANGLE_TEXT),
+            defaults={_ANGLE_TEXT: 0.0},
             shader=descriptor,
             make_uniforms=_uniforms,
             public=True,

@@ -1,17 +1,12 @@
 import unittest
 
 from sdf_ui import Canvas, sdf
-from sdf_ui.gpu.nodes.registry import registry
-from tests.helpers import rgba_array
+from tests.helpers import assert_public_plugin, rgba_array
 
 
 class DiamondPluginTests(unittest.TestCase):
     def test_diamond_and_rhombus_are_registered(self):
-        registry.ensure_loaded()
-
-        self.assertIn("diamond", registry.public_names())
-        self.assertIn("rhombus", registry.public_names())
-        self.assertEqual(registry.get("diamond").family, "primitive")
+        assert_public_plugin(self, "diamond", aliases=('rhombus',))
 
     def test_diamond_renders_a_visible_shape(self):
         with Canvas((96, 96)) as ctx:

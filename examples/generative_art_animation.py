@@ -10,121 +10,80 @@ SIZE = 640
 CENTER = (SIZE / 2, SIZE / 2)
 
 
-def tidal_bloom_scene(canvas):
-    """Build a layered orbital flower animated by one normalized phase."""
-    phase = param("phase")
+def _bloom_shape(phase):
     cx, cy = CENTER
-
     petals = []
-    petal_count = 12
-    for index in range(petal_count):
-        angle = 2.0 * math.pi * index / petal_count
+    for index in range(12):
+        angle = 2.0 * math.pi * index / 12
         orbit = 108 + 4 * sin(phase * 2.0 + angle * 3.0)
-        center = (
-            cx + orbit * math.cos(angle),
-            cy + orbit * math.sin(angle),
-        )
+        center = (cx + orbit * math.cos(angle), cy + orbit * math.sin(angle))
         length = 66 + 5 * sin(phase * 2.0 + angle * 4.0)
-        petal = sdf.ellipse(center, (27, length)).rotate(
-            angle - math.pi / 2, center=center
-        )
-        petals.append(petal)
-
+        petals.append(sdf.ellipse(center, (27, length)).rotate(angle - math.pi / 2, center=center))
     bloom = petals[0]
     for petal in petals[1:]:
         bloom = bloom.union(petal)
-    bloom = bloom.rotate(phase, center=CENTER)
+    return bloom.rotate(phase, center=CENTER)
 
-    background = color.radial_gradient(
-        CENTER,
-        (0.15, 0.24, 0.40, 1.0),
-        (0.012, 0.018, 0.045, 1.0),
-        outer=SIZE * 0.76,
-    )
 
-    # A pair of thin, breathing orbital tracks frames the moving bloom.
-    orbital_tracks = color.clear((0.0, 0.0, 0.0, 0.0))
-    for radius, width, tint in (
+def _orbital_tracks(phase):
+    tracks = color.clear((0.0, 0.0, 0.0, 0.0))
+    settings = (
         (220 + 5 * sin(phase * 2.0), 1.6, (0.22, 0.82, 0.86, 0.62)),
         (241 - 4 * sin(phase * 2.0), 1.0, (0.92, 0.63, 0.32, 0.52)),
         (188, 0.8, (0.55, 0.52, 0.94, 0.40)),
-    ):
+    )
+    for radius, width, tint in settings:
         track = sdf.ring(CENTER, radius, width).fill(
-            tint, (0.0, 0.0, 0.0, 0.0), inner=-0.7, outer=0.7
+            tint, (0.0, 0.0, 0.0, 0.0), inner=-7 / 10, outer=0.7
         )
-        orbital_tracks = orbital_tracks.alpha_overlay(track)
+        tracks = tracks.alpha_overlay(track)
+    return tracks
 
-    body = bloom.fill(
-        (0.17, 0.50, 0.69, 1.0),
-        (0.0, 0.0, 0.0, 0.0),
-        inner=-2.0,
-        outer=1.0,
-    )
-    contour_threads = bloom.isolines(
-        (0.56, 0.94, 0.88, 0.82),
-        (0.0, 0.0, 0.0, 0.0),
-        spacing=17,
-        line_width=0.9,
-        feather=0.55,
-        phase=phase * (17.0 * 4.0 / (2.0 * math.pi)),
-    )
-    contour_threads = body.alpha_overlay(
-        contour_threads.layer_mask(body, bloom.mask())
-    )
 
-    # Two constellations orbit in opposite directions, built as single SDF
-    # groups so each constellation costs one fill pass rather than one per dot.
-    constellations = []
-    for count, radius, dot_radius, direction in (
-        (9, 219, 3.4, 1.0),
-        (7, 164, 2.2, -1.0),
-    ):
+def _constellation_layers(phase):
+    groups = []
+    for count, radius, dot_radius, direction in ((9, 219, 3.4, 1.0), (7, 164, 2.2, -1.0)):
         dots = []
         for index in range(count):
-            angle = 2.0 * math.pi * index / count
-            moving_angle = angle + direction * phase
-            point = (
-                cx + radius * cos(moving_angle),
-                cy + radius * sin(moving_angle),
-            )
+            angle = 2.0 * math.pi * index / count + direction * phase
+            point = (CENTER[0] + radius * cos(angle), CENTER[1] + radius * sin(angle))
             dots.append(sdf.circle(point, dot_radius))
-        constellation = dots[0]
+        group = dots[0]
         for dot in dots[1:]:
-            constellation = constellation.union(dot)
-        constellations.append(constellation)
-
-    gold_stars = constellations[0].fill(
-        (1.0, 0.70, 0.37, 1.0), (0.0, 0.0, 0.0, 0.0)
-    )
-    ice_stars = constellations[1].fill(
-        (0.55, 0.88, 1.0, 0.95), (0.0, 0.0, 0.0, 0.0)
+            group = group.union(dot)
+        groups.append(group)
+    return (
+        groups[0].fill((1.0, 0.70, 0.37, 1.0), (0.0, 0.0, 0.0, 0.0)),
+        groups[1].fill((0.55, 0.88, 1.0, 0.95), (0.0, 0.0, 0.0, 0.0)),
     )
 
-    outer_halo = sdf.ring(CENTER, 72, 2.5).fill(
-        (0.96, 0.70, 0.39, 0.88), (0.0, 0.0, 0.0, 0.0)
-    )
-    inner_halo = sdf.ring(CENTER, 52 + 3 * sin(phase * 2.0), 1.2).fill(
-        (0.42, 0.91, 0.90, 0.84), (0.0, 0.0, 0.0, 0.0)
-    )
-    core = color.radial_gradient(
-        CENTER,
-        (0.95, 0.74, 0.43, 0.98),
-        (0.14, 0.42, 0.59, 0.0),
-        inner=4,
-        outer=66,
-    )
 
-    scene = background.film_grain().to_rgb()
-    for layer in (
-        orbital_tracks,
-        body,
-        contour_threads,
-        gold_stars,
-        ice_stars,
-        outer_halo,
-        inner_halo,
-        core,
-    ):
+def _bloom_core(phase):
+    body = _bloom_shape(phase)
+    fill = body.fill((0.17, 0.50, 0.69, 1.0), (0.0, 0.0, 0.0, 0.0), inner=-2.0, outer=1.0)
+    threads = body.isolines(
+        (0.56, 0.94, 0.88, 0.82), (0.0, 0.0, 0.0, 0.0),
+        spacing=17, line_width=0.9, feather=0.55,
+        phase=phase * (17.0 * 4.0 / (2.0 * math.pi)),
+    )
+    return fill, fill.alpha_overlay(threads.layer_mask(fill, body.mask()))
+
+
+def tidal_bloom_scene(canvas=None):
+    """Build a layered orbital flower animated by one normalized phase."""
+    phase = param("phase")
+    fill, threads = _bloom_core(phase)
+    stars = _constellation_layers(phase)
+    halos = (
+        sdf.ring(CENTER, 72, 2.5).fill((0.96, 0.70, 0.39, 0.88), (0.0, 0.0, 0.0, 0.0)),
+        sdf.ring(CENTER, 52 + 3 * sin(phase * 2.0), 1.2).fill((0.42, 0.91, 0.90, 0.84), (0.0, 0.0, 0.0, 0.0)),
+        color.radial_gradient(CENTER, (0.95, 0.74, 0.43, 0.98), (0.14, 0.42, 0.59, 0.0), inner=4, outer=66),
+    )
+    scene = color.radial_gradient(
+        CENTER, (0.15, 0.24, 0.40, 1.0), (0.012, 0.018, 0.045, 1.0),
+        outer=SIZE * 19 / 25,
+    ).film_grain().to_rgb()
+    for layer in (_orbital_tracks(phase), fill, threads, *stars, *halos):
         scene = scene.alpha_overlay(layer)
     return scene
 

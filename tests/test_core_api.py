@@ -30,6 +30,11 @@ from sdf_ui.gpu.context import Context
 from sdf_ui.gpu.nodes.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.gpu.nodes.registry import PluginRegistry, registry
 
+_CIRCLE_TEXT = 'circle'
+
+_COLOR_TEXT = 'color'
+
+_RADIUS_TEXT = 'radius'
 
 class FakeContext:
     def __init__(self, size=(200, 100)):
@@ -60,7 +65,7 @@ def test_root_exports_the_new_public_api():
     assert "Canvas" in sdf_ui.__all__
     assert "DispatchConfig" in sdf_ui.__all__
     assert "sdf" in sdf_ui.__all__
-    assert "color" in sdf_ui.__all__
+    assert _COLOR_TEXT in sdf_ui.__all__
 
 
 def test_dispatch_config_calculates_group_counts_and_validates_values():
@@ -101,7 +106,7 @@ def test_namespace_dir_exposes_the_public_factories():
     color_names = set(dir(color))
 
     assert {
-        "circle",
+        _CIRCLE_TEXT,
         "disc",
         "rect",
         "rounded_rect",
@@ -150,9 +155,9 @@ def test_unknown_namespace_factory_suggests_close_names():
 def test_dynamic_factory_exposes_its_runtime_signature():
     signature = inspect.signature(sdf.circle)
 
-    assert tuple(signature.parameters) == ("center", "radius")
-    assert sdf.circle.__name__ == "circle"
-    assert "circle" in sdf.circle.__doc__
+    assert tuple(signature.parameters) == ("center", _RADIUS_TEXT)
+    assert sdf.circle.__name__ == _CIRCLE_TEXT
+    assert _CIRCLE_TEXT in sdf.circle.__doc__
 
 
 def test_unknown_texture_method_suggests_close_names():
@@ -174,13 +179,13 @@ def test_dynamic_texture_method_exposes_its_runtime_signature():
     signature = inspect.signature(sdf.circle((0, 0), 1).smooth_union)
 
     assert tuple(signature.parameters) == ("other", "k")
-    assert signature.parameters["k"].default == 0.025
+    assert signature.parameters["k"].default == 1 / 40
 
 
 @pytest.mark.parametrize(
     ("namespace_name", "factory_name", "args", "expected_kind", "expected_op"),
     [
-        ("sdf", "circle", ((16, 16), 5), "sdf", "circle"),
+        ("sdf", _CIRCLE_TEXT, ((16, 16), 5), "sdf", _CIRCLE_TEXT),
         ("sdf", "disc", ((16, 16), 5), "sdf", "disc"),
         ("sdf", "rect", ((16, 16), (10, 10), (2, 2, 2, 2)), "sdf", "rect"),
         (
@@ -194,25 +199,25 @@ def test_dynamic_texture_method_exposes_its_runtime_signature():
         ("sdf", "bezier", ((0, 0), (8, 12), (15, 0)), "sdf", "bezier"),
         ("sdf", "triangle", ((0, 0), (15, 0), (8, 15)), "sdf", "triangle"),
         ("sdf", "grid", ((8, 8), (4, 4)), "sdf", "grid"),
-        ("color", "clear", ("#ffffff",), "color", "clear"),
-        ("color", "clear_color", ("#ffffff",), "color", "clear_color"),
+        (_COLOR_TEXT, "clear", ("#ffffff",), _COLOR_TEXT, "clear"),
+        (_COLOR_TEXT, "clear_color", ("#ffffff",), _COLOR_TEXT, "clear_color"),
         (
-            "color",
+            _COLOR_TEXT,
             "linear_gradient",
             ((0, 8), (15, 8), (255, 0, 0, 255), (0, 0, 255, 255)),
-            "color",
+            _COLOR_TEXT,
             "linear_gradient",
         ),
         (
-            "color",
+            _COLOR_TEXT,
             "radial_gradient",
             ((8, 8), (255, 0, 0, 255), (0, 0, 255, 255)),
-            "color",
+            _COLOR_TEXT,
             "radial_gradient",
         ),
-        ("color", "noise", (), "color", "noise"),
-        ("color", "perlin_noise", (), "color", "perlin_noise"),
-        ("color", "film_grain", (), "color", "film_grain"),
+        (_COLOR_TEXT, "noise", (), _COLOR_TEXT, "noise"),
+        (_COLOR_TEXT, "perlin_noise", (), _COLOR_TEXT, "perlin_noise"),
+        (_COLOR_TEXT, "film_grain", (), _COLOR_TEXT, "film_grain"),
     ],
 )
 def test_public_factories_build_expected_texture_kinds(
@@ -229,7 +234,7 @@ def test_expression_constructors_and_evaluation_cover_percent_syntax():
     ctx = FakeContext()
 
     assert percent(25).op == "percent"
-    assert param("radius", default=2).args == ("radius", 2)
+    assert param(_RADIUS_TEXT, default=2).args == (_RADIUS_TEXT, 2)
     assert percent_x(25).op == "percent_x"
     assert percent_y(25).op == "percent_y"
     assert percent_of_min(25).op == "percent_of_min"
@@ -253,11 +258,11 @@ def test_expression_arithmetic_and_param_lookup():
     expr = percent_x(10) + sin(math.pi / 2) * 2 - 1
 
     assert evaluate_expr(expr, ctx, {}) == pytest.approx(21.0)
-    assert evaluate_expr(param("radius", 12), ctx, {}) == 12
-    assert evaluate_expr(param("radius"), ctx, {"radius": 33}) == 33
+    assert evaluate_expr(param(_RADIUS_TEXT, 12), ctx, {}) == 12
+    assert evaluate_expr(param(_RADIUS_TEXT), ctx, {_RADIUS_TEXT: 33}) == 33
 
     with pytest.raises(KeyError, match="Missing render parameter 'radius'"):
-        evaluate_expr(param("radius"), ctx, {})
+        evaluate_expr(param(_RADIUS_TEXT), ctx, {})
 
 
 def test_texture_params_and_freeze_preserve_texture_nodes():
@@ -276,14 +281,14 @@ def test_plugin_bind_and_registry_validation_cover_common_failure_modes():
         PluginFamily.PRIMITIVE,
         TextureKind.SDF,
         (TextureKind.SDF,),
-        params=("radius", "falloff"),
+        params=(_RADIUS_TEXT, "falloff"),
         defaults={"falloff": 2},
     )
     shape = sdf.circle((1, 2), 3)
 
     inputs, params = plugin.bind((shape, 7), {})
     assert inputs == (shape,)
-    assert params == {"radius": 7, "falloff": 2}
+    assert params == {_RADIUS_TEXT: 7, "falloff": 2}
 
     with pytest.raises(TypeError, match="expects at least 1 input argument"):
         plugin.bind((), {})
@@ -299,7 +304,7 @@ def test_plugin_bind_and_registry_validation_cover_common_failure_modes():
             PluginFamily.PRIMITIVE,
             TextureKind.SDF,
             (TextureKind.SDF,),
-            params=("radius",),
+            params=(_RADIUS_TEXT,),
         ).bind((shape,), {})
 
     fresh_registry = PluginRegistry()
@@ -317,7 +322,7 @@ def test_registry_metadata_points_to_real_shader_files():
 
     public_names = set(registry.public_names())
     assert {
-        "circle",
+        _CIRCLE_TEXT,
         "rect",
         "line",
         "bezier",
@@ -327,7 +332,7 @@ def test_registry_metadata_points_to_real_shader_files():
     }.issubset(public_names)
 
     shader_names = {descriptor.name for descriptor in registry.shader_files()}
-    assert {"circle", "fill", "layer_mask", "blur_ver_9", "blur_hor_9"}.issubset(
+    assert {_CIRCLE_TEXT, "fill", "layer_mask", "blur_ver_9", "blur_hor_9"}.issubset(
         shader_names
     )
 
@@ -339,7 +344,7 @@ def test_registry_method_names_match_texture_kinds():
     registry.ensure_loaded()
 
     sdf_methods = set(registry.method_names_for("sdf"))
-    color_methods = set(registry.method_names_for("color"))
+    color_methods = set(registry.method_names_for(_COLOR_TEXT))
 
     assert {
         "fill",
@@ -383,8 +388,8 @@ def test_texture_node_dir_and_clone_helpers_are_kind_aware():
     assert "alpha_overlay" not in dir(sdf_node)
     assert "fill" not in dir(color_node)
 
-    named = sdf_node.named("circle").cache().uncached()
-    assert named.label == "circle"
+    named = sdf_node.named(_CIRCLE_TEXT).cache().uncached()
+    assert named.label == _CIRCLE_TEXT
     assert not named.should_cache
     assert type(named) is type(sdf_node)
 
@@ -412,7 +417,7 @@ def test_multi_output_results_unpack_to_typed_outputs():
     sdf_result, color_result = result
 
     assert sdf_result.kind == "sdf"
-    assert color_result.kind == "color"
+    assert color_result.kind == _COLOR_TEXT
     assert sdf_result.op == "output"
     assert color_result.op == "output"
     assert color_result.mode == "RGB"

@@ -57,7 +57,7 @@ class PluginLoaderTests(unittest.TestCase):
                 .light(
                     (80, 180, 255, 255),
                     (0, 0, 0, 255),
-                    light_dir=(-0.6, -0.6, 0.8),
+                    light_dir=(-3 / 5, -3 / 5, 0.8),
                 )
                 .render(ctx)
             )

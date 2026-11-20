@@ -1,9 +1,11 @@
+
 import unittest
 from types import SimpleNamespace
 
 from sdf_ui import sdf
 from sdf_ui.gpu.nodes.registry import registry
 
+_CENTER_TEXT = 'center'
 
 class TransformPluginTests(unittest.TestCase):
     def _render(self, name, params):
@@ -49,22 +51,22 @@ class TransformPluginTests(unittest.TestCase):
         self.assertEqual(uniforms["transform_kind"], 0.0)
         self.assertEqual(uniforms["offset"], (12, 0))
 
+    def _assert_uniform_binding(self, name, kind, field, value):
+        uniforms = self._render(name, {field: value, _CENTER_TEXT: (32, 32)})
+        self.assertEqual(uniforms["transform_kind"], kind)
+        self.assertEqual(uniforms[_CENTER_TEXT], (32, 32))
+        self.assertEqual(uniforms[field], value)
+
     def test_scale_binds_expected_uniforms(self):
-        uniforms = self._render("scale", {"factor": 1.6, "center": (32, 32)})
-        self.assertEqual(uniforms["transform_kind"], 1.0)
-        self.assertEqual(uniforms["center"], (32, 32))
-        self.assertEqual(uniforms["factor"], 1.6)
+        self._assert_uniform_binding("scale", 1.0, "factor", 1.6)
 
     def test_rotate_binds_expected_uniforms(self):
-        uniforms = self._render("rotate", {"angle": 0.75, "center": (32, 32)})
-        self.assertEqual(uniforms["transform_kind"], 2.0)
-        self.assertEqual(uniforms["center"], (32, 32))
-        self.assertEqual(uniforms["angle"], 0.75)
+        self._assert_uniform_binding("rotate", 2.0, "angle", 0.75)
 
     def test_skew_binds_expected_uniforms(self):
-        uniforms = self._render("skew", {"skew": (0.5, 0.0), "center": (32, 32)})
+        uniforms = self._render("skew", {"skew": (0.5, 0.0), _CENTER_TEXT: (32, 32)})
         self.assertEqual(uniforms["transform_kind"], 3.0)
-        self.assertEqual(uniforms["center"], (32, 32))
+        self.assertEqual(uniforms[_CENTER_TEXT], (32, 32))
         self.assertEqual(uniforms["skew"], (0.5, 0.0))
 
     def test_scale_rejects_a_zero_factor(self):
@@ -72,7 +74,7 @@ class TransformPluginTests(unittest.TestCase):
             registry.get("scale").render(
                 SimpleNamespace(ctx=SimpleNamespace()),
                 [SimpleNamespace(tex=SimpleNamespace())],
-                {"factor": 0, "center": (32, 32)},
+                {"factor": 0, _CENTER_TEXT: (32, 32)},
             )
 
 

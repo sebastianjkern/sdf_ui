@@ -1,3 +1,4 @@
+
 import numpy as np
 import pytest
 
@@ -13,11 +14,9 @@ from sdf_ui.learning import (
     ParameterStore,
 )
 
+_FIELD_TEXT = 'field'
 
 def test_display_layer_shaders_match_reference_without_readback(monkeypatch):
-    def fail(*args, **kwargs):
-        raise AssertionError("layer attempted CPU texture transfer")
-
     rng = np.random.default_rng(13)
     arrays = [rng.integers(0, 256, (6, 8, 4), dtype=np.uint8) for _ in range(3)]
     arrays[0][0, 0, 3] = arrays[1][0, 0, 3] = 0
@@ -28,27 +27,42 @@ def test_display_layer_shaders_match_reference_without_readback(monkeypatch):
             texture.write(array.tobytes())
             textures.append(ColorTexture(tex=texture, context=canvas, mode="RGB"))
         a, b, mask = [v.astype(np.float32) / 255 for v in arrays]
-        alpha = b[..., 3:4] + (1 - b[..., 3:4]) * a[..., 3:4]
-        numerator = (
-            b[..., :3] * b[..., 3:4] + a[..., :3] * (1 - b[..., 3:4]) * a[..., 3:4]
-        )
-        rgb = np.divide(numerator, alpha, out=np.zeros_like(numerator), where=alpha > 0)
-        expected = (
-            a * b,
-            a * mask[..., :1] + b * (1 - mask[..., :1]),
-            np.concatenate((rgb, alpha), axis=2),
-        )
-        scenes = (
-            textures[0].multiply(textures[1]),
-            textures[0].mask(textures[1], textures[2]),
-            textures[0].over(textures[1]),
-        )
-        for scene, goal in zip(scenes, expected):
-            with monkeypatch.context() as guarded:
-                guarded.setattr(GPUImage, "read", fail)
-                result = canvas.render(scene)
-            pixels = np.frombuffer(result.tex.read(), np.uint8).reshape(6, 8, 4)
-            np.testing.assert_allclose(pixels, np.rint(goal * 255), atol=1)
+        expected = _expected_layer_outputs(a, b, mask)
+        scenes = _layer_scenes(textures)
+        _assert_display_layers(canvas, monkeypatch, scenes, expected)
+
+
+def _fail_layer_readback(*args, **kwargs):
+    raise AssertionError("layer attempted CPU texture transfer")
+
+
+def _expected_layer_outputs(a, b, mask):
+    alpha = b[..., 3:4] + (1 - b[..., 3:4]) * a[..., 3:4]
+    numerator = b[..., :3] * b[..., 3:4] + a[..., :3] * (1 - b[..., 3:4]) * a[..., 3:4]
+    rgb = np.divide(numerator, alpha, out=np.zeros_like(numerator), where=alpha > 0)
+    return (
+        a * b,
+        a * mask[..., :1] + b * (1 - mask[..., :1]),
+        np.concatenate((rgb, alpha), axis=2),
+    )
+
+
+def _layer_scenes(textures):
+    first, second, mask = textures
+    return (
+        first.multiply(second),
+        first.mask(second, mask),
+        first.over(second),
+    )
+
+
+def _assert_display_layers(canvas, monkeypatch, scenes, expected):
+    for scene, goal in zip(scenes, expected):
+        with monkeypatch.context() as guarded:
+            guarded.setattr(GPUImage, "read", _fail_layer_readback)
+            result = canvas.render(scene)
+        pixels = np.frombuffer(result.tex.read(), np.uint8).reshape(6, 8, 4)
+        np.testing.assert_allclose(pixels, np.rint(goal * 255), atol=1)
 
 
 def test_shared_plan_executes_display_cpu_and_training():
@@ -56,19 +70,19 @@ def test_shared_plan_executes_display_cpu_and_training():
     params.define("r", 2.0)
     scene = sdf.circle((4, 3), param("r"))
     image = scene.fill("#ff0000", "#000000").to_rgb()
-    plan = lower_graph({"field": scene, "image": image})
+    plan = lower_graph({_FIELD_TEXT: scene, "image": image})
     reference = DifferentiableRenderer((8, 6), params).render_plan(plan)
     with Canvas((8, 6)) as canvas:
         display = canvas.render_plan(plan, params)
         np.testing.assert_allclose(
-            np.frombuffer(display["field"].tex.read(), np.float32).reshape(6, 8),
-            reference["field"].numpy(),
+            np.frombuffer(display[_FIELD_TEXT].tex.read(), np.float32).reshape(6, 8),
+            reference[_FIELD_TEXT].numpy(),
             atol=1e-5,
         )
         with canvas.compile(plan, params) as graph:
             with graph.run() as execution:
                 np.testing.assert_allclose(
-                    execution.read("field"), reference["field"].numpy(), atol=1e-5
+                    execution.read(_FIELD_TEXT), reference[_FIELD_TEXT].numpy(), atol=1e-5
                 )
                 np.testing.assert_allclose(
                     execution.read("image"), reference["image"].numpy(), atol=2e-4
@@ -101,15 +115,15 @@ def test_custom_plugin_lowering_is_used_by_all_executors(monkeypatch):
     )
     monkeypatch.setitem(registry._plugins, plugin.name, plugin)
     scene = registry.build(plugin.name, (4, 3), 2)
-    plan = lower_graph({"field": scene})
-    cpu = DifferentiableRenderer((8, 6)).render_plan(plan)["field"].numpy()
+    plan = lower_graph({_FIELD_TEXT: scene})
+    cpu = DifferentiableRenderer((8, 6)).render_plan(plan)[_FIELD_TEXT].numpy()
     with Canvas((8, 6)) as canvas:
-        image = canvas.render_plan(plan)["field"]
+        image = canvas.render_plan(plan)[_FIELD_TEXT]
         np.testing.assert_allclose(
             np.frombuffer(image.tex.read(), np.float32).reshape(6, 8), cpu, atol=1e-5
         )
-        with canvas.compile({"field": scene}) as graph, graph.run() as run:
-            np.testing.assert_allclose(run.read("field"), cpu, atol=1e-5)
+        with canvas.compile({_FIELD_TEXT: scene}) as graph, graph.run() as run:
+            np.testing.assert_allclose(run.read(_FIELD_TEXT), cpu, atol=1e-5)
 
 
 def test_geometry_checkpoint_requires_and_checks_identity():
@@ -117,7 +131,7 @@ def test_geometry_checkpoint_requires_and_checks_identity():
         params = ParameterStore()
         params.define("r", 2.0)
         scene = sdf.circle((4, 3), param("r"))
-        with canvas.compile({"field": scene}, params) as graph:
+        with canvas.compile({_FIELD_TEXT: scene}, params) as graph:
             with GraphTrainer(
                 graph, Objective().geometry(lambda: params["r"] ** 2)
             ) as trainer:
