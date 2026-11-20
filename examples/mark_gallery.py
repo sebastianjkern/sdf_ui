@@ -2,9 +2,9 @@
 
 from pathlib import Path
 
-from _chart_helpers import chart_text
-
 from sdf_ui import Canvas, Plot, color, sdf
+
+from ._chart_helpers import chart_text
 
 OUTPUT = Path("out/examples/mark_gallery")
 SIZE = (920, 540)

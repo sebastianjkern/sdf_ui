@@ -55,6 +55,7 @@ uv run python -m examples.texture_sampled_arrows
 uv run python -m examples.quadtree_mosaic
 uv run python -m examples.vanishing_signal
 uv run python -m examples.molten_reflection
+uv run python -m examples.chromatic_drift
 uv run python -m examples.series_plot
 uv run python -m examples.mark_gallery
 uv run python -m examples.chart_grammar
@@ -73,6 +74,7 @@ uv run python -m examples.distance_corrections_example
 uv run python -m examples.field_flow_animation
 uv run python -m examples.generative_art_animation
 uv run python -m examples.github_banner_example
+uv run python -m examples.parametric_banner
 uv run python -m examples.kinetic_city_animation
 uv run python -m examples.learned_rule_art
 uv run python -m examples.procedural_fields_example
@@ -119,13 +121,23 @@ lit windows, diagonal rain, a gliding tram, and moving water reflections. It
 writes ``out/examples/blue_hour/blue_hour_relay.mp4`` and a PNG preview alongside
 it.
 
-``molten_reflection`` renders a portrait of a red light field refracted through
+``molten_reflection`` renders a 4:3 landscape of a red light field refracted through
 fluted glass, then uses Canvas to bloom and finish the highlights. It writes
 ``out/examples/molten_reflection/molten_reflection.png``. Pass ``--seed`` to vary the rib
 depths or ``--output`` to save a variant separately.
 Run ``uv run python -m examples.molten_reflection --animate`` to render a
 six-second loop to ``out/examples/molten_reflection/molten_reflection.mp4``. Animation
 export requires FFmpeg.
+
+``chromatic_drift`` renders a print inspired by screen printing. Texture
+samples set the size, offset, angle, and color of each diamond. The rotation
+varies more toward the right, while an opacity sample adds speckled wear. It writes
+``out/examples/chromatic_drift/chromatic_drift.png``. Pass ``--seed`` for a
+different print or ``--landscape`` for the 4:3 README version.
+
+``parametric_banner`` draws the README wordmark on labeled Cartesian axes,
+with separate colors for line segments and cubic Bézier curves. It writes
+``out/examples/parametric_banner/banner.png``.
 
 ``learned_score`` uses the learning API to arrange a kinetic graphic score.
 Its marks begin with small deterministic offsets; a layout trainer discovers

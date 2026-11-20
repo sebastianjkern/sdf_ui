@@ -8,7 +8,7 @@ from sdf_ui import Canvas, color, field, sdf
 OUTPUT = Path("out/examples/spatial_parameters")
 SIZE = (720, 720)
 CENTER = (360, 360)
-SQUARE_GRID_SIZE = (700, 1010)
+SQUARE_GRID_SIZE = (768, 576)
 
 
 def halftone():
@@ -82,7 +82,7 @@ def drifting_squares():
     # square's space. Composite the strokes so intersections stay visible.
     pitch = (2 * spacing, 2 * spacing)
     layers = (
-        outline.repeat_grid(6, 11, pitch, (width / 2 + dx, height / 2 + dy))
+        outline.repeat_grid(8, 6, pitch, (width / 2 + dx, height / 2 + dy))
         for dx in (-spacing / 2, spacing / 2)
         for dy in (-spacing / 2, spacing / 2)
     )

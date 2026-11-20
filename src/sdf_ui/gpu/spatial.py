@@ -463,7 +463,7 @@ fn sample_{i}(p: vec2<f32>) -> vec4<f32> {{
             return self._gradient_shader(node, name, raw)
         if plugin.shader is None or not plugin.shader.interface:
             return self._unavailable_shader(node)
-        return self._plugin_shader(node, output, plugin, raw)
+        return self._plugin_shader(node, name, output, plugin, raw)
 
     def _gradient_shader(self, node, name, raw):
         from ..core.expressions import _lazy_scalar
@@ -490,7 +490,7 @@ fn sample_{i}(p: vec2<f32>) -> vec4<f32> {{
             f"'{node.op}' cannot consume spatial parameters because it has no callable shader"
         )
 
-    def _plugin_shader(self, node, output, plugin, raw):
+    def _plugin_shader(self, node, name, output, plugin, raw):
         shader = plugin.shader
         interface = shader.interface
         bindings = (interface.output, *interface.extra_outputs)
@@ -511,7 +511,7 @@ fn sample_{i}(p: vec2<f32>) -> vec4<f32> {{
         self.functions.append(
             self.inline(
                 Kernel(shader, code, bindings[output].name),
-                bindings[output].name,
+                name,
                 params,
                 child_functions,
             )

@@ -123,6 +123,11 @@ intermediate composites uncached::
 Pass ``cache=False`` to ``ColorTexture.over`` when the final composite is
 unique to one frame. Intermediate results remain disposable in either mode.
 
+Use ``.uncached()`` for one-shot intermediate layers that do not need to be
+kept across renders. Their output images can be recycled after every graph
+branch has consumed them. ``RenderStats.texture_reuses`` counts allocations
+reused from the context's bounded GPU image pool.
+
 .. automodule:: sdf_ui.core.api
    :members:
    :undoc-members:

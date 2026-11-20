@@ -11,7 +11,7 @@ import numpy as np
 
 from sdf_ui import Canvas, ColorTexture
 
-SIZE = (720, 1280)
+SIZE = (768, 576)
 OUTPUT = Path("out/examples/molten_reflection/molten_reflection.png")
 VIDEO = OUTPUT.with_suffix(".mp4")
 DEFAULT_SEED = 27
