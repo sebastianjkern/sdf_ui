@@ -5,10 +5,10 @@ from __future__ import annotations
 import math
 from numbers import Real
 
+from ..core.expressions import _lazy_scalar
 from ._plot_data import Layer
 from ._plot_geometries import columns, lines, points, ranges, rectangles, ribbons
 from ._plot_statistics import Histogram
-from .core.expressions import _lazy_scalar
 
 
 def geom_point(mapping=None, *, data=None, tint=None, radius=4.5) -> Layer:

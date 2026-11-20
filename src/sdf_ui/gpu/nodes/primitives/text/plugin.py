@@ -14,6 +14,7 @@ from sdf_ui.fonts import (
     font_paths,
     layout_font_paths,
     layout_text,
+    text_decoration_metrics,
     text_vertical_metrics,
 )
 from sdf_ui.fonts import (
@@ -295,7 +296,7 @@ class _TextRenderPipeline:
     @staticmethod
     def _draw_line_decorations(config, layout, line_data):
         _, line_width, line_x, baseline, clip_rect = line_data
-        metrics = _TextRenderPipeline._decoration_metrics(config["paths"][0], config[_CFG_FONT_SIZE])
+        metrics = text_decoration_metrics(config["paths"][0], config[_CFG_FONT_SIZE])
         for decoration in config["decorations"]:
             offset, thickness = _TextRenderPipeline._decoration_metrics(
                 decoration, metrics, layout["ascent"], config[_CFG_DECORATION_THICKNESS]

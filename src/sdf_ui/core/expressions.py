@@ -8,12 +8,55 @@ import math
 
 from ._expression_nodes import (
     _MAXIMUM_TEXT,
-    Expr,
     _select_positive,
-    percent,
-    percent_of_min,
-    percent_x,
-    percent_y,
+)
+from ._expression_nodes import (
+    Expr as Expr,
+)
+from ._expression_nodes import (
+    _lazy_scalar as _lazy_scalar,
+)
+from ._expression_nodes import (
+    _scalar_maximum as _scalar_maximum,
+)
+from ._expression_nodes import (
+    _scalar_minimum as _scalar_minimum,
+)
+from ._expression_nodes import (
+    cos as cos,
+)
+from ._expression_nodes import (
+    ease_in_cubic as ease_in_cubic,
+)
+from ._expression_nodes import (
+    ease_in_out_sine as ease_in_out_sine,
+)
+from ._expression_nodes import (
+    ease_out_cubic as ease_out_cubic,
+)
+from ._expression_nodes import (
+    input_value as input_value,
+)
+from ._expression_nodes import (
+    param as param,
+)
+from ._expression_nodes import (
+    percent as percent,
+)
+from ._expression_nodes import (
+    percent_of_min as percent_of_min,
+)
+from ._expression_nodes import (
+    percent_x as percent_x,
+)
+from ._expression_nodes import (
+    percent_y as percent_y,
+)
+from ._expression_nodes import (
+    sin as sin,
+)
+from ._expression_nodes import (
+    validate_progress as validate_progress,
 )
 
 

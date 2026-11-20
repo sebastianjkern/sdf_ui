@@ -28,7 +28,7 @@ def draw_axes(
     x_axis_at,
     y_axis_at,
 ):
-    from . import color, sdf
+    from .. import color, sdf
     from ._plot_viewport import _auto_ticks
 
     xmin, xmax = plot.x_range

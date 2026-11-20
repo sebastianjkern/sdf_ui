@@ -9,6 +9,8 @@ from numbers import Integral, Real
 from types import MappingProxyType
 from typing import Any
 
+from ..core.color import ColorTexture
+from ..text import measure_text
 from ._plot_geometries import (
     X_CHANNELS,
     Y_CHANNELS,
@@ -16,8 +18,6 @@ from ._plot_geometries import (
 )
 from ._plot_statistics import Histogram
 from ._plot_viewport import Box, Plot, Point
-from .core.color import ColorTexture
-from .text import measure_text
 
 Row = Mapping[str, Any]
 MappingSpec = Mapping[str, str]
@@ -129,13 +129,13 @@ def _prepare(layer, inherited, data, facets):
 
 
 def _compose(layers):
-    from . import color
+    from .. import color
 
     return color.clear(_TRANSPARENT).over(*layers)
 
 
 def _text(label, x, y, size, tint=_FOREGROUND):
-    from . import sdf
+    from .. import sdf
 
     return sdf.text(label, ox=x, oy=y, size=size).ink(tint, inflate=0.2)
 
@@ -238,7 +238,7 @@ def _chart_box(box):
 
 
 def _legend(box, colors):
-    from . import sdf
+    from .. import sdf
 
     left, bottom, width, _ = box
     start, end = left + 64, left + width - 24

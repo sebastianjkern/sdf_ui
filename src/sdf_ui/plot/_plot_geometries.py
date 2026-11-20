@@ -7,9 +7,9 @@ from dataclasses import dataclass
 from numbers import Real
 from typing import Any
 
+from ..core.color import ColorTexture
+from ..core.expressions import _lazy_scalar
 from ._plot_viewport import Plot
-from .core.color import ColorTexture
-from .core.expressions import _lazy_scalar
 
 Rows = Sequence[Mapping[str, Any]]
 X_CHANNELS = ("x", "xmin", "xmax")

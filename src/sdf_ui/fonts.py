@@ -20,6 +20,15 @@ from ._font_resources import (
     layout_font_paths,
     text_vertical_metrics,
 )
+from ._font_resources import (
+    default_font_path as default_font_path,
+)
+from ._font_resources import (
+    system_font as system_font,
+)
+from ._font_resources import (
+    text_decoration_metrics as text_decoration_metrics,
+)
 
 
 def _font_for_cluster(cluster, paths, missing_glyph):

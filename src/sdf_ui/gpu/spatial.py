@@ -14,7 +14,7 @@ from ..core.spatial import is_spatial, spatial_scene
 from ..core.texture import _SPATIAL_PARAMS
 from .nodes.common import build
 from .nodes.registry import registry
-from .regions import _matching_brace, _matching_paren, _split_arguments
+from .regions import _matching_delimiter, _split_arguments
 
 _SCALE = "scale"
 _FLOAT = "float"
@@ -67,7 +67,7 @@ def _replace_calls(code, function, replace):
     offset = 0
     while (match := pattern.search(code, offset)) is not None:
         opening = match.end() - 1
-        end = _matching_paren(code, opening)
+        end = _matching_delimiter(code, opening, "(", ")", "Malformed WGSL function call")
         args = _split_arguments(code[opening + 1 : end])
         replacement = replace(*(arg.strip() for arg in args))
         code = code[: match.start()] + replacement + code[end + 1 :]
@@ -99,7 +99,7 @@ def _dispatch_local_entry(kernel):
     match = _ENTRY.search(code)
     if match is None:
         raise NotImplementedError(f"'{kernel.descriptor.name}' has no adaptable compute entry")
-    ending = _matching_brace(code, match.end() - 1)
+    ending = _matching_delimiter(code, match.end() - 1, "{", "}", "Malformed WGSL function body")
     invocation = match.group(1)
     body = code[match.end():ending]
     body = re.sub(rf"\b{invocation}\.xy\b", "vec2<i32>(round(position))", body)

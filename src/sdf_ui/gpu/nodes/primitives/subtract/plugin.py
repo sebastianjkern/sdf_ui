@@ -1,19 +1,26 @@
 __docformat__ = "google"
 
-from functools import partial
-
-from sdf_ui.gpu.nodes.base import PluginFamily, TextureKind
-from sdf_ui.gpu.nodes.common import register_single_texture_shader
+from sdf_ui.gpu.nodes.base import Plugin, PluginFamily, TextureKind
+from sdf_ui.gpu.nodes.common import shader
 
 from .implementation import CONTRACT, INTERFACE, PROGRAM
 
-register_plugins = partial(
-    register_single_texture_shader,
-    name="subtract",
-    family=PluginFamily.PRIMITIVE,
-    texture_kind=TextureKind.SDF,
-    shader_path="primitives/subtract/shader.glsl",
-    contract=CONTRACT,
-    program=PROGRAM,
-    interface=INTERFACE,
-)
+
+def register_plugins(registry):
+    registry.register(
+        Plugin(
+            "subtract",
+            PluginFamily.PRIMITIVE,
+            TextureKind.SDF,
+            (TextureKind.SDF, TextureKind.SDF),
+            shader=shader(
+                "subtract",
+                "primitives/subtract/shader.glsl",
+                derivative_contract=CONTRACT,
+                program=PROGRAM,
+                interface=INTERFACE,
+            ),
+            input_uniforms=("sdf0", "sdf1"),
+            method_of=(TextureKind.SDF,),
+        )
+    )

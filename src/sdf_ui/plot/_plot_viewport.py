@@ -9,15 +9,15 @@ from itertools import pairwise
 from numbers import Real
 from typing import TYPE_CHECKING, Any
 
-from ._plot_sampling import Point, _ordered_range, _sample_path
-from .core.color import ColorTexture
-from .core.expressions import (
+from ..core.color import ColorTexture
+from ..core.expressions import (
     _lazy_scalar,
     _scalar_maximum,
     _scalar_minimum,
     _select_positive,
 )
-from .core.sdf import SDFTexture
+from ..core.sdf import SDFTexture
+from ._plot_sampling import Point, _ordered_range, _sample_path
 
 if TYPE_CHECKING:
     from ._plot_data import PlotSpec
@@ -133,7 +133,7 @@ class Plot:
 
     def clip(self, shape: SDFTexture) -> SDFTexture:
         """Intersect a filled shape with the viewport. Apply ink after clipping."""
-        from . import sdf
+        from .. import sdf
 
         left, bottom, width, height = self.box
         viewport = sdf.rect_from_size(
@@ -151,7 +151,7 @@ class Plot:
         to ``clip()`` before coloring. Coordinates and radius can be lazy.
         Supply at least one pair of adjacent points.
         """
-        from . import sdf
+        from .. import sdf
 
         _nonnegative_literal(radius, "line radius")
         mapped = (None if point is None else self.point(*point) for point in points)
@@ -164,7 +164,7 @@ class Plot:
 
     def scatter(self, points: Iterable[DataPoint], *, radius: Any = 4.0) -> SDFTexture:
         """Draw one or more circles with a canvas-space radius and live positions."""
-        from . import sdf
+        from .. import sdf
 
         _nonnegative_literal(radius, "scatter radius")
         return _combine_marks(
@@ -180,7 +180,7 @@ class Plot:
         width and baseline can all be lazy expressions. A value on the
         baseline gives a zero-height rectangle.
         """
-        from . import sdf
+        from .. import sdf
 
         _nonnegative_literal(width, "bar width")
         canvas_width = self.box[2]
@@ -205,7 +205,7 @@ class Plot:
         Corner coordinates may be lazy and can be supplied in either order
         on each axis. Apply ``clip()`` before coloring to crop to the viewport.
         """
-        from . import sdf
+        from .. import sdf
 
         def marks():
             for xmin, xmax, ymin, ymax in bounds:
@@ -225,7 +225,7 @@ class Plot:
         Each coordinate may be lazy. Keep x ordered within a run and supply
         at least two adjacent samples. Paint with ``ink()`` for best results.
         """
-        from . import sdf
+        from .. import sdf
 
         def marks():
             samples = tuple(points)
@@ -251,7 +251,7 @@ class Plot:
         Return unsigned distance to the sampled line. Set a positive radius
         for a filled distance band, or use ``.stroke()`` on the centerline.
         """
-        from . import sdf
+        from .. import sdf
 
         def point_at(x):
             y = function(x)
@@ -290,7 +290,7 @@ class Plot:
         errors and ``None`` leave gaps. Pass known jumps or poles in ``breaks``
         so sampling never connects across them.
         """
-        from . import sdf
+        from .. import sdf
 
         left, bottom, width, height = self.box
         points = _sample_path(
@@ -370,7 +370,7 @@ class Plot:
         can be a static native graph input while its position and the optional
         leader remain trainable. Use ``cache=False`` for moving annotations.
         """
-        from . import sdf
+        from .. import sdf
 
         if isinstance(leader_width, Real) and (
             not math.isfinite(leader_width) or leader_width <= 0

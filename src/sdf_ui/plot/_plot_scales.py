@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from numbers import Real
 from typing import Any
 
+from ..core.expressions import Expr
 from ._plot_sampling import Point, _ordered_range
-from .core.expressions import Expr
 
 _CONSTANT_DATA_MARGIN = 0.5
 _RELATIVE_DATA_MARGIN = 0.1
@@ -27,7 +27,7 @@ def _categorical_scale(values, limits, axis, include_zero):
 
 
 def _numeric_values(values, limits, axis):
-    from .learning.autodiff import Parameter
+    from ..learning.autodiff import Parameter
 
     numbers = []
     for value in values:

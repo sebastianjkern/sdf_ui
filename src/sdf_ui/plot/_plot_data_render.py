@@ -4,6 +4,7 @@ from __future__ import annotations
 
 
 def build_layers(spec, box):
+    from ..core.expressions import _lazy_scalar
     from ._plot_data import (
         _MUTED,
         PlotLayers,
@@ -16,7 +17,6 @@ def build_layers(spec, box):
     )
     from ._plot_geometries import X_CHANNELS, Y_CHANNELS
     from ._plot_scales import PositionScale
-    from .core.expressions import _lazy_scalar
 
     box = _chart_box(box)
     prepared = _prepare_layers(spec, _prepare)

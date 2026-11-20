@@ -8,10 +8,10 @@ from PIL import Image
 
 from sdf_ui import Canvas
 from sdf_ui.bw_to_sdf import image_to_sdf
+from sdf_ui.gpu.nodes.primitives._text_composite import _sample_sdf
 from sdf_ui.gpu.nodes.primitives.text.plugin import (
     _cached_glyph_sdf,
     _glyph_cache_size,
-    _sample_sdf,
 )
 from sdf_ui.text import glyph, text
 from sdf_ui.util import hex_col

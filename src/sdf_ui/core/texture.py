@@ -1600,7 +1600,6 @@ class PostNamespace:
         return sorted(names)
 
 
-@dataclass(frozen=True)
 class WarpableTextureNode(TextureNode):
     """Texture node variant that supports vector-field displacement."""
 
@@ -1614,6 +1613,7 @@ class WarpableTextureNode(TextureNode):
         return warp_texture(self._warp_operation, self, field, strength, steps)
 
 
+@dataclass(frozen=True)
 class MultiOutputResult:
     op: str
     inputs: tuple = ()
