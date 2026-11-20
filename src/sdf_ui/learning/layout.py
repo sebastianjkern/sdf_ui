@@ -25,14 +25,15 @@ import numpy as np
 
 from .._json_identity import serialize_identity
 from ..core.expressions import Expr, evaluate_expr
+from ._checkpoint_io import JsonCheckpoint
 from .autodiff import Parameter, Tensor, as_tensor, maximum, minimum
 from .optimizers import Adam
 
-_HEIGHT_TEXT = 'height'
+_HEIGHT_TEXT = "height"
 
-_MINIMUM_SIZE_TEXT = 'minimum_size'
+_MINIMUM_SIZE_TEXT = "minimum_size"
 
-_WIDTH_TEXT = 'width'
+_WIDTH_TEXT = "width"
 
 __all__ = ["Bounds", "Element", "Layout", "LayoutSnapshot", "LayoutTrainer"]
 
@@ -87,7 +88,9 @@ class Bounds:
 
     def __post_init__(self):
         for name in ("x", "y", _WIDTH_TEXT, _HEIGHT_TEXT):
-            _validate_scalar(getattr(self, name), name, name in {_WIDTH_TEXT, _HEIGHT_TEXT})
+            _validate_scalar(
+                getattr(self, name), name, name in {_WIDTH_TEXT, _HEIGHT_TEXT}
+            )
 
     @property
     def left(self):
@@ -168,10 +171,13 @@ class Element:
     def __post_init__(self):
         self._validate_labels(self)
         object.__setattr__(self, "parent", self._normalize_parent(self.parent))
-        object.__setattr__(self, _MINIMUM_SIZE_TEXT, self._normalize_minimum_size(self.minimum_size))
-        if self.content_bounds is not None and not isinstance(self.content_bounds, Bounds):
+        object.__setattr__(
+            self, _MINIMUM_SIZE_TEXT, self._normalize_minimum_size(self.minimum_size)
+        )
+        if self.content_bounds is not None and not isinstance(
+            self.content_bounds, Bounds
+        ):
             raise TypeError("content_bounds must be Bounds")
-
 
     def shape(self, corner_radius=0.0):
         """Build a persistent SDF rect sharing these raw geometry leaves.
@@ -273,6 +279,7 @@ def _validated_parameters(parameters):
 def _serialize_layout_identity(identity):
     return serialize_identity(identity, "Layout")
 
+
 def _validate_layout_checkpoint(trainer, state):
     if (
         not isinstance(state, Mapping)
@@ -349,7 +356,10 @@ class LayoutSnapshot:
         """Return a mutable, JSON-compatible copy for reporting/checkpoints."""
 
         def box(bounds):
-            return {key: getattr(bounds, key) for key in ("x", "y", _WIDTH_TEXT, _HEIGHT_TEXT)}
+            return {
+                key: getattr(bounds, key)
+                for key in ("x", "y", _WIDTH_TEXT, _HEIGHT_TEXT)
+            }
 
         return {
             "size": list(self.size),
@@ -435,27 +445,40 @@ class Layout:
         elements = {}
         for name, element in self.elements.items():
             minimum_size = (
-                tuple(_resolve(v, ctx, params, False, _MINIMUM_SIZE_TEXT, True)
-                      for v in element.minimum_size)
-                if element.minimum_size is not None else None
+                tuple(
+                    _resolve(v, ctx, params, False, _MINIMUM_SIZE_TEXT, True)
+                    for v in element.minimum_size
+                )
+                if element.minimum_size is not None
+                else None
             )
             content_bounds = (
                 _resolve_bounds(element.content_bounds, ctx, params, False)
-                if element.content_bounds is not None else None
+                if element.content_bounds is not None
+                else None
             )
             elements[name] = Element(
-                name, _resolve_bounds(element.bounds, ctx, params, False),
-                role=element.role, parent=element.parent,
-                minimum_size=minimum_size, content_bounds=content_bounds,
+                name,
+                _resolve_bounds(element.bounds, ctx, params, False),
+                role=element.role,
+                parent=element.parent,
+                minimum_size=minimum_size,
+                content_bounds=content_bounds,
             )
         return elements
 
     def _snapshot_overlap_area(self, bounds):
         return sum(
-            max(0.0, min(bounds[a].right, bounds[b].right)
-                - max(bounds[a].left, bounds[b].left))
-            * max(0.0, min(bounds[a].bottom, bounds[b].bottom)
-                - max(bounds[a].top, bounds[b].top))
+            max(
+                0.0,
+                min(bounds[a].right, bounds[b].right)
+                - max(bounds[a].left, bounds[b].left),
+            )
+            * max(
+                0.0,
+                min(bounds[a].bottom, bounds[b].bottom)
+                - max(bounds[a].top, bounds[b].top),
+            )
             for a, b in self._pairs()
         )
 
@@ -481,10 +504,12 @@ class Layout:
         overlap_area = self._snapshot_overlap_area(bounds)
         offscreen_area, minimum_size_loss = self._snapshot_constraints(elements)
         return LayoutSnapshot(
-            elements, self.size, float(overlap_area), float(offscreen_area),
+            elements,
+            self.size,
+            float(overlap_area),
+            float(offscreen_area),
             float(minimum_size_loss),
         )
-
 
     def overlap_loss(self, params=None):
         """Sum pairwise overlap areas; gradients vanish for separated boxes.
@@ -677,7 +702,7 @@ class Layout:
         return result
 
 
-class LayoutTrainer:
+class LayoutTrainer(JsonCheckpoint):
     """Optimize a scalar Tensor loss built fresh by ``loss_fn()`` each step.
 
     Parameters may be an iterable or a mapping of Parameter objects. The

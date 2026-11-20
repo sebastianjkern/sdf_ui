@@ -43,7 +43,7 @@ def _load_zero(image, x, y):
 def _filter_stencil(image, x, y, position, extent, offset, weight, axis):
     import numpy as np
 
-    count = len(weight)
+    count = weight.shape[0]
     integer_offsets = np.trunc(offset.data).astype(np.intp)
     result = _load_zero(image, x, y) * weight[0] + offset.sum() * 0.0
     factor = np.ones_like(position)

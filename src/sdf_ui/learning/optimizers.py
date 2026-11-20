@@ -1,7 +1,5 @@
 """CPU SGD and Adam optimizers for learning parameters."""
 
-
-
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Iterable, Mapping, Optional, Sequence, Tuple
 
@@ -9,11 +7,12 @@ import numpy as np
 
 from .autodiff import Parameter, _array, _finite
 
-_EXP_AVG_TEXT = 'exp_avg'
+_EXP_AVG_TEXT = "exp_avg"
 
-_EXP_AVG_SQ_TEXT = 'exp_avg_sq'
+_EXP_AVG_SQ_TEXT = "exp_avg_sq"
 
-_MOMENTUM_BUFFER_TEXT = 'momentum_buffer'
+_MOMENTUM_BUFFER_TEXT = "momentum_buffer"
+
 
 def _hyper(
     value: Any, name: str, upper: Optional[float] = None, positive: bool = False
@@ -41,7 +40,9 @@ def _validate_optimizer_checkpoint(optimizer, state):
         or state.get("type") != type(optimizer).__name__
     ):
         raise ValueError("incompatible optimizer state")
-    expected = {parameter.name: list(parameter.shape) for parameter in optimizer.parameters}
+    expected = {
+        parameter.name: list(parameter.shape) for parameter in optimizer.parameters
+    }
     if state.get("parameters") != expected:
         raise ValueError("optimizer state parameter names or shapes differ")
     config = state.get("hyperparameters")
@@ -278,7 +279,11 @@ class Adam(_Optimizer):
                     (
                         parameter,
                         value,
-                        {"step": step, _EXP_AVG_TEXT: m.copy(), _EXP_AVG_SQ_TEXT: v.copy()},
+                        {
+                            "step": step,
+                            _EXP_AVG_TEXT: m.copy(),
+                            _EXP_AVG_SQ_TEXT: v.copy(),
+                        },
                     )
                 )
         for parameter, value, state in updates:

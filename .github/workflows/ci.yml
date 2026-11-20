@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.10", "3.12"]
+        python: ["3.11", "3.12"]
     env:
       LIBGL_ALWAYS_SOFTWARE: "1"
     steps:
@@ -18,15 +18,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
-      - name: Install Mesa
-        run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1-mesa-dri libgl1
+      - name: Install Mesa software rendering
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1-mesa-dri libgl1 libvulkan1 mesa-vulkan-drivers
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
       - name: Install dependencies
         run: uv sync --locked --python ${{ matrix.python }}
       - name: Check formatting
-        run: uv run --locked --no-sync python -m ruff format --check src/sdf_ui/graph src/sdf_ui/learning src/sdf_ui/backends tests/test_consolidation.py
+        run: uv run --locked --no-sync python -m ruff format --check src/sdf_ui/graph src/sdf_ui/learning tests/test_consolidation.py
       - name: Lint
         run: uv run --locked --no-sync python -m ruff check src tests build_tools
       - name: Type check

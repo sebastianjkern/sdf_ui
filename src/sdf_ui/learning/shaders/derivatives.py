@@ -59,7 +59,9 @@ def _convert_arguments(contract, context, defaults, inputs, params, independent)
         for argument in arguments:
             spatial_shape = (context.size[1], context.size[0]) if is_image else ()
             expected = spatial_shape + argument.shape
-            value = source.get(argument.name, defaults.get(argument.name, np.zeros(expected)))
+            value = source.get(
+                argument.name, defaults.get(argument.name, np.zeros(expected))
+            )
             tensor = _tensor(value)
             if tensor.shape != expected:
                 raise ValueError(
@@ -76,7 +78,8 @@ def _independent_tensor(tensor, contract, argument, is_image, independent):
         return tensor
     return Tensor(
         tensor.numpy(),
-        requires_grad=is_image or argument.name not in contract.zero_gradient_parameters,
+        requires_grad=is_image
+        or argument.name not in contract.zero_gradient_parameters,
     )
 
 

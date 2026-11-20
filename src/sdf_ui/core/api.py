@@ -1,9 +1,13 @@
 """Dynamic namespaces that expose plugin-backed factory functions."""
 
+from __future__ import annotations
+
 __docformat__ = "google"
 
 import math
+from collections.abc import Iterable
 from numbers import Real
+from typing import TYPE_CHECKING
 
 from ..gpu.nodes.base import TextureKind
 from ..gpu.nodes.common import build
@@ -17,6 +21,9 @@ from .expressions import (
     cos,
     sin,
 )
+
+if TYPE_CHECKING:
+    from .sdf import SDFTexture
 
 
 def _half_dimensions(size):
@@ -128,7 +135,7 @@ class _OperationNamespace:
 class SDFNamespace(_OperationNamespace):
     kind = TextureKind.SDF
 
-    def union_all(self, shapes):
+    def union_all(self, shapes: Iterable[SDFTexture]):
         """Combine an iterable of signed distance fields with hard union.
 
         The iterable must contain at least one SDF. Inputs stay as scene nodes,
@@ -169,7 +176,7 @@ class SDFNamespace(_OperationNamespace):
         return _rect_with_size("rounded_rect", center, size, corner_radius, angle)
 
     def star(
-        self, center, outer_radius, inner_radius=None, rays=5, rotation=-math.pi / 2
+        self, center, outer_radius, inner_radius=None, rays: int = 5, rotation=-math.pi / 2
     ):
         """Create a regular star from differentiable triangular wedges.
 
@@ -243,7 +250,7 @@ class SDFNamespace(_OperationNamespace):
             )
         return tuple(vertices)
 
-    def fir_tree(self, center_x, base_y, height, width, tiers=3):
+    def fir_tree(self, center_x, base_y, height, width, tiers: int = 3):
         """Build a stepped fir silhouette from triangle boughs and a trunk.
 
         Position and dimensions accept lazy expressions or trainable parameters.
@@ -477,7 +484,7 @@ class ColorNamespace(_OperationNamespace):
         """Create a floating point layer with linear RGBA values."""
         return build("hdr_clear", rgba)
 
-    def concentric_rings(self, center, radius, *, count, tint, line_width=2.0, gap=5.0):
+    def concentric_rings(self, center, radius, *, count: int, tint, line_width=2.0, gap=5.0):
         """Compose equally spaced colored outlines inside a circle.
 
         ``count`` is a fixed positive topology control. Center, radius, tint,

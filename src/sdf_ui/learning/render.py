@@ -443,7 +443,14 @@ class DifferentiableRenderer:
     def _builtin(self, op, inputs, params, modes):
         if op in {"circle", "disc", "rect", "rounded_rect"}:
             return self._builtin_geometry(op, params)
-        if op in {"union", "intersection", "subtract", "smooth_union", "interpolate", "abs"}:
+        if op in {
+            "union",
+            "intersection",
+            "subtract",
+            "smooth_union",
+            "interpolate",
+            "abs",
+        }:
             return self._builtin_distance(op, inputs, params)
         if op in {"translate", "scale", "rotate"}:
             return self._transform(op, inputs[0], params)

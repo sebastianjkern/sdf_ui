@@ -12,6 +12,8 @@ from ..learning.autodiff import Tensor
 from .image import GPUImage
 from .resources import GPUBuffer
 
+def _integer_pair(value: Any, name: str, *, positive: bool) -> tuple[int, int]: ...
+
 class DispatchConfig:
     shader_local_size: tuple[int, int, int]
     group_count: tuple[int, int, int] | None

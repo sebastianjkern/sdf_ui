@@ -316,7 +316,7 @@ class TestSlopLintCasesOneB:
                     scene, expected = first.abs(), np.abs(a)
                 elif operation == "smooth_union":
                     scene = first.smooth_union(second, k=5 / 2)
-                    weight = np.clip(0.5 + 0.5 * (b - a) / 5 / 2, 0, 1)
+                    weight = np.clip(0.5 + 0.5 * (b - a) / 2.5, 0, 1)
                     expected = b * (1 - weight) + a * weight - 5 / 2 * weight * (1 - weight)
                 elif operation == "interpolate":
                     scene, expected = first.interpolate(second, t=0.31), a * 69 / 100 + b * 31 / 100

@@ -51,8 +51,10 @@ def tracked_texture_close(texture_node_type):
     original_close = texture_node_type.close
 
     def close(texture):
-        if texture.tex is not None:
-            closed.append(texture)
+        image = texture.tex
+        if image is not None and not image.closed:
+            # The wrapper can run during __del__, so never retain the node.
+            closed.append(id(texture))
         original_close(texture)
 
     return closed, close

@@ -246,14 +246,8 @@ class _Lowerer:
             Port(
                 index,
                 output_index,
-                {"r32f": "sdf", "rgba32float": "field"}.get(
-                    argument.kind, _COLOR_KEY
-                ),
-                (
-                    None
-                    if argument.kind in {"r32f", "rgba32float"}
-                    else mode or "LAB"
-                ),
+                {"r32f": "sdf", "rgba32float": "field"}.get(argument.kind, _COLOR_KEY),
+                (None if argument.kind in {"r32f", "rgba32float"} else mode or "LAB"),
             )
             for output_index, argument in enumerate(outputs)
         )
@@ -264,16 +258,22 @@ class _Lowerer:
         key = (port, mode)
         if key not in self.conversions:
             if mode == "LINEAR":
-                result = self.emit("hdr_decode", {"source": self.convert(port, "RGB")}, mode=mode)[0]
+                result = self.emit(
+                    "hdr_decode", {"source": self.convert(port, "RGB")}, mode=mode
+                )[0]
             elif port.mode == "LINEAR":
                 rgb = self.emit(
-                    "hdr_finish", {"source": port},
-                    lambda resolve: {"tone": 0.0, "dither": 0.0}, "RGB",
+                    "hdr_finish",
+                    {"source": port},
+                    lambda resolve: {"tone": 0.0, "dither": 0.0},
+                    "RGB",
                 )[0]
                 result = rgb if mode == "RGB" else self.convert(rgb, mode)
             else:
                 result = self.emit(
-                    "to_rgb" if mode == "RGB" else "to_lab", {"origTex": port}, mode=mode
+                    "to_rgb" if mode == "RGB" else "to_lab",
+                    {"origTex": port},
+                    mode=mode,
                 )[0]
             self.conversions[key] = result
         return self.conversions[key]
@@ -340,7 +340,9 @@ class _Lowerer:
                 "Materialized source textures require a live Canvas context"
             )
         if node.kind not in {"sdf", _COLOR_KEY, "field"}:
-            raise ValueError("Materialized graph sources must be SDF, color, or field textures")
+            raise ValueError(
+                "Materialized graph sources must be SDF, color, or field textures"
+            )
         index = len(self.sources)
         mode = node.mode if node.kind == _COLOR_KEY else None
         self.sources.append(node)
@@ -460,7 +462,9 @@ class _Lowerer:
         if name == "output":
             return self._composite_output(inputs, raw)
         if name == "masked_union":
-            return self.emit("masked_union", dict(zip(("sdf0", "sdf1"), inputs)), mode="RGB")
+            return self.emit(
+                "masked_union", dict(zip(("sdf0", "sdf1"), inputs)), mode="RGB"
+            )
         if name in {"translate", "scale", "rotate", "skew"}:
             return self._composite_transform(name, inputs, values)
         if name in {"mask", "layer_mask", "alpha_overlay", "multiply"}:

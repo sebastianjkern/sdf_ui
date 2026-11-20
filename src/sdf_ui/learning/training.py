@@ -100,10 +100,19 @@ def _run_fit_steps(
     stale = 0
     for index in range(steps):
         result = trainer.step() if step is None else step()
-        should_validate = _should_validate(validation, index, steps, validation_interval)
+        should_validate = _should_validate(
+            validation, index, steps, validation_interval
+        )
         if should_validate:
             best, best_state, stale = _record_validation(
-                trainer, result, validation, best, best_state, stale, min_delta, restore_best
+                trainer,
+                result,
+                validation,
+                best,
+                best_state,
+                stale,
+                min_delta,
+                restore_best,
             )
         history.append(result)
         if callback is not None:

@@ -86,52 +86,41 @@ class _PluginAdapters:
     def _adapt_output(renderer, plugin, inputs, params, modes):
         return _output_plugin(inputs, params, modes)
 
-
     @staticmethod
     def _adapt_masked_union(renderer, plugin, inputs, params, modes):
         return _masked_union_plugin(renderer, inputs)
-
 
     @staticmethod
     def _adapt_transform(renderer, plugin, inputs, params, modes):
         return _transform_plugin(renderer, plugin.name, inputs, params)
 
-
     @staticmethod
     def _adapt_layer(renderer, plugin, inputs, params, modes):
         return _layer_plugin(renderer, plugin.name, inputs, modes)
-
 
     @staticmethod
     def _adapt_fill_texture(renderer, plugin, inputs, params, modes):
         return _fill_texture_plugin(renderer, inputs, params, modes)
 
-
     @staticmethod
     def _adapt_fixed_blur(base, renderer, plugin, inputs, params, modes):
         return _blur(renderer, inputs[0], base, params["n"]), modes[0]
-
 
     @staticmethod
     def _adapt_blur(renderer, plugin, inputs, params, modes):
         return _iterated_blur_plugin(renderer, inputs, params, modes)
 
-
     @staticmethod
     def _adapt_shadow(renderer, plugin, inputs, params, modes):
         return _shadow_plugin(renderer, inputs, params)
-
 
     @staticmethod
     def _adapt_radial(renderer, plugin, inputs, params, modes):
         return _radial_gradient_plugin(renderer, params)
 
-
     @staticmethod
     def _adapt_linear(renderer, plugin, inputs, params, modes):
         return _linear_gradient_plugin(renderer, params)
-
-
 
     @staticmethod
     def result_mode(plugin, input_modes):
@@ -260,11 +249,10 @@ def _normalize_shader_colors(renderer, plugin, uniforms):
             uniforms[argument.name] = renderer._color(uniforms[argument.name])
 
 
-
-
 def _shader_plugin(renderer, plugin, inputs, params, input_modes):
     uniforms = (
-        {} if plugin.make_uniforms is None
+        {}
+        if plugin.make_uniforms is None
         else plugin.make_uniforms(_shader_uniform_parameters(plugin, params))
     )
     if plugin.name == "light":

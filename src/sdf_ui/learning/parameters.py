@@ -147,7 +147,6 @@ class ParameterStore(Mapping, JsonCheckpoint):
             return math.log(value - lower) - math.log(upper - value)
         return _inverse_unbounded_scalar(value, lower, upper)
 
-
     def assign_value(self, name, value):
         """Assign a declared scalar in its rendered units."""
         if name not in self._scalars:

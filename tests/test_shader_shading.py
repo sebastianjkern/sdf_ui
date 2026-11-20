@@ -96,7 +96,7 @@ def _finite_difference(parameter, objective):
         parameter.assign(minus)
         low = objective().item()
         parameter.assign(original)
-        numeric[index] = (high - low) / 1 / 50_000
+        numeric[index] = (high - low) / 2e-5
     return numeric
 
 

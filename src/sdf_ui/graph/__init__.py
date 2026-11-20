@@ -1,11 +1,9 @@
 """Shared graph compilation, execution and inspection."""
 
-
-
 from importlib import import_module
 from typing import TYPE_CHECKING
 
-_RUNTIME_TEXT = 'runtime'
+_RUNTIME_TEXT = "runtime"
 
 if TYPE_CHECKING:
     from .dataset import (

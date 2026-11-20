@@ -106,8 +106,9 @@ class Plot:
         """
         from ._plot_data import PlotSpec
 
-        options = {} if palette is None else {"palette": tuple(palette)}
-        return PlotSpec(data, mapping or {}, xlim=xlim, ylim=ylim, **options)
+        if palette is None:
+            return PlotSpec(data, mapping or {}, xlim=xlim, ylim=ylim)
+        return PlotSpec(data, mapping or {}, xlim=xlim, ylim=ylim, palette=tuple(palette))
 
     def point(self, x: Any, y: Any) -> tuple[Any, Any]:
         """Map a graph coordinate or lazy data expression to the canvas."""

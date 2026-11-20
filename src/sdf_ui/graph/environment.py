@@ -54,6 +54,7 @@ def _validate_callbacks(objective, reward, action_transform):
 def _serialize_identity(identity):
     return serialize_identity(identity, "Environment")
 
+
 def _input_binding(value, graph):
     if not isinstance(value, Expr) or value.op != "input":
         return None
@@ -149,11 +150,11 @@ class RenderEnvironment:
         self._assign_inputs(observation, action)
         with self.graph.run(self.objective) as execution:
             reward = (
-                -execution.loss if self.reward is None
+                -execution.loss
+                if self.reward is None
                 else self.reward(observation, raw_action, execution)
             )
             return _validated_reward(reward)
-
 
 
 class NamedValues(Mapping):

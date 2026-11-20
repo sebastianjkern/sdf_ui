@@ -1,7 +1,5 @@
 """Regression coverage for graph state and parameter schemas."""
 
-
-
 import numpy as np
 import pytest
 
@@ -19,11 +17,12 @@ from sdf_ui.learning import (
     PolicyGradientTrainer,
 )
 
-_CONTEXT_TEXT = 'context'
+_CONTEXT_TEXT = "context"
 
-_FIELD_TEXT = 'field'
+_FIELD_TEXT = "field"
 
-_RADIUS_TEXT = 'radius'
+_RADIUS_TEXT = "radius"
+
 
 def test_objective_terms_and_cpu_targets_are_immutable():
     target = np.ones((3, 4), dtype=np.float32)
@@ -141,7 +140,9 @@ def test_dataset_early_stopping_restores_best_optimizer_state():
                 assert len(history) == 6
                 assert trainer.steps == 2
                 assert p[_RADIUS_TEXT].item() == pytest.approx(values[1])
-                assert trainer.optimizer.state_dict()["state"][_RADIUS_TEXT]["step"] == 2
+                assert (
+                    trainer.optimizer.state_dict()["state"][_RADIUS_TEXT]["step"] == 2
+                )
 
 
 def test_dataset_extreme_weights_remain_finite():
@@ -209,7 +210,9 @@ def test_named_policy_checkpoint_validates_environment_identity():
     context = input_value(_CONTEXT_TEXT)
     with Canvas((4, 3)) as canvas:
         with canvas.compile(
-            {_FIELD_TEXT: sdf.circle((context, 1), radius)}, p, inputs={_CONTEXT_TEXT: 2}
+            {_FIELD_TEXT: sdf.circle((context, 1), radius)},
+            p,
+            inputs={_CONTEXT_TEXT: 2},
         ) as graph:
             kwargs = {
                 "observations": {_CONTEXT_TEXT: context},

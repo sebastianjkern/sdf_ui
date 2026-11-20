@@ -4,6 +4,7 @@ import math
 from dataclasses import dataclass
 from numbers import Real
 
+from ..learning._checkpoint_io import JsonCheckpoint
 from ..learning.objective import Objective
 from .runtime import GraphTrainer, RenderGraph
 
@@ -68,7 +69,7 @@ class GraphCase:
         object.__setattr__(self, "weight", float(self.weight))
 
 
-class GraphDatasetTrainer:
+class GraphDatasetTrainer(JsonCheckpoint):
     """Train over scenes with one weighted-mean optimizer update per batch.
 
     All graphs must share a Canvas and exactly the same Parameter objects.

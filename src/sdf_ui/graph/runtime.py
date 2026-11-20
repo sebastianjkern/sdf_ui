@@ -13,6 +13,7 @@ from PIL import Image
 from ..core.expressions import evaluate_expr, validate_progress
 from ..core.image import shape_size
 from ..core.texture import MultiOutputResult, TextureNode
+from ..learning._checkpoint_io import JsonCheckpoint
 from ..learning.autodiff import Tensor, as_tensor
 from ..learning.objective import Objective
 from ..learning.render import _tensor
@@ -62,26 +63,6 @@ def _validate_shared_graph_case(case, graph):
         id(parameter) for parameter in case.graph.parameters
     } != {id(parameter) for parameter in graph.parameters}:
         raise ValueError("Cases must share a Canvas and parameter leaves")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 class FitResult:
@@ -293,7 +274,9 @@ class RenderGraph:
         self.backend = canvas.create_graph_backend()
         for operation in self.plan.passes:
             if getattr(operation.shader.wgsl, "forward_formats", None) is not None:
-                self.backend.descriptors.setdefault(operation.shader.name, operation.shader)
+                self.backend.descriptors.setdefault(
+                    operation.shader.name, operation.shader
+                )
 
     def _initialize_execution_state(self, canvas):
         self._cache = {}
@@ -441,6 +424,7 @@ class RenderGraph:
     ):
         """Create a named policy environment backed by this graph."""
         return _create_environment(
+            self,
             actions=actions,
             observations=observations,
             objective=objective,
@@ -1290,7 +1274,7 @@ class GraphExecution:
             pass
 
 
-class GraphTrainer:
+class GraphTrainer(JsonCheckpoint):
     """Train a compiled graph with one complete combined-loss update per step.
 
     The default optimizer is native GPU Adam. Existing CPU SGD/Adam can also

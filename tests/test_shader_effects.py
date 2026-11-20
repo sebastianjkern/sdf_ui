@@ -161,7 +161,7 @@ def _assert_effect_gradients(name, inputs, params, leaves, uniforms, objective):
                 source[key] = minus
                 low = objective()
                 source[key] = original
-                numerical[index] = (high - low) / 1 / 500_000
+                numerical[index] = (high - low) / 2e-6
             np.testing.assert_allclose(
                 tensor.grad, numerical, atol=3e-7, rtol=3e-6, err_msg=name + ":" + key
             )

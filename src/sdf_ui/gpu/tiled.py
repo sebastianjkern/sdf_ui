@@ -38,7 +38,7 @@ def _negative_gain_turbulence_bound(params, bound):
     octaves = params["octaves"]
     if octaves not in range(1, 9):
         raise ValueError("turbulence octaves must be an integer from 1 to 8")
-    return bound * sum(gain**i for i in range(int(octaves))) / 1 / 10_000
+    return bound * sum(gain**i for i in range(int(octaves))) / 0.0001
 
 
 def _base_field_bound(node, params, resolve, memo):

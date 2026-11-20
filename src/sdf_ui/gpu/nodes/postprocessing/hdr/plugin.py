@@ -102,7 +102,7 @@ def _reference(context, inputs, p, *, op):
         "expose": lambda: (rgb * exp(_tensor(p["stops"]) * np.log(2)), alpha),
         "grain": lambda: _grain(rgb, alpha, context, p, _tensor, where),
         "extract": lambda: _extract(rgb, alpha, p, _tensor, where),
-        "glow": lambda: _glow(rgb, alpha, inputs, p, context, _tensor, where),
+        "glow": lambda: _glow(rgb, alpha, inputs, p, _tensor, where),
         "finish": lambda: _finish(rgb, alpha, p, context, np, _tensor, where),
     }
     operation = operations.get(op)

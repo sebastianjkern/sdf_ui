@@ -119,13 +119,18 @@ def _format_annotation(annotation: Any) -> str:
 def _format_manual_method(name: str, func: Any, return_type: str) -> str:
     signature = inspect.signature(func)
     rendered = []
+    has_star = False
     for parameter in signature.parameters.values():
         chunk = parameter.name
         if parameter.kind == inspect.Parameter.VAR_POSITIONAL:
             chunk = f"*{parameter.name}: {_format_annotation(parameter.annotation)}"
+            has_star = True
         elif parameter.kind == inspect.Parameter.VAR_KEYWORD:
             chunk = f"**{parameter.name}: {_format_annotation(parameter.annotation)}"
         elif parameter.kind == inspect.Parameter.KEYWORD_ONLY:
+            if not has_star:
+                rendered.append("*")
+                has_star = True
             chunk = f"{parameter.name}: {_format_annotation(parameter.annotation)}"
         elif parameter.name != "self":
             chunk = f"{parameter.name}: {_format_annotation(parameter.annotation)}"
@@ -185,7 +190,10 @@ class _StubRenderer:
                 "render": "Self",
                 "read": "NDArray[Any]",
                 "show": "None",
-                "save": "None",
+                "save": "Path",
+                "channel": "TextureChannel",
+                "repeat": "Self",
+                "repeat_grid": "Self",
                 "named": "Any",
                 "cache": "Any",
                 "uncached": "Any",
@@ -200,9 +208,16 @@ class _StubRenderer:
             },
             _SDFTEXTURE_TEXT: {
                 "fill": _COLORTEXTURE_TEXT,
+                "ink": _COLORTEXTURE_TEXT,
+                "stroke": _COLORTEXTURE_TEXT,
+                "ink_linear": _COLORTEXTURE_TEXT,
+                "fill_linear": _COLORTEXTURE_TEXT,
                 "__or__": _SDFTEXTURE_TEXT,
                 "__and__": _SDFTEXTURE_TEXT,
                 "__sub__": _SDFTEXTURE_TEXT,
+                "__xor__": _SDFTEXTURE_TEXT,
+                "xor": _SDFTEXTURE_TEXT,
+                "intersection": _SDFTEXTURE_TEXT,
                 "intersect": _SDFTEXTURE_TEXT,
                 "mask": _COLORTEXTURE_TEXT,
                 "debug_seams": _COLORTEXTURE_TEXT,
@@ -214,8 +229,21 @@ class _StubRenderer:
                 "turbulence": _SDFTEXTURE_TEXT,
             },
             _SDFNAMESPACE_TEXT: {
+                "union_all": _SDFTEXTURE_TEXT,
+                "rect_from_size": _SDFTEXTURE_TEXT,
+                "rounded_rect_from_size": _SDFTEXTURE_TEXT,
+                "star": _SDFTEXTURE_TEXT,
+                "fir_tree": _SDFTEXTURE_TEXT,
+                "isometric_cube": _SDFTEXTURE_TEXT,
+                "arrow": _SDFTEXTURE_TEXT,
+                "polyline": _SDFTEXTURE_TEXT,
                 "svg": _SDFTEXTURE_TEXT,
                 "math": _SDFTEXTURE_TEXT,
+            },
+            _COLORNAMESPACE_TEXT: {
+                "linear_rgba": _COLORTEXTURE_TEXT,
+                "concentric_rings": _COLORTEXTURE_TEXT,
+                "palette": "Palette",
             },
             _FIELDNAMESPACE_TEXT: {
                 "constant": _FIELDTEXTURE_TEXT,
@@ -232,6 +260,12 @@ class _StubRenderer:
             _COLORTEXTURE_TEXT: {
                 "warp": _COLORTEXTURE_TEXT,
                 "over": _COLORTEXTURE_TEXT,
+                "alpha_overlay": _COLORTEXTURE_TEXT,
+                "to_linear": _COLORTEXTURE_TEXT,
+                "expose": _COLORTEXTURE_TEXT,
+                "film_grain": _COLORTEXTURE_TEXT,
+                "bloom": _COLORTEXTURE_TEXT,
+                "finish": _COLORTEXTURE_TEXT,
                 "to_lab": _COLORTEXTURE_TEXT,
                 "to_rgb": _COLORTEXTURE_TEXT,
             },
@@ -256,6 +290,7 @@ class _StubRenderer:
                     "__or__",
                     "__and__",
                     "__sub__",
+                    "__xor__",
                 }
                 and not (class_name == _RENDERER_TEXT and name == "__init__")
             ):
@@ -297,7 +332,9 @@ class _StubRenderer:
     def _plugin_matches_class(class_name, plugin, texture_kind):
         match class_name:
             case "SDFTexture":
-                return texture_kind.SDF in plugin.method_of
+                return texture_kind.SDF in plugin.method_of and plugin.name not in {
+                    "repeat", "repeat_grid",
+                }
             case "ColorTexture":
                 return texture_kind.COLOR in plugin.method_of
             case "PostNamespace":
@@ -338,6 +375,8 @@ class _StubRenderer:
             "",
             "from numpy.typing import NDArray",
             "",
+            "from .spatial import TextureChannel",
+            "",
             "if TYPE_CHECKING:",
             "    from .color import ColorTexture",
             "",
@@ -345,6 +384,7 @@ class _StubRenderer:
                 _TEXTURENODE_TEXT,
                 _collect_manual_methods(_TEXTURENODE_TEXT, runtime[_TEXTURENODE_TEXT]),
                 properties=[
+                    "    kind: str | None",
                     "    tex: Any",
                     "    context: Any",
                     "    op: str | None",
@@ -361,6 +401,12 @@ class _StubRenderer:
                     "    def __init__(self, *, op: str, inputs: Iterable[Any] = ..., params: Mapping[str, Any] | Iterable[Any] | None = ..., label: str | None = ..., should_cache: bool = ...) -> None: ...",
                 ],
             ).rstrip(),
+            "",
+            "class WarpableTextureNode(TextureNode):",
+            "    def warp(self, field: Any, strength: Any = 1.0, steps: Any = 1) -> Self: ...",
+            "",
+            "_SPATIAL_PARAMS: set[str]",
+            "def _scale_spatial_params(op: Any, params: Any, scale: Any) -> Any: ...",
             "",
             _render_class(
                 _POSTNAMESPACE_TEXT,
@@ -438,13 +484,14 @@ class _StubRenderer:
             "",
             "from typing import Any, overload",
             "",
-            "from .texture import PostNamespace, TextureNode",
+            "from .texture import PostNamespace, WarpableTextureNode",
             "",
             "class ColorSpaceMode:",
             "    LAB: str",
             "    RGB: str",
+            "    LINEAR: str",
             "",
-            _render_class("ColorTexture(TextureNode)", methods).rstrip(),
+            _render_class("ColorTexture(WarpableTextureNode)", methods).rstrip(),
             "",
         ]
         return "\n".join(lines)
@@ -464,6 +511,11 @@ class _StubRenderer:
             "",
             _render_class("FieldTexture(TextureNode)", methods).rstrip(),
             "",
+            _render_class(
+                _FIELDNAMESPACE_TEXT,
+                _collect_manual_methods(_FIELDNAMESPACE_TEXT, runtime[_FIELDNAMESPACE_TEXT]),
+            ).rstrip(),
+            "",
         ]
         return "\n".join(lines)
 
@@ -478,9 +530,9 @@ class _StubRenderer:
             "from typing import Any",
             "",
             "from .color import ColorTexture",
-            "from .texture import MultiOutputResult, TextureNode",
+            "from .texture import MultiOutputResult, WarpableTextureNode",
             "",
-            _render_class("SDFTexture(TextureNode)", methods).rstrip(),
+            _render_class("SDFTexture(WarpableTextureNode)", methods).rstrip(),
             "",
         ]
         return "\n".join(lines)
@@ -490,22 +542,20 @@ class _StubRenderer:
     def _render_api_stub(runtime: dict[str, Any]) -> str:
         sdf_methods = _merge_methods(_SDFNAMESPACE_TEXT, runtime[_SDFNAMESPACE_TEXT], runtime)
         color_methods = _merge_methods(_COLORNAMESPACE_TEXT, runtime[_COLORNAMESPACE_TEXT], runtime)
-        field_methods = _merge_methods(_FIELDNAMESPACE_TEXT, runtime[_FIELDNAMESPACE_TEXT], runtime)
         lines = [
             _FROM___FUTURE___IMPORT_ANNOTATIONS_TEXT,
             "",
+            "from collections.abc import Iterable",
             "from typing import Any",
             "",
             "from .color import ColorTexture",
-            "from .field import FieldTexture",
+            "from .palette import Palette",
             "from .sdf import SDFTexture",
             "from .texture import MultiOutputResult",
             "",
             _render_class(_SDFNAMESPACE_TEXT, sdf_methods).rstrip(),
             "",
             _render_class(_COLORNAMESPACE_TEXT, color_methods).rstrip(),
-            "",
-            _render_class(_FIELDNAMESPACE_TEXT, field_methods).rstrip(),
             "",
         ]
         return "\n".join(lines)
@@ -518,6 +568,7 @@ class _StubRenderer:
                 "from .color import ColorSpaceMode as ColorSpaceMode, ColorTexture as ColorTexture",
                 "from .expressions import Expr as Expr, cos as cos, input_value as input_value, param as param, percent as percent, percent_of_min as percent_of_min, percent_x as percent_x, percent_y as percent_y, sin as sin",
                 "from .field import FieldNamespace as FieldNamespace, FieldTexture as FieldTexture",
+                "from .palette import Palette as Palette, get_palette as get_palette, palettes as palettes",
                 "from .sdf import SDFTexture as SDFTexture",
                 "",
             ]
@@ -535,7 +586,10 @@ class _StubRenderer:
                 "from .core import ColorTexture as ColorTexture, FieldTexture as FieldTexture, SDFTexture as SDFTexture",
                 "from .core.api import ColorNamespace, SDFNamespace",
                 "from .core.field import FieldNamespace",
-                "from .core.expressions import Expr as Expr, cos as cos, input_value as input_value, param as param, percent as percent, percent_of_min as percent_of_min, percent_x as percent_x, percent_y as percent_y, sin as sin",
+                "from .core.palette import Palette as Palette, get_palette as get_palette, palettes as palettes",
+                "from .core.expressions import Expr as Expr, cos as cos, ease_in_cubic as ease_in_cubic, ease_in_out_sine as ease_in_out_sine, ease_out_cubic as ease_out_cubic, input_value as input_value, param as param, percent as percent, percent_of_min as percent_of_min, percent_x as percent_x, percent_y as percent_y, sin as sin",
+                "from .plot import Plot as Plot",
+                "from .text import badge as badge, glyph as glyph, icon as icon",
                 "",
                 "Canvas = Context",
                 "sdf: SDFNamespace",

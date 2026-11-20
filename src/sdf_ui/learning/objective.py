@@ -145,7 +145,17 @@ class Objective:
         self._version += 1
         return self
 
-    def _pointwise(self, output, target, *, kind, weight=1.0, name=None, mask=None, normalization="all"):
+    def _pointwise(
+        self,
+        output,
+        target,
+        *,
+        kind,
+        weight=1.0,
+        name=None,
+        mask=None,
+        normalization="all",
+    ):
         return self.pixel(
             output,
             target,

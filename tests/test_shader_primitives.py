@@ -108,7 +108,7 @@ def _check_gradients(name, values, input_values=None, size=SIZE):
             leaf.assign(minus)
             low = _loss(name, context, inputs, params).item()
             leaf.assign(initial)
-            numeric[index] = (high - low) / 1 / 50_000
+            numeric[index] = (high - low) / 2e-5
         np.testing.assert_allclose(
             analytic,
             numeric,
@@ -206,7 +206,7 @@ def test_repeat_integer_addressing_zero_spacing_gradient_and_oob_zero():
 
 def _repeat_reference(source):
     x, y = np.meshgrid(np.arange(7), np.arange(5))
-    ix, iy = np.rint(x / 371 / 100), np.rint(y / 371 / 100)
+    ix, iy = np.rint(x / 3.71), np.rint(y / 3.71)
     ox, oy = np.sign(x - 371 / 100 * ix), np.sign(y - 371 / 100 * iy)
     samples = []
     for j in range(2):

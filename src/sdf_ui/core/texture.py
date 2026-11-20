@@ -1115,7 +1115,7 @@ class Renderer:
 class TextureNode(ABC):
     kind = None
 
-    def channel(self, name=0):
+    def channel(self, name: str | int = 0):
         """Select a numeric channel for a spatial parameter expression."""
         from .spatial import channel
 
@@ -1131,7 +1131,7 @@ class TextureNode(ABC):
         stamp_center=None,
         rotation=0.0,
         scale=1.0,
-        baked=False,
+        baked: bool = False,
     ):
         """Repeat a scene with optional spatial bindings and per-copy transforms.
 
@@ -1177,7 +1177,7 @@ class TextureNode(ABC):
         stamp_center=None,
         rotation=0.0,
         scale=1.0,
-        baked=False,
+        baked: bool = False,
     ):
         """Repeat a stamp across the canvas with scalar or XY spacing."""
         from numbers import Real

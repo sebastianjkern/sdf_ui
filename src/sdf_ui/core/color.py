@@ -36,7 +36,7 @@ class ColorTexture(WarpableTextureNode):
     def post(self):
         return PostNamespace(self)
 
-    def over(self, *layers, cache=True):
+    def over(self, *layers, cache: bool = True):
         """Composite color layers in order using straight alpha.
 
         With no layers, return this color node. With several layers, each later
@@ -78,7 +78,7 @@ class ColorTexture(WarpableTextureNode):
         """
         return build("hdr_grain", self.to_linear(), amount, size)
 
-    def bloom(self, *, threshold=1.0, amount=0.35, passes=2):
+    def bloom(self, *, threshold=1.0, amount=0.35, passes: int = 2):
         """Add blurred light above a linear luminance threshold.
 
         Threshold and amount accept lazy values. Passes is a fixed positive

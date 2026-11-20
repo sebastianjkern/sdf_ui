@@ -112,7 +112,9 @@ class _MLP:
         self.w2 = Parameter(
             "w2",
             rng.normal(
-                0, _POLICY_INIT_SCALE / np.sqrt(self.hidden_dim), (self.hidden_dim, self.action_dim)
+                0,
+                _POLICY_INIT_SCALE / np.sqrt(self.hidden_dim),
+                (self.hidden_dim, self.action_dim),
             ),
         )
         self.b2 = Parameter("b2", np.zeros(self.action_dim))
@@ -534,7 +536,9 @@ class PolicyGradientTrainer(JsonCheckpoint):
             step=step,
         )
 
-    def _validate_fit_inputs(self, environment, observation_fn, steps, batch_size, callback):
+    def _validate_fit_inputs(
+        self, environment, observation_fn, steps, batch_size, callback
+    ):
         if not callable(observation_fn):
             raise TypeError("observation_fn must be callable")
         if callback is not None and not callable(callback):
