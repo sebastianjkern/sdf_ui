@@ -9,6 +9,7 @@ resolution, and drive geometry and shading with parameters that can be animated
 or optimized.
 
 Start with the [art and animation examples](examples/README.md), including
+[texture-driven generative art](#texture-driven-generative-art),
 [Starry Current](#starry-current), [animated vector fields](#animated-fields),
 and the [preset gallery](examples/preset_gallery.py). See
 [What can I do with this engine?](#what-can-i-do-with-this-engine) for more renders.
@@ -634,6 +635,51 @@ ___
         <td><img src="./docs/assets/examples/composed_vector_fields.png" width="420"></td>
     </tr>
 </table>
+
+#### Texture-driven generative art
+
+Textures can drive the radius, rotation, position, and color of a repeated
+shape. Sample at each cell center for one value per copy, or at each pixel
+for variation within a copy. See the [spatial parameters guide](docs/spatial_parameters.rst)
+and the [example source](examples/spatial_parameters.py).
+
+<table>
+    <tr>
+        <th>Halftone</th>
+        <th>Woven Stamps</th>
+        <th>Ceramic Tiles</th>
+    </tr>
+    <tr>
+        <td><img src="docs/assets/examples/halftone.png" width="250" alt="Blue halftone dots vary in size across broad white and blue bands"></td>
+        <td><img src="docs/assets/examples/woven_stamps.png" width="250" alt="Orange and green stamps vary in shape, angle, and opacity over a dark field"></td>
+        <td><img src="docs/assets/examples/ceramic_tiles.png" width="250" alt="Gold crescents and teal dots rotate and resize across a dark grid"></td>
+    </tr>
+</table>
+
+Drifting Squares increases each square’s offset and rotation toward the
+bottom. The [quadtree mosaic](examples/quadtree_mosaic.py) uses a texture to
+select tile sizes and tones, subdividing where the source image has more contrast.
+
+<table>
+    <tr>
+        <th>Drifting Squares</th>
+        <th>Quadtree at Depth 2</th>
+        <th>Quadtree at Depth 3</th>
+    </tr>
+    <tr>
+        <td><img src="docs/assets/examples/drifting_squares.png" height="345" alt="An orderly grid of outlined squares at the top becomes increasingly shifted and rotated toward the bottom"></td>
+        <td><img src="docs/assets/examples/quadtree_mosaic_depth2.png" height="345" alt="An orbital pattern rendered as black and white rounded squares down to 16 pixels wide"></td>
+        <td><img src="docs/assets/examples/quadtree_mosaic.png" height="345" alt="The same orbital pattern rendered with finer rounded squares down to 8 pixels wide"></td>
+    </tr>
+</table>
+
+Run these from the repository root to regenerate the artwork.
+
+```bash
+uv run python -m examples.spatial_parameters
+uv run python -m examples.quadtree_mosaic
+uv run python -m examples.quadtree_mosaic --max-depth 2 --output out/generative_art/quadtree_mosaic_depth2.png
+```
 
 #### Animated Fields
 
