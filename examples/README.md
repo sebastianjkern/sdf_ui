@@ -52,6 +52,7 @@ uv run --extra math python -m examples.plot_gallery
 uv run python -m examples.high_fidelity_art --scale 4
 uv run python -m examples.spatial_parameters
 uv run python -m examples.quadtree_mosaic
+uv run python -m examples.vanishing_signal
 uv run python -m examples.series_plot
 uv run python -m examples.mark_gallery
 uv run python -m examples.chart_grammar
