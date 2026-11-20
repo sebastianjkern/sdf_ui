@@ -69,6 +69,19 @@ class Expr:
     def minimum(self, other: Any) -> Expr:
         return Expr("minimum", (self, other))
 
+    def clamp(self, low: Any = 0.0, high: Any = 1.0) -> Expr:
+        """Keep this expression inside an interval."""
+        return self.maximum(low).minimum(high)
+
+    def remap(self, source, target, *, clamp: bool = True) -> Expr:
+        """Map the source interval to the target interval."""
+        lo, hi = source
+        out_lo, out_hi = target
+        position = (self - lo) / (hi - lo)
+        if clamp:
+            position = position.clamp()
+        return out_lo + position * (out_hi - out_lo)
+
 
 def _lazy_scalar(value):
     """Keep literal arithmetic cheap and defer arithmetic on live leaves."""

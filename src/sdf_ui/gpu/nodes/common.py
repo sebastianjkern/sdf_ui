@@ -34,8 +34,13 @@ def params(*names):
 
 
 def color(value):
+    from sdf_ui.core.expressions import Expr
     from sdf_ui.learning.autodiff import Tensor, as_tensor, stack
 
+    if isinstance(value, Expr) or (
+        isinstance(value, (tuple, list)) and any(isinstance(item, Expr) for item in value)
+    ):
+        return value
     if _is_differentiable_color(value, Tensor):
         channels = _tensor_color_channels(value, Tensor, as_tensor, stack)
         if channels.shape in {(3,), (4,)} and (abs(channels.numpy()) > 1).any():

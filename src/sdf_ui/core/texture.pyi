@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, Any, Iterator, Optional, Self, overload
 
 from numpy.typing import NDArray
 
+from .spatial import TextureChannel
+
 if TYPE_CHECKING:
     from .color import ColorTexture
 
@@ -20,6 +22,15 @@ class TextureNode:
     size: tuple[int, int]
     origin: tuple[int, int]
     canvas_size: tuple[int, int]
+    def channel(self, name: str | int = ...) -> TextureChannel: ...
+    def repeat_grid(
+        self, columns: Any, rows: Any, spacing: Any, center: Any, *,
+        stamp_center: Any = ..., rotation: Any = ..., scale: Any = ..., baked: bool = ...,
+    ) -> Self: ...
+    def repeat(
+        self, s: Any = ..., *, center: Any = ..., stamp_center: Any = ...,
+        rotation: Any = ..., scale: Any = ..., baked: bool = ...,
+    ) -> Self: ...
     @overload
     def __init__(self, tex: Any, context: Any, *, op: str | None = ..., inputs: Iterable[Any] = ..., params: Mapping[str, Any] | Iterable[Any] | None = ..., label: str | None = ..., should_cache: bool = ...) -> None: ...
     @overload

@@ -352,6 +352,12 @@ class _Lowerer:
         return port
 
     def _lower_plugin_node(self, node):
+        from ..core.spatial import is_spatial_node
+
+        if is_spatial_node(node):
+            from ..gpu.spatial_graph import emit_spatial
+
+            return emit_spatial(self, node)
         plugin = registry.get(node.op)
         self._validate_plugin_inputs(plugin, node.inputs)
         inputs = tuple(self.node(value) for value in node.inputs)

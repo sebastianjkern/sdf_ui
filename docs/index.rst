@@ -10,6 +10,7 @@ functions and composable render nodes.
 
    core
    high_fidelity
+   spatial_parameters
    plotting
    api
    learning

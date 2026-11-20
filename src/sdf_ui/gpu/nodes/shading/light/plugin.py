@@ -1,5 +1,6 @@
 __docformat__ = "google"
 
+from sdf_ui.core.expressions import Expr
 from sdf_ui.gpu.nodes.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.gpu.nodes.common import color, shader
 
@@ -43,7 +44,10 @@ def _uniforms(params):
         "shininess": params["shininess"],
         "normalStrength": params["normal_strength"],
         "bevel": params["bevel"],
-        "shadeBackground": float(params["shade_background"]),
+        "shadeBackground": (
+            params["shade_background"] if isinstance(params["shade_background"], Expr)
+            else float(params["shade_background"])
+        ),
         "backgroundBevel": params["background_bevel"],
         "heightProfile": _height_profile(params["height_profile"]),
         "heightGamma": params["height_gamma"],

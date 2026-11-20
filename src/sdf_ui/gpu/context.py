@@ -606,8 +606,16 @@ class Context:
         )
         source_code = None
         if descriptor.wgsl is not None:
-            display = any(image.format == "rgba8unorm" for image in (*images, output))
-            source_code = descriptor.wgsl.forward(display=display)
+            formats = getattr(descriptor.wgsl, "forward_formats", None)
+            if formats is not None:
+                source_code = formats(
+                    output.format, tuple(image.format for image in images)
+                )
+            else:
+                display = any(
+                    image.format == "rgba8unorm" for image in (*images, output)
+                )
+                source_code = descriptor.wgsl.forward(display=display)
         source_code, group_count = self._region_shader(
             descriptor, interface, resources, images, color_format, source_code
         )
@@ -1086,6 +1094,25 @@ class Context:
         image = self.rgba8((pixels.shape[1], pixels.shape[0]))
         image.write(pixels)
         return image
+
+    def load_image(self, path: str | Path):
+        """Load an image as an owned sRGB color layer, preserving alpha."""
+        from PIL import Image
+
+        from ..core.color import ColorTexture
+
+        with Image.open(path) as source:
+            with (
+                source.convert("RGBA") as rgba,
+                rgba.transpose(Image.Transpose.FLIP_TOP_BOTTOM) as pixels,
+            ):
+                texture = self.rgba8(pixels.size)
+                try:
+                    texture.write(pixels.tobytes())
+                except BaseException:
+                    texture.close()
+                    raise
+        return ColorTexture(tex=texture, context=self, mode="RGB")
 
     def percent(self, alpha: Any) -> Any:
         """Return ``alpha`` percent of the canvas width."""

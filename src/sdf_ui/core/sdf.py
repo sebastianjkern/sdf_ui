@@ -71,17 +71,6 @@ class SDFTexture(TextureNode):
         """Interpolate two linear RGBA colors over a signed distance interval."""
         return build("hdr_fill", self, rgba, background, inner, outer)
 
-    def repeat_grid(self, columns, rows, spacing, center):
-        """Repeat this SDF in a finite array, centered on its source location."""
-        return build(
-            "repeat_grid",
-            self,
-            columns=columns,
-            rows=rows,
-            spacing=spacing,
-            center=center,
-        )
-
     def warp(self, field, strength=1.0, steps=1):
         """Resample this SDF along a floating-point vector field."""
         return build("warp_sdf", self, field, strength=strength, steps=steps)

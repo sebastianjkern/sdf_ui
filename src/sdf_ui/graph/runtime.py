@@ -245,6 +245,9 @@ class RenderGraph:
             for node in self.plan.sources
         }
         self.backend = canvas.create_graph_backend()
+        for operation in self.plan.passes:
+            if getattr(operation.shader.wgsl, "forward_formats", None) is not None:
+                self.backend.descriptors.setdefault(operation.shader.name, operation.shader)
         self._cache = {}
         self._sources = []
         self._active = None

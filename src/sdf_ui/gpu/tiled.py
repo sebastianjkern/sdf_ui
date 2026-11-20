@@ -70,6 +70,7 @@ def _field_bound(node, resolve, memo):
 
 def required_halo(renderer, scene):
     """Validate the graph and add sampling reach along its longest branch."""
+    from ..core.spatial import is_spatial_node
     from .nodes.registry import registry
 
     def resolve(node):
@@ -85,6 +86,18 @@ def required_halo(renderer, scene):
             raise NotImplementedError(
                 "Tiled export requires unmaterialized scene inputs"
             )
+        if is_spatial_node(node):
+            from .spatial import tile_dependencies
+
+            halo = max(
+                (
+                    visit(child) + reach
+                    for child, reach in tile_dependencies(renderer, node)
+                ),
+                default=0,
+            )
+            halos[id(node)] = halo
+            return halo
         children = renderer._region_children(node, registry, tiled=True)
         halo = max((visit(child) for child in children), default=0)
         halo += _STENCIL_RADIUS.get(node.op, 0)

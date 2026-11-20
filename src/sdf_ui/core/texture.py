@@ -331,23 +331,27 @@ class Renderer:
         if is_root_render:
             from ..gpu.regions import normalize_rect
             from .expressions import validate_progress
+            from .spatial import spatial_scene
 
             if progress is not None:
                 self.progress = validate_progress(progress)
             if dirty_rect is not None and self.evaluation_rect is not None:
-                raise ValueError(
-                    "dirty_rect cannot be combined with evaluation_rect"
-                )
-            auto_dirty = dirty_rect == "auto" or (
-                dirty_rect is None and self._dirty_regions_enabled
+                raise ValueError("dirty_rect cannot be combined with evaluation_rect")
+            spatial = isinstance(
+                value, (TextureNode, MultiOutputResult)
+            ) and spatial_scene(value)
+            previous_dirty = self._dirty_regions_enabled
+            previous_cache = self.cache
+            auto_dirty = not spatial and (
+                dirty_rect == "auto"
+                or (dirty_rect is None and self._dirty_regions_enabled)
             )
-            self._dirty_regions_enabled |= dirty_rect is not None
             if auto_dirty:
                 rect = self._resolve_dirty_rect(value)
             else:
                 rect = (
                     normalize_rect(dirty_rect, self.ctx.size)
-                    if dirty_rect is not None
+                    if dirty_rect is not None and not spatial
                     else self._resolve_evaluation_rect(value)
                 )
             self._graph_ref_counts = self._count_graph_references(value)
@@ -367,6 +371,13 @@ class Renderer:
                 )
             if self.evaluation_rect is not None:
                 self._validate_region_graph(value)
+            if spatial:
+                # Sampled maps can invalidate geometry anywhere. Limit their
+                # display cache to one frame while retaining GPU pipelines.
+                self.cache = {}
+                self._dirty_regions_enabled = False
+            else:
+                self._dirty_regions_enabled |= dirty_rect is not None
             self.ctx._active_evaluation_rect = rect
             self.ctx._active_render_stats = self.stats
             self.stats.gpu_timing_supported = self.ctx.gpu_timing_supported
@@ -396,6 +407,10 @@ class Renderer:
                 self.ctx._active_render_stats = previous_stats
                 self.ctx._active_evaluation_rect = previous_rect
                 self.ctx.last_render_stats = self.stats
+                if spatial:
+                    self.cache.clear()
+                    self.cache = previous_cache
+                    self._dirty_regions_enabled = previous_dirty
 
     def _resolve_evaluation_rect(self, value):
         from ..gpu.regions import normalize_rect
@@ -409,6 +424,8 @@ class Renderer:
 
     @staticmethod
     def _count_graph_references(root):
+        from .spatial import samples
+
         counts = {}
         visited = set()
         pending = [root]
@@ -416,9 +433,16 @@ class Renderer:
             value = pending.pop()
             if not isinstance(value, (TextureNode, MultiOutputResult)):
                 continue
+            if id(value) in visited:
+                continue
             if isinstance(value, TextureNode) and value.tex is not None:
                 continue
-            for child in value.inputs:
+            maps = tuple(
+                binding.args[0]
+                for _, parameter in value.params
+                for binding in samples(parameter)
+            )
+            for child in (*value.inputs, *maps):
                 if isinstance(child, (TextureNode, MultiOutputResult)):
                     counts[id(child)] = counts.get(id(child), 0) + 1
                     if id(child) not in visited:
@@ -456,6 +480,18 @@ class Renderer:
         if id(value) in visited:
             return
         visited.add(id(value))
+        from .spatial import is_spatial_node
+
+        if is_spatial_node(value):
+            from ..gpu.spatial import tile_dependencies
+
+            if not getattr(self.ctx, "_tiled_export", False):
+                raise NotImplementedError(
+                    "Use save_tiled for spatial parameter evaluation in regions"
+                )
+            for child, _ in tile_dependencies(self, value):
+                self._validate_region_graph(child, visited)
+            return
         children = self._region_children(
             value, registry, tiled=getattr(self.ctx, "_tiled_export", False)
         )
@@ -546,6 +582,21 @@ class Renderer:
             self.stats.cache_skips += 1
 
         from sdf_ui.gpu.nodes.registry import registry
+
+        from .spatial import is_spatial_node
+
+        if is_spatial_node(node):
+            from ..gpu.spatial import render_spatial
+
+            result = render_spatial(self, node)
+            if cacheable:
+                self.cache[cache_key] = result
+                self.stats.cache_writes += 1
+            elif id(node) != self._root_graph_id:
+                self._graph_outputs[id(node)] = result
+            # A fused node evaluates the template itself. There are no
+            # materialized outputs for its ordinary input edges to consume.
+            return result
 
         plugin = registry.get(node.op)
         if (
@@ -972,10 +1023,23 @@ class Renderer:
             for input_ in node.inputs
         )
         param_keys = tuple(
-            (key, self._freeze_runtime(self._resolve(value)))
-            for key, value in node.params
+            (key, self._parameter_key(value)) for key, value in node.params
         )
         return context_key, node.kind, node.op, input_keys, param_keys
+
+    def _parameter_key(self, value):
+        from .spatial import is_spatial
+
+        if not is_spatial(value):
+            return self._freeze_runtime(self._resolve(value))
+        from .expressions import Expr
+
+        if isinstance(value, Expr):
+            if value.op == "texture_sample":
+                node, index, scope = value.args
+                return value.op, self._node_key(node), index, scope
+            return value.op, tuple(self._parameter_key(arg) for arg in value.args)
+        return tuple(self._parameter_key(arg) for arg in value)
 
     def _freeze_runtime(self, value):
         if isinstance(value, TextureNode) or isinstance(value, MultiOutputResult):
@@ -991,6 +1055,133 @@ class Renderer:
 
 class TextureNode(ABC):
     kind = None
+
+    def channel(self, name=0):
+        """Select a numeric channel for a spatial parameter expression."""
+        from .spatial import channel
+
+        return channel(self, name)
+
+    def repeat_grid(
+        self,
+        columns,
+        rows,
+        spacing,
+        center,
+        *,
+        stamp_center=None,
+        rotation=0.0,
+        scale=1.0,
+        baked=False,
+    ):
+        """Repeat a scene with optional spatial bindings and per-copy transforms.
+
+        Procedural templates default to a stamp centered at (0, 0) and
+        are clipped to their cells. Set ``stamp_center`` for another origin.
+        Ordinary SDF repeats without additional options keep their existing
+        behavior. Use ``baked=True`` to repeat an already rendered design.
+        """
+        from numbers import Integral, Real
+
+        from .spatial import is_spatial, spatial_scene
+
+        if (
+            self.kind == "sdf"
+            and self.tex is None
+            and stamp_center is None
+            and isinstance(rotation, Real)
+            and rotation == 0.0
+            and isinstance(scale, Real)
+            and scale == 1.0
+            and not baked
+            and not spatial_scene(self)
+            and not is_spatial((spacing, center))
+        ):
+            return build("repeat_grid", self, columns, rows, spacing, center)
+        if any(
+            isinstance(count, bool) or not isinstance(count, Integral) or count <= 0
+            for count in (columns, rows)
+        ):
+            raise ValueError(
+                "Spatial repeat rows and columns must be fixed positive integers"
+            )
+        return self._spatial_repeat(
+            columns, rows, spacing, center, stamp_center, rotation, scale, baked
+        )
+
+    def repeat(
+        self,
+        s=15.0,
+        *,
+        center=None,
+        stamp_center=None,
+        rotation=0.0,
+        scale=1.0,
+        baked=False,
+    ):
+        """Repeat a stamp across the canvas with scalar or XY spacing."""
+        from numbers import Real
+
+        from .spatial import spatial_scene
+
+        if (
+            self.kind == "sdf"
+            and self.tex is None
+            and center is None
+            and stamp_center is None
+            and isinstance(rotation, Real)
+            and rotation == 0
+            and isinstance(scale, Real)
+            and scale == 1
+            and not baked
+            and not isinstance(s, (tuple, list))
+            and not spatial_scene(self)
+        ):
+            from .spatial import is_spatial
+
+            if not is_spatial(s):
+                return build("repeat", self, s)
+        return self._spatial_repeat(
+            None,
+            None,
+            s,
+            (0, 0) if center is None else center,
+            stamp_center,
+            rotation,
+            scale,
+            baked,
+        )
+
+    def _spatial_repeat(
+        self, columns, rows, spacing, center, stamp_center, rotation, scale, baked
+    ):
+        if not isinstance(spacing, (tuple, list)):
+            spacing = (spacing, spacing)
+        if stamp_center is None:
+            if self.tex is not None:
+                device_scale = getattr(self.context, "device_scale", 1.0)
+                stamp_center = tuple(
+                    (offset + size * 0.5) / device_scale
+                    for offset, size in zip(self.origin, self.size)
+                )
+            else:
+                stamp_center = center if baked else (0.0, 0.0)
+        kwargs = dict(mode=self.mode) if self.kind == "color" else {}
+        return type(self)(
+            op="spatial_repeat",
+            inputs=(self,),
+            params=dict(
+                columns=columns,
+                rows=rows,
+                spacing=spacing,
+                center=center,
+                stamp_center=stamp_center,
+                rotation=rotation,
+                scale=scale,
+                baked=baked,
+            ),
+            **kwargs,
+        )
 
     def __init__(
         self,
