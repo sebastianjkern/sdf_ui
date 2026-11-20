@@ -48,6 +48,30 @@ repos:
         language: system
         pass_filenames: false
         files: ^(src/)
+      - id: gpu-lifecycle-lint
+        name: GPU lifecycle lint
+        entry: uv run --locked python build_tools/lint/gpu_lifecycle.py
+        language: system
+        pass_filenames: false
+        files: ^(src/)
+      - id: shader-contract-inventory
+        name: shader contract inventory lint
+        entry: uv run --locked python build_tools/lint/shader_contract_inventory.py
+        language: system
+        pass_filenames: false
+        files: ^src/sdf_ui/gpu/nodes/
+      - id: shader-rule-coverage
+        name: shader rule coverage lint
+        entry: uv run --locked python build_tools/lint/shader_rule_coverage.py
+        language: system
+        pass_filenames: false
+        files: ^(src/sdf_ui/gpu/nodes/|src/sdf_ui/learning/shaders/)
+      - id: shader-lowering-coverage
+        name: shader lowering coverage lint
+        entry: uv run --locked python build_tools/lint/shader_lowering_coverage.py
+        language: system
+        pass_filenames: false
+        files: ^(src/sdf_ui/gpu/nodes/|src/sdf_ui/graph/lowering\.py$)
       - id: pytest
         name: pytest
         entry: uv run --locked pytest

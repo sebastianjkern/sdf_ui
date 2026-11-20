@@ -13,6 +13,8 @@ Layers below `sdf_ui`:
 - Delivery modules (``ascii``, ``bw_to_sdf``) are user-facing drivers and may
   import anything.
 - ``sdf_ui/__init__.py`` is the re-export seam and is exempt.
+- ``gpu/context.py`` may defer-import ``sdf_ui.anim`` for its animation save
+  convenience methods; other GPU modules may not depend on the animation layer.
 
 TYPE_CHECKING-only imports are exempt because they never execute at runtime.
 """
@@ -45,6 +47,9 @@ TEXT_MODULES = frozenset(
 _HELPERS = frozenset(("support", "text"))
 _LOW_LAYERS = frozenset(("core", "plot", "widgets"))
 _CHART = frozenset(("chart",))
+_ALLOWED_MODULE_EDGES: dict[tuple[str, ...], frozenset[str]] = {
+    ("gpu", "context"): frozenset({"sdf_ui.anim"}),
+}
 
 # Allowed imports per layer. A missing key allows nothing.
 ALLOWED_IMPORTS: dict[str, AbstractSet[str]] = {
@@ -144,16 +149,19 @@ def lint_file(path: Path) -> list[str]:
         return [f"syntax error: {exc}"]
 
     source = path.relative_to(_SRC_ROOT).with_suffix("")
-    layer_parts = tuple(source.parts[1:])  # strip the leading sdf_ui
+    layer_parts = tuple(source.parts)
     here = source_layer(layer_parts)
     if here is None:
         return []
     allowed = ALLOWED_IMPORTS.get(here, frozenset())
 
     violations: list[str] = []
-    full_parts = tuple(source.parts)
+    full_parts = ("sdf_ui", *source.parts)
+    allowed_modules = _ALLOWED_MODULE_EDGES.get(tuple(source.parts), frozenset())
     for node in iter_runtime_imports(tree):
         for module in resolve_import_node(node, full_parts):
+            if module in allowed_modules:
+                continue
             imported = target_layer(module)
             if imported is None or imported == here or imported in allowed:
                 continue

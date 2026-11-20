@@ -285,7 +285,8 @@ class GPUAdam(Adam):
             self._input, self._previous, self._candidate, self._values,
             self._status, self._uniform,
         ):
-            resource.destroy()
+            if not self.canvas._defer_resource_destroy(resource):
+                resource.destroy()
 
     def __enter__(self):
         self._check_open()
