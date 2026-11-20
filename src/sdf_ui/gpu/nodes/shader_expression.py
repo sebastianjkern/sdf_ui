@@ -252,8 +252,6 @@ class ShaderProgram:
                 + "}",
             ]
         )
-        # A shader may have a uniform named `c`, as Bezier does. Keep public
-        # uniform names while avoiding the dual constructor's identifier.
         return _primal_only(re.sub(r"\bc\s*\(", "dualC(", source))
 
 

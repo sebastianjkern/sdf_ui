@@ -278,7 +278,6 @@ class CategoricalPolicy(_MLP):
 
     def log_probs(self, observation):
         logits = self.logits(observation)
-        # The max is a detached constant. Its derivative cancels in log-softmax.
         shifted = logits - float(np.max(logits.numpy()))
         result = shifted - shifted.exp().sum().log()
         _array(result, (self.action_dim,), "log probabilities")
@@ -672,5 +671,4 @@ class PolicyGradientTrainer(JsonCheckpoint):
                 load
             ):
                 raise ValueError("Checkpoint optimizer type is incompatible")
-            # Optimizers validate their entire state before assigning it.
             load(deepcopy(optimizer_state))

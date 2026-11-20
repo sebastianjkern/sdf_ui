@@ -53,8 +53,6 @@ class Pass:
 class GraphPlan:
     passes: Tuple[Pass, ...]
     outputs: Mapping[str, Port]
-    # Structural fingerprint, independent of current Tensor values. It is not
-    # a cache key for results or for exchanging live bindings between plans.
     fingerprint: str = ""
     parameter_names: Tuple[str, ...] = ()
     sources: tuple = ()
@@ -99,7 +97,6 @@ def _resolve(value, resolve):
 
 
 def _color(value):
-    # This helper only operates on three/four-channel uniforms, never pixels.
     return DifferentiableRenderer._color(value)
 
 
@@ -163,8 +160,6 @@ class _Lowerer:
         self.parameter_names = set()
         self.required_parameters = set()
         self.structure = []
-        # Composite descriptors come from builtin registration, so a custom
-        # shader with the same name cannot replace a known calculation.
         self.shaders = {}
         for descriptor in registry.shader_files():
             if descriptor.differentiation is not None:

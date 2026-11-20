@@ -127,14 +127,9 @@ class Plugin:
     public: bool = False
     method_of: tuple = ()
     render_func: Optional[Callable] = None
-    # Optional floating-point implementation. Building it from learning.Tensor
-    # operations records its backward pass without changing the GPU renderer.
     differentiable_func: Optional[Callable] = None
-    # Return one Port or a tuple of Ports using the shared graph builder.
     lowering_func: Optional[Callable] = None
-    # Map public arguments to shader uniforms without evaluating spatial Exprs.
     spatial_uniforms: Optional[Callable] = None
-    # Expand a composed operation for evaluation at an arbitrary coordinate.
     spatial_lowering: Optional[Callable] = None
 
     def method_input_names(self) -> tuple[str, ...]:

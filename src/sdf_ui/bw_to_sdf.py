@@ -32,21 +32,16 @@ def image_to_sdf(path: str, resize: bool = True, preview: bool = False):
 
     """
 
-    # Read image
     image: PIL.Image.Image = PIL.Image.open(path)
     if resize:
         image = image.resize((128, 128))
     pix = numpy.array(image)
 
-    # Convert color image to bw image
-    # TODO: Improve file format compatibility
     pix = (pix @ [1, 1, 1, 0]) / 3
-    # pix = (pix @ [1, 1, 1]) / 3
 
     if preview:
         PIL.Image.fromarray(pix).show()
 
-    # find pixels that are darker than the threshold
     i, j = numpy.where(pix < 150)
     center_points = list(zip(i, j))
     if not center_points:
@@ -54,6 +49,5 @@ def image_to_sdf(path: str, resize: bool = True, preview: bool = False):
             f"No dark pixels found in '{path}', so no SDF texture can be generated"
         )
 
-    # combine pixel sdfs to full sdf
     discs = [sdf.circle((x[0], x[1]), 1.75) for x in center_points]
     return reduce(lambda x, y: x.smooth_union(y, k=1.5), discs)

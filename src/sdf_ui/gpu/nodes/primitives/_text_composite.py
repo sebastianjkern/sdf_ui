@@ -49,7 +49,6 @@ def _composite_bounds(shape, left, top, right, bottom, clip_rect):
 def _sample_glyph_patch(patch, source_x, source_y, source_to_dest):
     if patch.get("hinted_size") is None:
         return _sample_sdf(patch[_FIELD_KEY], source_x, source_y, source_to_dest)
-    # Hinted coverage must stay bilinear to preserve thin strokes and counters.
     return _sample_bilinear(patch[_FIELD_KEY], source_x, source_y)
 
 

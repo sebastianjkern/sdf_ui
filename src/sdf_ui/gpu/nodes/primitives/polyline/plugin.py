@@ -10,7 +10,6 @@ from sdf_ui.gpu.nodes.base import Plugin, PluginFamily, TextureKind
 
 _HEADER = struct.Struct("<fI")
 _NODE = struct.Struct("<8f2I")
-# Keep squared distances representable in the GPU's float32 arithmetic.
 _COORDINATE_LIMIT = 1e15
 
 
@@ -50,7 +49,6 @@ def _path_buffer(points, radius):
             middle = len(items) // 2
             visit(items[:middle])
             visit(items[middle:])
-        # The next index skips this entire subtree when its box is too far.
         _NODE.pack_into(
             payload,
             _HEADER.size + index * _NODE.size,

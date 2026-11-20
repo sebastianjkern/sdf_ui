@@ -9,8 +9,6 @@ from PIL import Image
 from ..core.texture import Renderer, _scale_spatial_params
 from .context import _integer_pair
 
-# These host nodes are compositions of region-safe shaders, or explicitly
-# evaluate their geometry in global coordinates within the requested crop.
 COMPOSITES = {
     "blur",
     "blur_9",
@@ -102,7 +100,6 @@ def required_halo(renderer, scene):
             halo += radius * (max(0, params["n"]) + 1)
         elif node.op in _WARPS:
             strength = abs(resolve(node)["strength"])
-            # Interpolation can read the pixel just beyond the displacement.
             halo += (
                 math.ceil(strength * _field_bound(node.inputs[1], resolve, bounds)) + 2
             )

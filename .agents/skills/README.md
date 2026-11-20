@@ -10,6 +10,7 @@ for GPU passes, caches, or texture ownership.
 | [Engine feature](engine-feature/SKILL.md) | New primitives, effects, public API, and reusable widgets |
 | [Learning support](learning-support/SKILL.md) | Making low-level and high-level components trainable |
 | [Shader lifecycle](shader-lifecycle/SKILL.md) | Shader implementation, resource lifetime, cache correctness, and repeated rendering |
+| [AST lint rule](sdf-ui-ast-lint-rule/SKILL.md) | Adding custom AST-based quality checks wired into build_tools, pre-commit, and CI |
 
 For a feature that spans layers, apply the engine feature skill first, then the
 learning and shader lifecycle skills wherever their triggers apply.

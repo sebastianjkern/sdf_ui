@@ -5,8 +5,6 @@ from sdf_ui.gpu.nodes.base import Plugin, PluginFamily, ShaderFile, TextureKind
 
 from .implementation import INTERFACE
 
-# The shader interface binds the WGSL node kernel. This operation remains
-# outside graph differentiation, as it did when it used a host render function.
 DESCRIPTOR = ShaderFile("normalize_distance", "", interface=INTERFACE)
 
 

@@ -106,8 +106,6 @@ fn compute_main(@builtin(global_invocation_id) id: vec3<u32>) {{
         formats = tuple(_FORMATS[kind] for kind in self.source_kinds)
         channels = tuple(1 if kind == "sdf" else 4 for kind in self.source_kinds)
         output_channels = 1 if self.result_kind == "sdf" else 4
-        # Each at_cell/at_pixel fetch uses at most four texels. Distinct
-        # coordinates from nested shaders or baked images may raise this.
         capacity = 128
         return f"""
 struct Offset {{ @size(16) value: i32, }}

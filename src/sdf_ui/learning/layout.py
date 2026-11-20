@@ -52,7 +52,6 @@ def _number(value, label):
 
 
 def _validate_scalar(value, label, nonnegative=False):
-    # Expr and percentage strings need a viewport/parameter mapping first.
     if isinstance(value, (Expr, str)):
         return
     numeric = _number(value, label)
@@ -258,8 +257,6 @@ def _overlap(a, b):
 
 
 def _outside_length(start, length, limit):
-    # Each edge spill is bounded by the element's length, including when the
-    # element lies wholly outside. A fully inside interval gives exact zero.
     return min(
         length,
         min(length, max(0.0, -start)) + min(length, max(0.0, start + length - limit)),
@@ -615,7 +612,6 @@ class Layout:
         metrics = {
             "overlap_area": snapshot.overlap_area,
             "offscreen_area": snapshot.offscreen_area,
-            # Area alone misses zero-sized bounds positioned outside the page.
             "offscreen_edge_loss": self.offscreen_loss(params).item(),
             "minimum_size_loss": snapshot.minimum_size_loss,
             "containment_loss": self.containment_loss(params).item(),

@@ -288,7 +288,6 @@ class Tensor:
             g: np.ndarray, a: np.ndarray, b: np.ndarray
         ) -> Tuple[np.ndarray, np.ndarray]:
             shape = np.broadcast(a, b).shape
-            # x**0 is constant, including at zero; avoid 0 * (0**-1).
             power = np.zeros(shape)
             np.power(a, b - 1, out=power, where=np.broadcast_to(b != 0, shape))
             da = g * b * power if self.requires_grad else g
@@ -436,7 +435,6 @@ class Tensor:
         return as_tensor(other).matmul(self)
 
     def __getitem__(self, index: Any) -> Tensor:
-        # Freeze mutable advanced indices so later caller edits cannot reroute grads.
         def freeze(value: Any) -> Any:
             if isinstance(value, np.ndarray):
                 return value.copy()

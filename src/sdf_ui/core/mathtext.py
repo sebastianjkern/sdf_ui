@@ -53,8 +53,6 @@ def _render_math_svg(math_expression, font_size, fontset):
 
 
 def _remove_math_background(root):
-    # math_to_image adds an opaque page rectangle. The SVG primitive renders
-    # filled paths as geometry, so remove the page while retaining glyph paths.
     for parent in root.iter():
         for child in list(parent):
             if child.attrib.get("id") == "patch_1":

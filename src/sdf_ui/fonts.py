@@ -93,8 +93,6 @@ def _shape_line(
     word_spacing=0.0,
     letter_spacing=0.0,
 ):
-    # Select a font per grapheme, then shape each maximal font run as a whole so
-    # contextual substitutions and mark positioning can cross character boundaries.
     visual_runs = _bidi_runs(value, direction)
     placements = []
     pen_x = 0.0

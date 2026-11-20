@@ -26,8 +26,6 @@ def render_alpha_overlay_pair(renderer, inputs, params):
 
     ctx = renderer.ctx
     if ctx._active_evaluation_rect is not None:
-        # The fused overlay kernel uses full-canvas coordinates. Use the
-        # regular pointwise node shader so it can dispatch into a crop.
         top = renderer.render(inputs[1].to_rgb())
         base = renderer.render(inputs[0].to_rgb())
         output = ctx.rgba8()

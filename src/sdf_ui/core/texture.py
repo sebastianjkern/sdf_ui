@@ -565,8 +565,6 @@ class Renderer:
     def _cache_node(self, node):
         if not node.should_cache:
             return False
-        # Tiles have distinct origins and never reuse an earlier tile's cache.
-        # Only shared inputs benefit from being retained within one tile.
         if getattr(self.ctx, "_tiled_export", False):
             return self._graph_ref_counts.get(id(node), 0) > 1
         return True

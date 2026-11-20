@@ -53,7 +53,6 @@ def _fixed_array(value, label, *, nonnegative=False):
             f"{label} must be finite"
             + (" and nonnegative" if nonnegative else " in float32")
         )
-    # A bytes-backed array cannot be made writable again by callers.
     return np.frombuffer(array.tobytes(), dtype=np.float32).reshape(array.shape)
 
 

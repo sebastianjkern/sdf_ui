@@ -50,8 +50,6 @@ def _adaptive_segments(sample, start, a, end, b, tolerance, depth=0):
     if all(point is None for point in points):
         return
     if all(point is not None for point in points):
-        # Measure interpolation error in canvas units. A perpendicular-only
-        # test can accept a near-vertical chord through a finite jump.
         if all(
             math.hypot(
                 p[0] - (a[0] + (b[0] - a[0]) * ratio),
@@ -62,7 +60,6 @@ def _adaptive_segments(sample, start, a, end, b, tolerance, depth=0):
         ):
             yield a, b
             return
-    # An unresolved interval may contain a discontinuity. Leave a gap.
     if depth < _MAX_DEPTH and start < mid < end:
         yield from _adaptive_segments(
             sample, start, a, mid, probes[1], tolerance, depth + 1
@@ -118,7 +115,6 @@ def _sample_path(function, domain, project, low, high, tolerance, samples, break
 
 
 def _clipped_interval(sample, start, end, index, cut_count, low, high, tolerance, samples):
-    # Take one-sided samples at explicitly marked discontinuities.
     lo = start if index == 0 else math.nextafter(start, end)
     hi = end if index == cut_count - 2 else math.nextafter(end, start)
     if lo >= hi:

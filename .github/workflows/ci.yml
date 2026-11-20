@@ -29,6 +29,10 @@ jobs:
         run: uv run --locked --no-sync python -m ruff format --check src/sdf_ui/graph src/sdf_ui/learning tests/test_consolidation.py
       - name: Lint
         run: uv run --locked --no-sync python -m ruff check src tests build_tools
+      - name: Architecture layer lint
+        run: uv run --locked --no-sync python build_tools/lint/arch_lint.py
+      - name: Forbid comments
+        run: uv run --locked --no-sync python build_tools/lint/comment_lint.py
       - name: Type check
         run: uv run --locked --no-sync python -m mypy src build_tools
       - name: Check generated stubs

@@ -313,7 +313,6 @@ class Compiler:
 
     def sampler(self, i, node, rendered):
         image = rendered.tex
-        # The currently allocated rectangle is independent of canvas coordinates.
         x, y = map(self.constant, image.origin)
         width, height = map(self.constant, image.canvas_size)
         fmt = image.format
@@ -358,7 +357,6 @@ fn sample_{i}(p: vec2<f32>) -> vec4<f32> {{
     def repeat(self, node):
         raw = dict(node.params)
         child = node.inputs[0]
-        # Finished textures can be stamped with mapped transforms as well.
         source = self.evaluate(
             child, baked=child.tex is not None or raw.get("baked", False)
         )
@@ -456,7 +454,6 @@ fn sample_{i}(p: vec2<f32>) -> vec4<f32> {{
         if plugin.spatial_lowering is not None:
             lowered = plugin.spatial_lowering(node.inputs, raw)
             return f"return {self.evaluate(lowered, output=output)}(p);"
-        # Reuse ordinary plugin compositions where no custom raster pass is needed.
         if node.op in {"ngon", "polygon", "convex_polygon"}:
             return self.polygon(node, raw)
         if node.op in {"radial_gradient", "linear_gradient"}:

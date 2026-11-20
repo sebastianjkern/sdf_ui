@@ -36,6 +36,18 @@ repos:
         language: system
         pass_filenames: false
         files: ^(src/|build_tools/)
+      - id: arch-lint
+        name: architecture layer lint
+        entry: uv run --locked python build_tools/lint/arch_lint.py
+        language: system
+        pass_filenames: false
+        files: ^(src/)
+      - id: comment-lint
+        name: forbid comments
+        entry: uv run --locked python build_tools/lint/comment_lint.py
+        language: system
+        pass_filenames: false
+        files: ^(src/)
       - id: pytest
         name: pytest
         entry: uv run --locked pytest

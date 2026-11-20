@@ -73,8 +73,6 @@ def _smoothstep(first, second, value):
 def _length(x, y):
     squared = x * x + y * y
     positive = squared.data > 0.0
-    # Avoid sqrt'(0) even in the inactive branch of where; the origin uses
-    # the zero subgradient of the Euclidean norm.
     return where(positive, where(positive, squared, 1.0).sqrt(), 0.0)
 
 
@@ -205,7 +203,7 @@ class DifferentiableRenderer:
         self.size = tuple(int(value) for value in size)
         self.params = {} if params is None else params
         self.progress = validate_progress(progress)
-        self.ctx = self  # expression context for position-dependent values
+        self.ctx = self
         y, x = np.indices((self.size[1], self.size[0]), dtype=float)
         self.x, self.y = as_tensor(x), as_tensor(y)
 
@@ -420,8 +418,6 @@ class DifferentiableRenderer:
         color = _tensor(value)
         if color.shape not in {(3,), (4,)}:
             raise ValueError("Colors must have three or four channels")
-        # Match the existing tuple-color shorthand (0..255 when any channel
-        # exceeds 1), extending it to trainable vectors without detaching them.
         if np.any(np.abs(color.data) > 1.0):
             color = color / 255.0
         if color.shape == (3,):

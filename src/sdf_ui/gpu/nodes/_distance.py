@@ -19,8 +19,6 @@ def normalize_distance(field, epsilon, band):
     )
     proximity = np.clip(1.0 - np.abs(field) / band, 0.0, 1.0)
     weight = proximity * proximity * (3.0 - 2.0 * proximity)
-    # Fade the local correction smoothly outside a narrow band. Flat regions
-    # have no stable local scale, so they retain their original values.
     scale = 1.0 + weight * (inverse_gradient - 1.0)
     return field * scale
 

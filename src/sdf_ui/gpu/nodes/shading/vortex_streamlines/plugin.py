@@ -115,7 +115,6 @@ def register_plugins(registry):
                 "color": (0.44, 0.94, 0.89, 0.82),
                 "glow_color": (0.18, 0.78, 0.76, 0.48),
             },
-            # Additional controls are optional graph parameters too.
             render_func=render_streamlines,
             public=True,
         )

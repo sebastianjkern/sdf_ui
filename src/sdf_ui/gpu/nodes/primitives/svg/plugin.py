@@ -190,7 +190,6 @@ class _FlatteningPen(BasePen):
         self._finish(close=True)
 
     def _endPath(self):
-        # SVG fill implicitly closes open subpaths.
         self._finish(close=True)
 
     def _finish(self, close):

@@ -7,25 +7,25 @@ from pathlib import Path
 from types import UnionType
 from typing import Any, Union, get_args, get_origin
 
-_COLORNAMESPACE_TEXT = 'ColorNamespace'
+_COLORNAMESPACE_TEXT = "ColorNamespace"
 
-_COLORTEXTURE_TEXT = 'ColorTexture'
+_COLORTEXTURE_TEXT = "ColorTexture"
 
-_FIELDNAMESPACE_TEXT = 'FieldNamespace'
+_FIELDNAMESPACE_TEXT = "FieldNamespace"
 
-_FIELDTEXTURE_TEXT = 'FieldTexture'
+_FIELDTEXTURE_TEXT = "FieldTexture"
 
-_POSTNAMESPACE_TEXT = 'PostNamespace'
+_POSTNAMESPACE_TEXT = "PostNamespace"
 
-_RENDERER_TEXT = 'Renderer'
+_RENDERER_TEXT = "Renderer"
 
-_SDFNAMESPACE_TEXT = 'SDFNamespace'
+_SDFNAMESPACE_TEXT = "SDFNamespace"
 
-_SDFTEXTURE_TEXT = 'SDFTexture'
+_SDFTEXTURE_TEXT = "SDFTexture"
 
-_TEXTURENODE_TEXT = 'TextureNode'
+_TEXTURENODE_TEXT = "TextureNode"
 
-_FROM___FUTURE___IMPORT_ANNOTATIONS_TEXT = 'from __future__ import annotations'
+_FROM___FUTURE___IMPORT_ANNOTATIONS_TEXT = "from __future__ import annotations"
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "src"
@@ -170,7 +170,6 @@ class _StubRenderer:
         body = "\n".join(members) if members else "    pass"
         return f"class {name}:\n{body}\n"
 
-
     @staticmethod
     def _plugin_return_type(texture_kind: Any, plugin: Any) -> str:
         if plugin.result == texture_kind.SDF:
@@ -178,7 +177,6 @@ class _StubRenderer:
         if plugin.result == texture_kind.COLOR:
             return _COLORTEXTURE_TEXT
         return "MultiOutputResult"
-
 
     @staticmethod
     def _method_return_overrides() -> dict[str, dict[str, str]]:
@@ -275,7 +273,6 @@ class _StubRenderer:
             },
         }
 
-
     @staticmethod
     def _collect_manual_methods(class_name: str, cls: Any) -> list[str]:
         overrides = _method_return_overrides().get(class_name, {})
@@ -300,7 +297,6 @@ class _StubRenderer:
             return_type = overrides.get(name, "Any")
             methods.append(_format_manual_method(name, value, return_type))
         return methods
-
 
     @staticmethod
     def _collect_plugin_methods(class_name: str, runtime: dict[str, Any]) -> list[str]:
@@ -327,13 +323,13 @@ class _StubRenderer:
             for plugin in plugins
         ]
 
-
     @staticmethod
     def _plugin_matches_class(class_name, plugin, texture_kind):
         match class_name:
             case "SDFTexture":
                 return texture_kind.SDF in plugin.method_of and plugin.name not in {
-                    "repeat", "repeat_grid",
+                    "repeat",
+                    "repeat_grid",
                 }
             case "ColorTexture":
                 return texture_kind.COLOR in plugin.method_of
@@ -344,7 +340,6 @@ class _StubRenderer:
                 )
             case _:
                 return False
-
 
     @staticmethod
     def _merge_methods(class_name: str, cls: Any, runtime: dict[str, Any]) -> list[str]:
@@ -362,7 +357,6 @@ class _StubRenderer:
                 merged.append(line)
                 existing_names.add(name)
         return merged
-
 
     @staticmethod
     def _render_texture_stub(runtime: dict[str, Any]) -> str:
@@ -410,7 +404,9 @@ class _StubRenderer:
             "",
             _render_class(
                 _POSTNAMESPACE_TEXT,
-                _merge_methods(_POSTNAMESPACE_TEXT, runtime[_POSTNAMESPACE_TEXT], runtime),
+                _merge_methods(
+                    _POSTNAMESPACE_TEXT, runtime[_POSTNAMESPACE_TEXT], runtime
+                ),
             ).rstrip(),
             "",
             _render_class(
@@ -465,7 +461,6 @@ class _StubRenderer:
         ]
         return "\n".join(lines)
 
-
     @staticmethod
     def _render_color_stub(runtime: dict[str, Any]) -> str:
         methods = [
@@ -478,7 +473,9 @@ class _StubRenderer:
             "    @property",
             "    def post(self) -> PostNamespace: ...",
         ]
-        methods.extend(_merge_methods(_COLORTEXTURE_TEXT, runtime[_COLORTEXTURE_TEXT], runtime))
+        methods.extend(
+            _merge_methods(_COLORTEXTURE_TEXT, runtime[_COLORTEXTURE_TEXT], runtime)
+        )
         lines = [
             _FROM___FUTURE___IMPORT_ANNOTATIONS_TEXT,
             "",
@@ -496,11 +493,12 @@ class _StubRenderer:
         ]
         return "\n".join(lines)
 
-
     @staticmethod
     def _render_field_stub(runtime: dict[str, Any]) -> str:
         methods = ["    kind: str"]
-        methods.extend(_merge_methods(_FIELDTEXTURE_TEXT, runtime[_FIELDTEXTURE_TEXT], runtime))
+        methods.extend(
+            _merge_methods(_FIELDTEXTURE_TEXT, runtime[_FIELDTEXTURE_TEXT], runtime)
+        )
         lines = [
             _FROM___FUTURE___IMPORT_ANNOTATIONS_TEXT,
             "",
@@ -513,17 +511,20 @@ class _StubRenderer:
             "",
             _render_class(
                 _FIELDNAMESPACE_TEXT,
-                _collect_manual_methods(_FIELDNAMESPACE_TEXT, runtime[_FIELDNAMESPACE_TEXT]),
+                _collect_manual_methods(
+                    _FIELDNAMESPACE_TEXT, runtime[_FIELDNAMESPACE_TEXT]
+                ),
             ).rstrip(),
             "",
         ]
         return "\n".join(lines)
 
-
     @staticmethod
     def _render_sdf_stub(runtime: dict[str, Any]) -> str:
         methods = ["    kind: str"]
-        methods.extend(_merge_methods(_SDFTEXTURE_TEXT, runtime[_SDFTEXTURE_TEXT], runtime))
+        methods.extend(
+            _merge_methods(_SDFTEXTURE_TEXT, runtime[_SDFTEXTURE_TEXT], runtime)
+        )
         lines = [
             _FROM___FUTURE___IMPORT_ANNOTATIONS_TEXT,
             "",
@@ -537,11 +538,14 @@ class _StubRenderer:
         ]
         return "\n".join(lines)
 
-
     @staticmethod
     def _render_api_stub(runtime: dict[str, Any]) -> str:
-        sdf_methods = _merge_methods(_SDFNAMESPACE_TEXT, runtime[_SDFNAMESPACE_TEXT], runtime)
-        color_methods = _merge_methods(_COLORNAMESPACE_TEXT, runtime[_COLORNAMESPACE_TEXT], runtime)
+        sdf_methods = _merge_methods(
+            _SDFNAMESPACE_TEXT, runtime[_SDFNAMESPACE_TEXT], runtime
+        )
+        color_methods = _merge_methods(
+            _COLORNAMESPACE_TEXT, runtime[_COLORNAMESPACE_TEXT], runtime
+        )
         lines = [
             _FROM___FUTURE___IMPORT_ANNOTATIONS_TEXT,
             "",
@@ -560,7 +564,6 @@ class _StubRenderer:
         ]
         return "\n".join(lines)
 
-
     @staticmethod
     def _render_core_init_stub() -> str:
         return "\n".join(
@@ -573,7 +576,6 @@ class _StubRenderer:
                 "",
             ]
         )
-
 
     @staticmethod
     def _render_root_init_stub() -> str:

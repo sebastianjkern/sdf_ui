@@ -385,7 +385,6 @@ class SDFNamespace(_OperationNamespace):
         half_head_width = (
             52 / 100 * head_length if head_width is None else _lazy_scalar(head_width) / 2
         )
-        # At subpixel lengths _arrow_head returns a round capsule.
         return _arrow_head(ax, ay, bx, by, radius, head_length, half_head_width)
 
     def polyline(self, points, radius=0.0):

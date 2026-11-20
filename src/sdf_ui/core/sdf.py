@@ -178,8 +178,6 @@ class SDFTexture(WarpableTextureNode):
             raise ValueError(
                 f"Unknown boolean operation {operation!r}; choose {choices}"
             ) from exc
-        # Show signed values and emphasize the zero boundary where the
-        # boolean result changes from inside to outside.
         heatmap = result.debug_distance(range=range, show_contours=False)
         boundary = result.isolines(
             fg_color,

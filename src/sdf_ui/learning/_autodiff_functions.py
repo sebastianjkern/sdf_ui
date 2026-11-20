@@ -17,7 +17,6 @@ def _axes(axis: Any, ndim: int) -> Tuple[int, ...]:
         if not isinstance(a, (int, np.integer)):
             raise TypeError("reduction axes must be integers")
         if not -ndim <= a < ndim:
-            # NumPy accepts scalar sum(axis=0), including axis=-1.
             if ndim == 0 and a in (0, -1) and not isinstance(axis, tuple):
                 return ()
             raise ValueError("reduction axis out of bounds")

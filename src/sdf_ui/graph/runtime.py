@@ -538,8 +538,6 @@ class RenderGraph:
         result = []
         for operation in self.plan.passes:
             raw = operation.uniforms(self._resolve)
-            # Include declared default uniforms so offsets, layouts, and VJP
-            # result ranges never depend on which optional values were supplied.
             defaults = self.backend.defaults(operation.shader.name)
             unknown = set(raw) - {a.name for a in operation.contract.parameters}
             if unknown:
@@ -888,8 +886,6 @@ class GraphExecution:
             self._validate_completion()
         except BaseException:
             self.close()
-            # A failed forward must not leave an invalid value eligible for a
-            # later cache hit that would bypass the GPU finite-value check.
             for _, images in graph._cache.values():
                 for image in images:
                     image.close()
@@ -1422,8 +1418,6 @@ class GraphTrainer(JsonCheckpoint):
         )
 
     def _objective_signature(self):
-        # Checkpointing is explicit: GPU target snapshots may be read here to
-        # identify their content portably. No activation image is read in step().
         return self.graph.objective_signature(self.objective, portable=True)
 
     def state_dict(self):

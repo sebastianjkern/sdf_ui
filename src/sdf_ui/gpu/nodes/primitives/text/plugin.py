@@ -393,10 +393,6 @@ def _cached_hinted_glyph_sdf(path, glyph_id, hinted_size, supersample):
         return None
 
     scale = max(1, int(supersample))
-    # Rasterize the outline at the higher working resolution. Upscaling a
-    # bitmap rendered at `hinted_size` preserves its pixel grid, but not the
-    # actual curve geometry; counters and joins in glyphs such as g and Q
-    # become visibly lumpy as a result.
     raster_size = hinted_size * scale
     font = ImageFont.truetype(path, raster_size)
     mask, offset = font.getmask2(character, mode="L", anchor="ls")
@@ -480,10 +476,6 @@ def _rasterize_glyph_fill(contours, height, width):
         distance_sq = np.minimum(distance_sq, _contour_distance_sq(points, contour))
         winding += _contour_winding(points, contour)
 
-    # Build distance from the filled silhouette rather than from every path
-    # contour. Glyphs can contain overlapping contours; their internal edges
-    # are not part of the filled shape boundary and must not create zero
-    # distance seams through the rendered glyph.
     inside = winding != 0
     on_contour = distance_sq <= _MINIMUM_RENDER_EPSILON
     internal_contour = np.zeros_like(inside)
