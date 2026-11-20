@@ -13,6 +13,8 @@ from sdf_ui.gpu.nodes.base import (
 )
 from sdf_ui.gpu.nodes.differentiation import ShaderArgument, ShaderDifferentiation
 
+from .grain import WGSL as GRAIN_WGSL
+from .grain import reference_noise
 from .kernel import PointwiseKernel
 
 _COLOR = TextureKind.COLOR
@@ -49,6 +51,10 @@ def _uniforms(values, names):
             result[name] = tensor
         else:
             scalar = float(value.item() if hasattr(value, "item") else value)
+            if name == "grain_amount" and not 0 <= scalar <= 1:
+                raise ValueError("Film grain amount must be in [0, 1]")
+            if name == "grain_size" and not 1 <= scalar < float("inf"):
+                raise ValueError("Film grain size must be finite and at least 1")
             if not np.isfinite(scalar) or (
                 name in {"threshold", "amount", "tone", "dither"} and scalar < 0
             ):
@@ -106,6 +112,14 @@ def _reference(context, inputs, p, *, op):
         a = alpha
     elif op == "expose":
         rgb = rgb * exp(_tensor(p["stops"]) * np.log(2))
+    elif op == "grain":
+        amount = _tensor(p["grain_amount"])
+        size = _tensor(p["grain_size"])
+        amount = where(amount.data < 0, 0, where(amount.data > 1, 1, amount))
+        size = where(size.data < 1, 1, size)
+        luma = (rgb * [0.2126, 0.7152, 0.0722]).sum(axis=-1)
+        factor = 1 + amount * reference_noise(context, size) / (1 + 3 * luma)
+        rgb = rgb * factor[..., None]
     elif op == "extract":
         luma = (rgb * [0.2126, 0.7152, 0.0722]).sum(axis=-1)
         excess = luma - _tensor(p["threshold"])
@@ -209,6 +223,21 @@ _OPS = {
         return out;
     """,
     ),
+    "grain": (
+        (("source", _COLOR),),
+        (("grain_amount", "float"), ("grain_size", "float")),
+        """
+        var out=ins[0];
+        var amount=u[0];
+        if amount.v<0.0 || amount.v>1.0 { amount=k(clamp(amount.v,0.0,1.0)); }
+        var size=u[1];
+        if size.v<1.0 { size=k(1.0); }
+        let gentle=div(amount,add(k(1.0),mul(k(3.0),luminance(out))));
+        let factor=add(k(1.0),mul(gentle,grain_noise(pos,size)));
+        for (var i=0; i<3; i++) { out[i]=mul(out[i],factor); }
+        return out;
+    """,
+    ),
     "extract": (
         (("source", _COLOR),),
         (("threshold", "float"),),
@@ -292,7 +321,9 @@ def register_plugins(registry):
                 ),
                 tuple(Uniform(key, kind) for key, kind in parameters),
             ),
-            wgsl=PointwiseKernel(contract, body, mixed=op),
+            wgsl=PointwiseKernel(
+                contract, body, mixed=op, helpers=GRAIN_WGSL if op == "grain" else ""
+            ),
         )
         registry.register(
             Plugin(

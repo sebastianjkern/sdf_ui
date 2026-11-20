@@ -61,6 +61,76 @@ def test_hdr_learning_matches_cpu_with_live_finishing_controls():
             assert execution.loss != pytest.approx(loss.item(), abs=3e-7)
 
 
+def test_film_grain_is_subtle_and_keeps_black_hue_and_alpha():
+    rgb = np.array([0.32, 0.14, 0.04], dtype=np.float32)
+    source = color.linear_rgba((*rgb, 0.6))
+    with Canvas((53, 47)) as canvas:
+        with canvas.render(source.film_grain(0)) as plain:
+            np.testing.assert_array_equal(
+                plain.read(), np.broadcast_to([*rgb, np.float32(0.6)], plain.tex.shape)
+            )
+        with canvas.render(source.film_grain()) as grain:
+            values = grain.read()
+        with canvas.render(color.linear_rgba((0, 0, 0, 0.6)).film_grain()) as black:
+            assert np.all(black.read()[..., :3] == 0)
+    multipliers = values[..., :3] / rgb
+    assert np.array_equal(values[..., 3], np.full(values.shape[:2], 0.6, np.float32))
+    assert np.allclose(multipliers, multipliers[..., :1])
+    assert abs(multipliers.mean() - 1) < 0.003
+    assert 0.005 < multipliers.std() < 0.04
+
+
+def test_film_grain_controls_train_on_gpu_and_match_cpu():
+    size = (23, 19)
+    weights = ParameterStore()
+    amount = weights.bind("amount", 0.15)
+    grain_size = weights.bind("size", 1.47)
+    source = color.linear_rgba((0.45, 0.22, 0.08, 1))
+    output = source.film_grain(amount, size=grain_size)
+    target = source.film_grain(0.25, size=1.52)
+    reference = DifferentiableRenderer(size, params=weights)
+    error = reference.render(output) - reference.render(target)
+    loss = (error * error).mean()
+    loss.backward()
+    expected = [float(weights[name].grad) for name in ("amount", "size")]
+    target_pixels = reference.render(target)
+    for name, derivative in zip(("amount", "size"), expected):
+        knob = weights[name]
+        start = knob.item()
+        step = 1e-5
+        estimates = []
+        for delta in (-step, step):
+            knob.assign(start + delta)
+            diff = reference.render(output) - target_pixels
+            estimates.append((diff * diff).mean().item())
+        assert (estimates[1] - estimates[0]) / (2 * step) == pytest.approx(
+            derivative, abs=1e-8
+        )
+        knob.assign(start)
+        knob.zero_grad()
+
+    with (
+        Canvas(size) as canvas,
+        canvas.capture(target) as image,
+        canvas.compile({"image": output}, weights) as graph,
+    ):
+        objective = Objective().mse("image", image)
+        with graph.run(objective) as execution:
+            assert execution.loss == pytest.approx(loss.item(), abs=1e-7)
+            execution.backward()
+        assert all(value != 0 for value in expected)
+        np.testing.assert_allclose(
+            [weights[name].grad for name in ("amount", "size")],
+            expected,
+            atol=1e-7,
+            rtol=1e-4,
+        )
+        weights["amount"].assign(0.25)
+        weights["size"].assign(1.52)
+        with graph.run(objective) as execution:
+            assert execution.loss == pytest.approx(0, abs=1e-10)
+
+
 @pytest.mark.parametrize("linear", [False, True])
 def test_tiled_still_matches_whole_frame_with_nested_warps_and_blur(tmp_path, linear):
     flow = field.vortex((45, 36), 24, 9).add(field.constant((2.1, -1.7))).scale(0.8)
@@ -72,6 +142,7 @@ def test_tiled_still_matches_whole_frame_with_nested_warps_and_blur(tmp_path, li
             .over(shape.ink_linear((3.4, 1.5, 0.5, 0.9)))
             .warp(flow, strength=1.2, steps=3)
             .bloom(amount=0.6, passes=2)
+            .film_grain(0.12, size=1.35)
             .finish(tone=0.6)
         )
     else:

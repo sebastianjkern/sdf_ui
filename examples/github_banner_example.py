@@ -164,8 +164,7 @@ def github_banner_example(output="out/banner.png"):
             spark_2_fill,
             title,
             subtitle,
-            color.film_grain().transparency(0.025),
-        ).to_rgb()
+        ).film_grain().to_rgb()
 
         with ctx.session(cache=cache) as renderer:
             rendered = renderer.render(scene)

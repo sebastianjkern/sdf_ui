@@ -20,6 +20,14 @@ linear luminance threshold, blurs it, and adds it back to the source.
 The pass count is a fixed integer and the blur stencil is measured in
 output pixels.
 
+Use ``scene.film_grain(amount=0.075, size=1.35)`` before finishing to add a
+subtle texture. Grain modulates brightness while preserving hue, alpha, and
+black. The effect tapers in bright areas. Use ``amount=0`` for an unchanged
+linear layer. Amount ranges from 0 to 1, and size controls the grain spacing
+in output pixels, starting at 1. Increase size for coarser grain. The
+standalone ``color.film_grain()`` factory provides a full-range noise texture
+for use as a map.
+
 ``finish(exposure=..., tone=..., dither=...)`` applies exposure, a
 luminance-based Reinhard operator, and the sRGB transfer function.
 Use ``tone=0`` to bypass tone compression or ``dither=0`` to turn off
@@ -29,11 +37,11 @@ sRGB encoding with clipping. Call ``finish()`` to select the look.
 For raw floating point pixels, use ``Canvas.render()`` and read the
 rendered texture.
 
-Linear colors, fill distances, exposure, bloom threshold and amount,
-tone compression, and dither strength accept the engine's lazy
-parameters. The learning graph differentiates the underlying continuous
-math before export quantization. Keep positive controls in range with
-bounded parameters or smooth constraints.
+Linear colors, fill distances, exposure, bloom threshold and amount, grain
+amount and size, tone compression, and dither strength accept the engine's
+lazy parameters. The learning graph differentiates the underlying
+continuous math before export quantization. Keep positive controls in
+range with bounded parameters or smooth constraints.
 
 Tiled export
 ------------

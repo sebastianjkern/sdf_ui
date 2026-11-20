@@ -216,8 +216,8 @@ def starry_current_scene(*, linear=False):
             moon.ink_linear((2.4, 1.85, 0.8, 1.0)), back_layer, middle_layer,
             foreground_layer, village_layer, roof_layer,
             window_shapes.ink_linear((2.2, 1.15, 0.3, 1.0)),
-            cypress_layer, cypress_glint, color.film_grain().transparency(0.025),
-        )
+            cypress_layer, cypress_glint,
+        ).film_grain()
 
     scene = sky_base.alpha_overlay(sky).alpha_overlay(sky_glaze).alpha_overlay(flow_lines)
     scene = scene.alpha_overlay(shadows).alpha_overlay(cross_strokes)
@@ -229,9 +229,7 @@ def starry_current_scene(*, linear=False):
     scene = scene.alpha_overlay(foreground_layer).alpha_overlay(village_layer)
     scene = scene.alpha_overlay(roof_layer)
     scene = scene.alpha_overlay(window_layer).alpha_overlay(cypress_layer)
-    return scene.alpha_overlay(cypress_glint).alpha_overlay(
-        color.film_grain().transparency(0.025)
-    )
+    return scene.alpha_overlay(cypress_glint).film_grain().to_rgb()
 
 
 def starry_current_animation(

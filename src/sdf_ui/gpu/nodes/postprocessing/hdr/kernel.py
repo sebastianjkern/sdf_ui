@@ -45,6 +45,7 @@ class PointwiseKernel:
     contract: object
     body: str
     mixed: str = ""
+    helpers: str = ""
 
     def _inputs(self, start, *, display=False):
         for i, arg in enumerate(self.contract.inputs):
@@ -99,6 +100,7 @@ class PointwiseKernel:
                 *self._inputs(1, display=display),
                 uniforms,
                 _DUAL,
+                self.helpers,
                 self._evaluate(),
                 f"@group(0) @binding(0) var {output}: texture_storage_2d<{fmt}, write>;",
                 f"""
@@ -141,6 +143,7 @@ fn compute_main(@builtin(global_invocation_id) id: vec3<u32>) {{
             (
                 *self._inputs(0),
                 _DUAL,
+                self.helpers,
                 self._evaluate(),
                 f"""
 struct Offset {{ @size(16) value: i32, }}

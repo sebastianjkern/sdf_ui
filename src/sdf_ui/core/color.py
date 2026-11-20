@@ -68,6 +68,15 @@ class ColorTexture(TextureNode):
         """Multiply linear RGB by two raised to the given exposure stops."""
         return build("hdr_expose", self.to_linear(), stops)
 
+    def film_grain(self, amount=0.075, *, size=1.35):
+        """Apply centered luminance grain and return a linear RGBA layer.
+
+        Amount ranges from 0 to 1 and size is the grain spacing in rendered
+        pixels (at least 1). Both accept lazy parameters. Grain preserves
+        alpha and color ratios, with a gentler effect in bright areas.
+        """
+        return build("hdr_grain", self.to_linear(), amount, size)
+
     def bloom(self, *, threshold=1.0, amount=0.35, passes=2):
         """Add blurred light above a linear luminance threshold.
 

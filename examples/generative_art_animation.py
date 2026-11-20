@@ -41,7 +41,6 @@ def tidal_bloom_scene(canvas):
         (0.012, 0.018, 0.045, 1.0),
         outer=SIZE * 0.76,
     )
-    grain = color.film_grain().transparency(0.035)
 
     # A pair of thin, breathing orbital tracks frames the moving bloom.
     orbital_tracks = color.clear((0.0, 0.0, 0.0, 0.0))
@@ -115,7 +114,7 @@ def tidal_bloom_scene(canvas):
         outer=66,
     )
 
-    scene = background.alpha_overlay(grain)
+    scene = background.film_grain().to_rgb()
     for layer in (
         orbital_tracks,
         body,
