@@ -9,8 +9,6 @@ from sdf_ui.gpu.nodes.differentiation import (
     ShaderArgument,
     ShaderDifferentiation,
 )
-from sdf_ui.gpu.nodes.layer.glsl import color_program
-from sdf_ui.gpu.nodes.shader_expression import ShaderProgram
 
 _OFFSET_TEXT = 'offset'
 
@@ -82,33 +80,17 @@ def reference(context, inputs, params, *, name, axis):
     return _blur_axis(image, context, params, name, axis)
 
 
-def gpu_body(component, count):
-    delta = (
-        "ivec2(int(U_offset(i).v),0)" if component == "x"
-        else "ivec2(0,int(U_offset(i).v))"
-    )
-    return color_program("""
-    D4 col=mul4(load4(0,pos),U_weight(0));
-    int factor=1;
-    for(int i=1;i<%d;i++) {
-        ivec2 delta=%s;
-        col=add4(col,mul4(load4(0,abs(pos-delta)),U_weight(i)));
-        if(pos.%s+i>=size.%s-1) factor=-1;
-        col=add4(col,mul4(load4(0,pos+factor*delta),U_weight(i)));
-    }
-""" % (count, delta, component, component))
 
 
 def shader_parts(name):
     _, direction, width = name.split("_")
     count = len(DEFAULTS[name][_WEIGHT_TEXT])
-    suffix = "hor" if direction == "hor" else "vert"
     interface = ShaderInterface(
         ImageBinding("destTex", 0, write=True), (ImageBinding("origTex", 1, read=True),),
         (Uniform(_OFFSET_TEXT, f"float[{count}]"), Uniform(_WEIGHT_TEXT, f"float[{count}]")),
     )
     contract = ShaderDifferentiation(
-        name, f"gpu/nodes/postprocessing/blur/blur{width}_{suffix}.glsl",
+        name, f"gpu/nodes/postprocessing/blur/blur_{direction}_{width}.wgsl",
         (ShaderArgument("origTex", (4,), "rgba8"),),
         (ShaderArgument(_OFFSET_TEXT, (count,), "float"), ShaderArgument(_WEIGHT_TEXT, (count,), "float")),
         (ShaderArgument("destTex", (4,), "rgba8"),),
@@ -118,4 +100,4 @@ def shader_parts(name):
         reference=partial(reference, name=name, axis=1 if direction == "hor" else 0),
         defaults=DEFAULTS[name],
     )
-    return interface, contract, ShaderProgram(name, gpu_body("x" if direction == "hor" else "y", count))
+    return interface, contract

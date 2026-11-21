@@ -35,6 +35,8 @@ jobs:
         run: uv run --locked --no-sync python build_tools/lint/comment_lint.py
       - name: GPU lifecycle lint
         run: uv run --locked --no-sync python build_tools/lint/gpu_lifecycle.py
+      - name: Shader layout lint
+        run: uv run --locked --no-sync python build_tools/lint/shader_layout.py
       - name: Shader contract inventory lint
         run: uv run --locked --no-sync python build_tools/lint/shader_contract_inventory.py
       - name: Shader rule coverage lint

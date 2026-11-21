@@ -136,7 +136,7 @@ def contract_for(name):
     zero = _params_for(name) if name == "turbulence_field" else ()
     return ShaderDifferentiation(
         name,
-        f"gpu/nodes/primitives/vector_field/{name}.glsl",
+        f"gpu/nodes/primitives/vector_field/{name}.wgsl",
         inputs,
         params,
         (ShaderArgument("destTex", (4,), "rgba32float"),),

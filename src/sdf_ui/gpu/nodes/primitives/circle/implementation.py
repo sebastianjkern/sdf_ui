@@ -4,7 +4,6 @@ from sdf_ui.gpu.nodes.differentiation import (
     ShaderArgument,
     ShaderDifferentiation,
 )
-from sdf_ui.gpu.nodes.shader_expression import Expression, ShaderProgram
 
 
 def reference(context, inputs, params):
@@ -16,7 +15,7 @@ def reference(context, inputs, params):
 
 CONTRACT = ShaderDifferentiation(
     "circle",
-    "gpu/nodes/primitives/circle/shader.glsl",
+    "gpu/nodes/primitives/circle/circle.wgsl",
     (),
     (ShaderArgument("offset", (2,), "vec2"), ShaderArgument("radius", (), "float")),
     (ShaderArgument("destTex", (), "r32f"),),
@@ -24,21 +23,4 @@ CONTRACT = ShaderDifferentiation(
     reference=reference,
 )
 
-EXPRESSION = Expression(
-    "sub",
-    (
-        Expression(
-            "length2",
-            (Expression("sub2", (Expression("position"), Expression("uniform", ("offset",)))),),
-        ),
-        Expression("uniform", ("radius",)),
-    ),
-)
 
-PROGRAM = ShaderProgram(
-    "circle",
-    "void evaluate(ivec2 pos,out D o[8]) { o[0]="
-    + EXPRESSION.emit(dual=True)
-    + "; for(int i=1;i<8;i++)o[i]=c(0.0);}",
-    reverse_expression=EXPRESSION,
-)

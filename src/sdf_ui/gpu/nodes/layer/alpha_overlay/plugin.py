@@ -5,7 +5,7 @@ from pathlib import Path
 from sdf_ui.gpu.nodes.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.gpu.nodes.common import lower_composite, shader
 
-from .implementation import CONTRACT, INTERFACE, PROGRAM
+from .implementation import CONTRACT, INTERFACE
 
 _FUSED_OVERLAY = (
     Path(__file__).with_name("overlay_fused.wgsl").read_text(encoding="utf-8")
@@ -183,9 +183,8 @@ def register_plugins(registry):
             (TextureKind.COLOR, TextureKind.COLOR),
             shader=shader(
                 "overlay",
-                "layer/alpha_overlay/shader.glsl",
+                "layer/alpha_overlay/overlay.wgsl",
                 derivative_contract=CONTRACT,
-                program=PROGRAM,
                 interface=INTERFACE,
             ),
             input_uniforms=("tex1", "tex0"),

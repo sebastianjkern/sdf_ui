@@ -7,7 +7,7 @@ from sdf_ui.gpu.nodes.common import (
     shader,
 )
 
-from .implementation import CONTRACT, INTERFACE, PROGRAM
+from .implementation import CONTRACT, INTERFACE
 
 
 def render_multiply(renderer, inputs, params):
@@ -23,7 +23,7 @@ def register_plugins(registry):
             PluginFamily.LAYER,
             TextureKind.COLOR,
             (TextureKind.COLOR, TextureKind.COLOR),
-            shader=shader("multiply", "layer/multiply/shader.glsl", derivative_contract=CONTRACT, program=PROGRAM, interface=INTERFACE),
+            shader=shader("multiply", "layer/multiply/multiply.wgsl", derivative_contract=CONTRACT, interface=INTERFACE),
             input_uniforms=("mask1", "mask2"),
             mode="RGB",
             render_func=render_multiply,

@@ -14,6 +14,12 @@ def _lint_source(tmp_path, monkeypatch, relative_path, source):
     return arch_lint.lint_file(path)
 
 
+def _assert_rejected_import(tmp_path, monkeypatch, relative_path, source, target):
+    violations = _lint_source(tmp_path, monkeypatch, relative_path, source)
+    assert len(violations) == 1
+    assert target in violations[0]
+
+
 @pytest.mark.parametrize(
     "source",
     [
@@ -29,23 +35,25 @@ def test_arch_lint_detects_aliased_absolute_imports(tmp_path, monkeypatch, sourc
 
 
 def test_arch_lint_detects_deferred_relative_imports(tmp_path, monkeypatch):
-    source = "def load_plot():\n    from ..plot.api import Plot\n"
-
-    violations = _lint_source(tmp_path, monkeypatch, Path("core") / "engine.py", source)
-
-    assert len(violations) == 1
-    assert "imports 'plot' (sdf_ui.plot.api, line 2)" in violations[0]
+    _assert_rejected_import(
+        tmp_path,
+        monkeypatch,
+        Path("core") / "engine.py",
+        "def load_plot():\n    from ..plot.api import Plot\n",
+        "imports 'plot' (sdf_ui.plot.api, line 2)",
+    )
 
 
 def test_arch_lint_detects_deferred_import_from_composition_layer(
     tmp_path, monkeypatch
 ):
-    source = "def render():\n    from sdf_ui.gpu import Canvas\n"
-
-    violations = _lint_source(tmp_path, monkeypatch, Path("plot") / "scene.py", source)
-
-    assert len(violations) == 1
-    assert "imports 'gpu' (sdf_ui.gpu, line 2)" in violations[0]
+    _assert_rejected_import(
+        tmp_path,
+        monkeypatch,
+        Path("plot") / "scene.py",
+        "def render():\n    from sdf_ui.gpu import Canvas\n",
+        "imports 'gpu' (sdf_ui.gpu, line 2)",
+    )
 
 
 @pytest.mark.parametrize(
@@ -66,15 +74,17 @@ def test_arch_lint_exempts_nested_type_checking_imports(tmp_path, monkeypatch, s
     assert violations == []
 
 
-def test_arch_lint_allows_declared_layer_edges(tmp_path, monkeypatch):
-    violations = _lint_source(
-        tmp_path,
-        monkeypatch,
-        Path("plot") / "scene.py",
-        "from sdf_ui.learning import Parameter\n",
-    )
-
-    assert violations == []
+@pytest.mark.parametrize(
+    "relative_path,source",
+    [
+        (Path("plot") / "scene.py", "from sdf_ui.learning import Parameter\n"),
+        (Path("plot") / "__init__.py", "from sdf_ui.gpu import Canvas\n"),
+    ],
+)
+def test_arch_lint_allows_declared_edges_and_package_reexports(
+    tmp_path, monkeypatch, relative_path, source
+):
+    assert _lint_source(tmp_path, monkeypatch, relative_path, source) == []
 
 
 def test_arch_lint_allows_animation_adapter_in_gpu_context_only(tmp_path, monkeypatch):
@@ -88,38 +98,28 @@ def test_arch_lint_allows_animation_adapter_in_gpu_context_only(tmp_path, monkey
     assert violations == []
 
 
-def test_arch_lint_rejects_animation_imports_from_other_gpu_modules(
-    tmp_path, monkeypatch
+@pytest.mark.parametrize(
+    "relative_path,source,target",
+    [
+        (
+            Path("gpu") / "optim.py",
+            "from ..anim import save_animation\n",
+            "imports 'anim' (sdf_ui.anim, line 1)",
+        ),
+        (
+            Path("gpu") / "context.py",
+            "from ..anim.helpers import helper\n",
+            "imports 'anim' (sdf_ui.anim.helpers, line 1)",
+        ),
+    ],
+)
+def test_arch_lint_limits_animation_exception_to_exact_module(
+    tmp_path, monkeypatch, relative_path, source, target
 ):
-    violations = _lint_source(
+    _assert_rejected_import(
         tmp_path,
         monkeypatch,
-        Path("gpu") / "optim.py",
-        "from ..anim import save_animation\n",
+        relative_path,
+        source,
+        target,
     )
-
-    assert len(violations) == 1
-    assert "imports 'anim' (sdf_ui.anim, line 1)" in violations[0]
-
-
-def test_arch_lint_keeps_animation_exception_module_specific(tmp_path, monkeypatch):
-    violations = _lint_source(
-        tmp_path,
-        monkeypatch,
-        Path("gpu") / "context.py",
-        "from ..anim.helpers import helper\n",
-    )
-
-    assert len(violations) == 1
-    assert "imports 'anim' (sdf_ui.anim.helpers, line 1)" in violations[0]
-
-
-def test_arch_lint_exempts_package_reexports(tmp_path, monkeypatch):
-    violations = _lint_source(
-        tmp_path,
-        monkeypatch,
-        Path("plot") / "__init__.py",
-        "from sdf_ui.gpu import Canvas\n",
-    )
-
-    assert violations == []

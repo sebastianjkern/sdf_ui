@@ -5,7 +5,7 @@ __docformat__ = "google"
 from sdf_ui.gpu.nodes.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.gpu.nodes.common import shader
 
-from .implementation import CONTRACT, INTERFACE, PROGRAM
+from .implementation import CONTRACT, INTERFACE
 
 
 def _positive_integer(params, name):
@@ -53,9 +53,8 @@ def register_plugins(registry):
             defaults={},
             shader=shader(
                 "repeat_grid",
-                "primitives/repeat_grid/shader.glsl",
+                "primitives/repeat_grid/repeat_grid.wgsl",
                 derivative_contract=CONTRACT,
-                program=PROGRAM,
                 interface=INTERFACE,
             ),
             make_uniforms=_uniforms,

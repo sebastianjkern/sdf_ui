@@ -7,8 +7,8 @@ from .implementation import shader_parts
 
 
 def blur_shader(name, path):
-    interface, contract, program = shader_parts(name)
-    return shader(name, path, derivative_contract=contract, program=program, interface=interface)
+    interface, contract = shader_parts(name)
+    return shader(name, path, derivative_contract=contract, interface=interface)
 
 
 def _render_blur_passes(renderer, inputs, params, base):
@@ -68,8 +68,8 @@ def register_plugins(registry):
             params=("n",),
             defaults={"n": 0},
             extra_shaders=(
-                blur_shader("blur_ver_9", "postprocessing/blur/blur9_vert.glsl"),
-                blur_shader("blur_hor_9", "postprocessing/blur/blur9_hor.glsl"),
+                blur_shader("blur_ver_9", "postprocessing/blur/blur_ver_9.wgsl"),
+                blur_shader("blur_hor_9", "postprocessing/blur/blur_hor_9.wgsl"),
             ),
             render_func=render_blur_9,
             lowering_func=lower_composite,
@@ -85,8 +85,8 @@ def register_plugins(registry):
             params=("n",),
             defaults={"n": 0},
             extra_shaders=(
-                blur_shader("blur_ver_13", "postprocessing/blur/blur13_vert.glsl"),
-                blur_shader("blur_hor_13", "postprocessing/blur/blur13_hor.glsl"),
+                blur_shader("blur_ver_13", "postprocessing/blur/blur_ver_13.wgsl"),
+                blur_shader("blur_hor_13", "postprocessing/blur/blur_hor_13.wgsl"),
             ),
             render_func=render_blur_13,
             lowering_func=lower_composite,

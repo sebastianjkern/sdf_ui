@@ -16,14 +16,3 @@ def angles(x, y, params):
     return start, end, inside
 
 
-GLSL = r"""
-bool primitiveInsideAngle(D2 p) {
-    float tau=6.28318530718;
-    float angle=mod(atan(p.y.v,p.x.v),tau);
-    float start=mod(U_start_angle.v,tau), end=mod(U_end_angle.v,tau);
-    return start<=end ? angle>=start && angle<=end : angle>=start || angle<=end;
-}
-D2 primitiveEndpoint(D angle,D radius) {
-    return mul2(D2(cosD(angle),sinD(angle)),radius);
-}
-"""

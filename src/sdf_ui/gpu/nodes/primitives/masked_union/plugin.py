@@ -3,7 +3,7 @@ __docformat__ = "google"
 from sdf_ui.gpu.nodes.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.gpu.nodes.common import lower_composite, shader
 
-from .implementation import CONTRACT, INTERFACE, PROGRAM
+from .implementation import CONTRACT, INTERFACE
 
 
 def render_masked_union(renderer, inputs, params):
@@ -48,9 +48,8 @@ def register_plugins(registry):
             defaults={"edge_width": 0.5},
             shader=shader(
                 "masked_union",
-                "primitives/masked_union/shader.glsl",
+                "primitives/masked_union/masked_union.wgsl",
                 derivative_contract=CONTRACT,
-                program=PROGRAM,
                 interface=INTERFACE,
             ),
             make_uniforms=lambda p: {"edgeWidth": p["edge_width"]},

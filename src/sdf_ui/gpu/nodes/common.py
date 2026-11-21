@@ -1,6 +1,6 @@
 __docformat__ = "google"
 
-from .base import Plugin, ShaderFile
+from .base import Plugin, PluginFamily, ShaderFile, TextureKind
 
 
 def lower_composite(builder, plugin, inputs, raw, values):
@@ -14,18 +14,22 @@ def shader(
     *,
     derivative_contract=None,
     gpu_derivative=None,
-    program=None,
     interface=None,
 ):
     path = f"gpu/nodes/{path}"
-    return ShaderFile(
-        name, path, derivative_contract, gpu_derivative, program, interface
-    )
+    return ShaderFile(name, path, derivative_contract, gpu_derivative, interface)
 
 
 def register_single_texture_shader(
-    registry, name, family, texture_kind, shader_path, *, contract, program,
-    interface, mode=None,
+    registry,
+    name,
+    family,
+    texture_kind,
+    shader_path,
+    *,
+    contract,
+    interface,
+    mode=None,
 ):
     options = {
         "input_uniforms": ("origTex",),
@@ -40,10 +44,32 @@ def register_single_texture_shader(
             texture_kind,
             (texture_kind,),
             shader=shader(
-                name, shader_path, derivative_contract=contract,
-                program=program, interface=interface,
+                name,
+                shader_path,
+                derivative_contract=contract,
+                interface=interface,
             ),
             **options,
+        )
+    )
+
+
+def register_binary_sdf_plugin(registry, name, *, contract, interface):
+    """Register one binary SDF boolean plugin with its declared shader API."""
+    registry.register(
+        Plugin(
+            name,
+            PluginFamily.PRIMITIVE,
+            TextureKind.SDF,
+            (TextureKind.SDF, TextureKind.SDF),
+            shader=shader(
+                name,
+                f"primitives/{name}/{name}.wgsl",
+                derivative_contract=contract,
+                interface=interface,
+            ),
+            input_uniforms=("sdf0", "sdf1"),
+            method_of=(TextureKind.SDF,),
         )
     )
 
@@ -72,7 +98,8 @@ def color(value):
     from sdf_ui.learning.autodiff import Tensor, as_tensor, stack
 
     if isinstance(value, Expr) or (
-        isinstance(value, (tuple, list)) and any(isinstance(item, Expr) for item in value)
+        isinstance(value, (tuple, list))
+        and any(isinstance(item, Expr) for item in value)
     ):
         return value
     if _is_differentiable_color(value, Tensor):
@@ -133,9 +160,7 @@ def render_rgb_shader(
     interface = None if descriptor is None else descriptor.interface
     if descriptor is None or interface is None:
         raise ValueError(f"Shader '{shader_name}' has no declared image interface")
-    names = tuple(image_uniforms) or tuple(
-        binding.name for binding in interface.inputs
-    )
+    names = tuple(image_uniforms) or tuple(binding.name for binding in interface.inputs)
     if len(names) != len(rgb_inputs):
         raise ValueError(f"Shader '{shader_name}' has invalid input count")
     try:

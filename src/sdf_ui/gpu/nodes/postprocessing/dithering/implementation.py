@@ -5,10 +5,8 @@ from sdf_ui.gpu.nodes.differentiation import (
     ShaderArgument,
     ShaderDifferentiation,
 )
-from sdf_ui.gpu.nodes.layer.glsl import color_program
-from sdf_ui.gpu.nodes.shader_expression import ShaderProgram
 
-from ..bayer import GLSL, threshold
+from ..bayer import threshold
 
 
 def reference(context, inputs, params):
@@ -23,17 +21,9 @@ INTERFACE = ShaderInterface(
     ImageBinding("destTex", 0, write=True), (ImageBinding("origTex", 1, read=True),)
 )
 CONTRACT = ShaderDifferentiation(
-    "dithering", "gpu/nodes/postprocessing/dithering/shader.glsl",
+    "dithering", "gpu/nodes/postprocessing/dithering/dithering.wgsl",
     (ShaderArgument("origTex", (4,), "rgba8"),), (),
     (ShaderArgument("destTex", (4,), "rgba8"),),
     notes="Additive threshold derivative zero; original color derivative identity away from jumps.",
     reference=reference,
 )
-BODY = GLSL + color_program(r"""
-    D4 col=load4(0,pos);
-    float threshold=effectsThreshold(pos);
-    col.x=add(col.x,c(col.x.v<threshold?0.0:1.0/255.0));
-    col.y=add(col.y,c(col.y.v<threshold?0.0:1.0/255.0));
-    col.z=add(col.z,c(col.z.v<threshold?0.0:1.0/255.0));
-""")
-PROGRAM = ShaderProgram("dithering", BODY)

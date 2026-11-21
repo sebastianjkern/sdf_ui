@@ -7,9 +7,8 @@ from sdf_ui.gpu.nodes.differentiation import (
     ShaderArgument,
     ShaderDifferentiation,
 )
-from sdf_ui.gpu.nodes.shader_expression import ShaderProgram
 
-from ..angular import GLSL, angles
+from ..angular import angles
 
 _FLOAT_TEXT = 'float'
 
@@ -34,19 +33,10 @@ INTERFACE = ShaderInterface(
               Uniform("start_angle", _FLOAT_TEXT), Uniform("end_angle", _FLOAT_TEXT)),
 )
 CONTRACT = ShaderDifferentiation(
-    "arc", "gpu/nodes/primitives/arc/shader.glsl", (),
+    "arc", "gpu/nodes/primitives/arc/arc.wgsl", (),
     (ShaderArgument("center", (2,), "vec2"), ShaderArgument("radius", (), _FLOAT_TEXT),
      ShaderArgument("start_angle", (), _FLOAT_TEXT), ShaderArgument("end_angle", (), _FLOAT_TEXT)),
     (ShaderArgument("destTex", (), "r32f"),),
     notes="Active radial or endpoint branch; angular selection is fixed away from boundaries.",
     reference=reference,
 )
-BODY = GLSL + r"""
-void evaluate(ivec2 pos,out D o[8]) {
-    D2 p=sub2(v2(vec2(pos)),U_center);
-    if(primitiveInsideAngle(p)) o[0]=absD(sub(len2(p),U_radius));
-    else o[0]=minD(len2(sub2(p,primitiveEndpoint(U_start_angle,U_radius))),
-                   len2(sub2(p,primitiveEndpoint(U_end_angle,U_radius))));
-}
-"""
-PROGRAM = ShaderProgram("arc", BODY)

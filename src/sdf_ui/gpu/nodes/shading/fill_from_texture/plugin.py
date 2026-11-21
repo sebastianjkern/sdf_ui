@@ -8,7 +8,7 @@ from sdf_ui.gpu.nodes.common import (
     shader,
 )
 
-from .implementation import CONTRACT, INTERFACE, PROGRAM
+from .implementation import CONTRACT, INTERFACE
 
 
 def render_fill_from_texture(renderer, inputs, params):
@@ -49,8 +49,8 @@ def register_plugins(registry):
             params=("background", "inflate"),
             defaults={"background": (0.0, 0.0, 0.0, 0.0), "inflate": 0},
             shader=shader(
-                "fill_from_texture", "shading/fill_from_texture/shader.glsl",
-                derivative_contract=CONTRACT, program=PROGRAM, interface=INTERFACE,
+                "fill_from_texture", "shading/fill_from_texture/fill_from_texture.wgsl",
+                derivative_contract=CONTRACT, interface=INTERFACE,
             ),
             input_uniforms=("sdf", "origTex"),
             mode="RGB",

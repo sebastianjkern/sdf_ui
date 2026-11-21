@@ -35,7 +35,7 @@ def _steps(params):
 
 def register_plugins(registry):
     sdf_descriptor = shader(
-        "warp_sdf", "primitives/warp_sdf/shader.glsl", derivative_contract=SDF_CONTRACT,
+        "warp_sdf", "primitives/warp_sdf/warp_sdf.wgsl", derivative_contract=SDF_CONTRACT,
         interface=ShaderInterface(
             ImageBinding("destTex", 0, write=True),
             (ImageBinding("sourceTex", 1, read=True), ImageBinding("fieldTex", 2, read=True)),
@@ -43,7 +43,7 @@ def register_plugins(registry):
         ),
     )
     color_descriptor = shader(
-        "warp_color", "shading/warp_color/shader.glsl", derivative_contract=COLOR_CONTRACT,
+        "warp_color", "shading/warp_color/warp_color.wgsl", derivative_contract=COLOR_CONTRACT,
         interface=ShaderInterface(
             ImageBinding("destTex", 0, write=True),
             (ImageBinding("sourceTex", 1, read=True), ImageBinding("fieldTex", 2, read=True)),

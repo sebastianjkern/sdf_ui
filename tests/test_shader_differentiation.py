@@ -1,7 +1,5 @@
 """Every registered shader has an executable and auditable derivative contract."""
 
-
-
 from pathlib import Path
 
 import numpy as np
@@ -11,13 +9,15 @@ from sdf_ui.gpu.nodes.base import ShaderFile
 from sdf_ui.gpu.nodes.registry import registry
 from sdf_ui.learning import Parameter
 
-_CIRCLE_TEXT = 'circle'
+_CIRCLE_TEXT = "circle"
 
-_OFFSET_TEXT = 'offset'
+_OFFSET_TEXT = "offset"
 
-_ORIGTEX_TEXT = 'origTex'
+_ORIGTEX_TEXT = "origTex"
 
-_RADIUS_TEXT = 'radius'
+_RADIUS_TEXT = "radius"
+_MASK_SMOOTHSTEP_T = 0.9
+
 
 def descriptor(name):
     return {shader.name: shader for shader in registry.shader_files()}[name]
@@ -26,9 +26,10 @@ def descriptor(name):
 def test_all_shader_files_have_contracts_and_executable_rules():
     shaders = {shader.name: shader for shader in registry.shader_files()}
     root = Path(__file__).resolve().parents[1] / "src/sdf_ui"
-    assert {
-        str(path.relative_to(root)) for path in (root / "gpu/nodes").rglob("*.glsl")
-    } == {shader.path for shader in shaders.values() if shader.wgsl is None}
+    glsl_leftovers = [
+        str(path.relative_to(root.parent)) for path in root.rglob("*.glsl")
+    ]
+    assert glsl_leftovers == []
     for name, shader in shaders.items():
         _assert_shader_contract(name, shader, root)
 
@@ -67,8 +68,8 @@ def _assert_shader_executable(shader, name, root):
     if shader.wgsl is not None:
         assert "fn compute_main" in shader.wgsl.forward()
         assert "fn compute_main" in shader.wgsl.backward
-    elif shader.program is None:
-        assert (root / f"gpu/shaders/{name}.wgsl").is_file(), name
+    else:
+        assert (root / shader.path).is_file(), name
 
 
 def test_circle_backward_reduces_pixels_and_does_not_mutate_callers():
@@ -114,7 +115,7 @@ def test_masked_union_accumulates_both_output_seeds():
         size, inputs, {}, {"destTex": np.full(shape, 3.0), "maskTex": mask_seed}
     )
     # The mask's normalized smoothstep coordinate is (0.4 + 0.5) / 1 = 0.9.
-    mask_gradient = 2 * 6 * 0.9 * (1 - 0.9)
+    mask_gradient = 2 * 6 * _MASK_SMOOTHSTEP_T * (1 - _MASK_SMOOTHSTEP_T)
     np.testing.assert_allclose(gradient.inputs["sdf0"], 3 - mask_gradient)
     np.testing.assert_allclose(gradient.inputs["sdf1"], mask_gradient)
 
@@ -171,13 +172,15 @@ def test_fixed_noise_has_no_trainable_shader_arguments(name):
 def test_shader_file_exposes_only_its_explicit_differentiation_contract():
     shader = next(item for item in registry.shader_files() if item.name == _CIRCLE_TEXT)
     assert shader.differentiation is descriptor(_CIRCLE_TEXT).differentiation
-    unknown = ShaderFile("custom", "custom.glsl")
+    unknown = ShaderFile("custom", "custom.wgsl")
     assert unknown.differentiation is None
     with pytest.raises(ValueError, match="no differentiation"):
         unknown.backward((3, 2), {}, {}, np.ones((2, 3)))
     # Names and paths do not infer contracts: ownership must be explicit.
     assert (
-        ShaderFile(_CIRCLE_TEXT, "gpu/nodes/primitives/rect/shader.glsl").differentiation
+        ShaderFile(
+            _CIRCLE_TEXT, "gpu/nodes/primitives/rect/rect.wgsl"
+        ).differentiation
         is None
     )
 

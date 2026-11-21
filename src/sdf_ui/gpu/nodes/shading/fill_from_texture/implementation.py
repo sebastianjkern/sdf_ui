@@ -5,9 +5,6 @@ from sdf_ui.gpu.nodes.differentiation import (
     ShaderArgument,
     ShaderDifferentiation,
 )
-from sdf_ui.gpu.nodes.shader_expression import ShaderProgram
-
-from ..glsl import RGBA
 
 
 def reference(context, inputs, params):
@@ -24,19 +21,10 @@ INTERFACE = ShaderInterface(
     uniforms=(Uniform("inflate", "float"), Uniform("background", "vec4")),
 )
 CONTRACT = ShaderDifferentiation(
-    "fill_from_texture", "gpu/nodes/shading/fill_from_texture/shader.glsl",
+    "fill_from_texture", "gpu/nodes/shading/fill_from_texture/fill_from_texture.wgsl",
     (ShaderArgument("origTex", (4,), "rgba8"), ShaderArgument("sdf", (), "r32f")),
     (ShaderArgument("inflate", (), "float"), ShaderArgument("background", (4,), "vec4")),
     (ShaderArgument("destTex", (4,), "rgba8"),),
     notes="Piecewise derivatives; min/max ties split adjoints equally.",
     reference=reference,
 )
-BODY = """
-void evaluate(ivec2 pos, out D o[8]) {
-    D distance = sub(ld(1, pos, 0), U_inflate);
-    D weight = smoothD(c(0.0), c(1.5001), distance);
-    // This shader mixes the supplied texture/color directly, without LAB.
-    shadingOutput(shadingMix(load4(0, pos), U_background, weight), o);
-}
-"""
-PROGRAM = ShaderProgram("fill_from_texture", RGBA + BODY)

@@ -5,9 +5,8 @@ from sdf_ui.gpu.nodes.differentiation import (
     ShaderArgument,
     ShaderDifferentiation,
 )
-from sdf_ui.gpu.nodes.shader_expression import ShaderProgram
 
-from ..segment_math import GLSL, MIN3_GLSL, minimum_candidates, segment
+from ..segment_math import minimum_candidates, segment
 
 
 def reference(context, inputs, params):
@@ -34,23 +33,8 @@ INTERFACE = ShaderInterface(
     uniforms=tuple(Uniform(name, "vec2") for name in ("point0", "point1", "point2")),
 )
 CONTRACT = ShaderDifferentiation(
-    "triangle", "gpu/nodes/primitives/triangle/shader.glsl", (),
+    "triangle", "gpu/nodes/primitives/triangle/triangle.wgsl", (),
     tuple(ShaderArgument(name, (2,), "vec2") for name in ("point0", "point1", "point2")),
     (ShaderArgument("destTex", (), "r32f"),),
     notes="Active edges/signs fixed; degenerate triangles outside shader domain.", reference=reference,
 )
-BODY = GLSL + MIN3_GLSL + r"""
-void evaluate(ivec2 pos,out D o[8]) {
-    D2 p=v2(vec2(pos)), a=U_point0, b=U_point1, q=U_point2;
-    D2 e0=sub2(b,a), e1=sub2(q,b), e2=sub2(a,q);
-    D2 v0=sub2(p,a), v1=sub2(p,b), vq=sub2(p,q);
-    float orientation=sign(e0.x.v*e2.y.v-e0.y.v*e2.x.v);
-    float side=min(orientation*(v0.x.v*e0.y.v-v0.y.v*e0.x.v),
-               min(orientation*(v1.x.v*e1.y.v-v1.y.v*e1.x.v),
-                   orientation*(vq.x.v*e2.y.v-vq.y.v*e2.x.v)));
-    D distance=primitiveMin3(primitiveSegment(p,a,b,0.0),
-        primitiveSegment(p,b,q,0.0),primitiveSegment(p,q,a,0.0));
-    o[0]=mul(distance,c(-sign(side)));
-}
-"""
-PROGRAM = ShaderProgram("triangle", BODY)

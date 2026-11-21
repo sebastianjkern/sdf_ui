@@ -5,9 +5,8 @@ from sdf_ui.gpu.nodes.differentiation import (
     ShaderArgument,
     ShaderDifferentiation,
 )
-from sdf_ui.gpu.nodes.shader_expression import ShaderProgram
 
-from ..rotation import GLSL, rotate
+from ..rotation import rotate
 
 
 def reference(context, inputs, params):
@@ -31,18 +30,9 @@ INTERFACE = ShaderInterface(
     uniforms=(Uniform("grid_size", "vec2"), Uniform("offset", "vec2"), Uniform("angle", "float")),
 )
 CONTRACT = ShaderDifferentiation(
-    "grid", "gpu/nodes/primitives/grid/shader.glsl", (),
+    "grid", "gpu/nodes/primitives/grid/grid.wgsl", (),
     (ShaderArgument("grid_size", (2,), "vec2"), ShaderArgument("offset", (2,), "vec2"), ShaderArgument("angle", (), "float")),
     (ShaderArgument("destTex", (), "r32f"),),
     notes="Modulo cell indices fixed; spacing/rotation differentiate within each cell.",
     reference=reference,
 )
-BODY = GLSL + r"""
-void evaluate(ivec2 pos,out D o[8]) {
-    D2 p=sub2(primitiveRotate(v2(vec2(pos)),U_angle),U_offset);
-    D x=sub(modD(p.x,U_grid_size.x),mul(U_grid_size.x,c(0.5)));
-    D y=sub(modD(p.y,U_grid_size.y),mul(U_grid_size.y,c(0.5)));
-    o[0]=minD(absD(x),absD(y));
-}
-"""
-PROGRAM = ShaderProgram("grid", BODY)

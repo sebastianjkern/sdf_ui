@@ -5,7 +5,7 @@ from numbers import Real
 from sdf_ui.gpu.nodes.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.gpu.nodes.common import shader
 
-from .implementation import CONTRACT, INTERFACE, PROGRAM
+from .implementation import CONTRACT, INTERFACE
 
 _ANGLE_TEXT = 'angle'
 
@@ -26,7 +26,7 @@ def _uniforms(params):
 
 
 def register_plugins(registry):
-    descriptor = shader("rect", "primitives/rect/shader.glsl", derivative_contract=CONTRACT, program=PROGRAM, interface=INTERFACE)
+    descriptor = shader("rect", "primitives/rect/rect.wgsl", derivative_contract=CONTRACT, interface=INTERFACE)
     registry.register(
         Plugin(
             "rect",

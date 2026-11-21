@@ -7,7 +7,6 @@ import re
 import struct
 from dataclasses import dataclass
 from numbers import Real
-from pathlib import Path
 
 from ..core.expressions import Expr
 from ..core.spatial import is_spatial, spatial_scene
@@ -78,14 +77,14 @@ def _replace_calls(code, function, replace):
 def _make_kernel(shader):
     if shader.wgsl is not None:
         return shader.wgsl.forward()
-    root = Path(__file__).with_name("shaders")
-    variant = root / f"{shader.name}_rgba32f.wgsl"
-    path = variant if variant.is_file() else root / f"{shader.name}.wgsl"
-    if not path.is_file():
+    from ._shader_layout import kernel_path
+
+    try:
+        return kernel_path(shader.name, "rgba32f").read_text(encoding="utf-8")
+    except KeyError as error:
         raise NotImplementedError(
             f"Spatial shader '{shader.name}' has no native source"
-        )
-    return path.read_text(encoding="utf-8")
+        ) from error
 
 
 def _color_output(node, tex, context):

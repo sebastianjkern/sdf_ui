@@ -1,8 +1,5 @@
 """Raw shader values and piecewise input/uniform gradients."""
 
-
-
-
 import numpy as np
 import pytest
 
@@ -12,13 +9,14 @@ from sdf_ui.learning.autodiff import Parameter, Tensor
 from sdf_ui.learning.shaders.effects import DEFAULTS, RULES
 from tests.helpers import shader_context
 
-_LAYER_MASK_TEXT = 'layer_mask'
+_LAYER_MASK_TEXT = "layer_mask"
+_FINITE_DIFFERENCE_STEP = 2e-6
 
-_OFFSET_TEXT = 'offset'
+_OFFSET_TEXT = "offset"
 
-_ORIGTEX_TEXT = 'origTex'
+_ORIGTEX_TEXT = "origTex"
 
-_WEIGHT_TEXT = 'weight'
+_WEIGHT_TEXT = "weight"
 
 NAMES = (
     "overlay",
@@ -38,7 +36,6 @@ NAMES = (
 BLURS = NAMES[-4:]
 
 
-
 def _case(name, size=(3, 2)):
     rng = np.random.default_rng(826)
     uniforms = {
@@ -54,9 +51,9 @@ def _case(name, size=(3, 2)):
     if name in BLURS:
         count = len(DEFAULTS[name][_WEIGHT_TEXT])
         params = {
-            _OFFSET_TEXT: np.array([0.37, 1.37, -237 / 100, 5.37, -737 / 100, 2.37, 0.37, 4.37])[
-                :count
-            ],
+            _OFFSET_TEXT: np.array(
+                [0.37, 1.37, -237 / 100, 5.37, -737 / 100, 2.37, 0.37, 4.37]
+            )[:count],
             _WEIGHT_TEXT: np.array(DEFAULTS[name][_WEIGHT_TEXT]),
         }
     return shader_context(size), inputs, params
@@ -88,8 +85,18 @@ def _blur_reference(image, offset, weight, axis, output_size=None):
             for i in range(1, len(weight)):
                 dx, dy = (int(offset[i]), 0) if axis == 1 else (0, int(offset[i]))
                 value, factor = _blur_pair(
-                    image, value, x, y, i, dx, dy, weight[i], axis,
-                    width, height, factor,
+                    image,
+                    value,
+                    x,
+                    y,
+                    i,
+                    dx,
+                    dy,
+                    weight[i],
+                    axis,
+                    width,
+                    height,
+                    factor,
                 )
             result[y, x] = value
     return result
@@ -124,8 +131,14 @@ def test_rules_cover_actual_standalone_descriptors():
         for shader in (plugin.shader, *plugin.extra_shaders)
         if shader is not None
     }
-    assert {name for name, shader in descriptors.items() if shader.wgsl is None} == set(NAMES) == set(RULES)
-    assert all(callable(shader.differentiation.reference) for shader in descriptors.values())
+    assert (
+        {name for name, shader in descriptors.items() if shader.wgsl is None}
+        == set(NAMES)
+        == set(RULES)
+    )
+    assert all(
+        callable(shader.differentiation.reference) for shader in descriptors.values()
+    )
     assert set(DEFAULTS) == set(BLURS)
     assert all(callable(rule) for rule in RULES.values())
 
@@ -163,7 +176,7 @@ def _assert_effect_gradients(name, inputs, params, leaves, uniforms, objective):
                 source[key] = minus
                 low = objective()
                 source[key] = original
-                numerical[index] = (high - low) / 2e-6
+                numerical[index] = (high - low) / _FINITE_DIFFERENCE_STEP
             np.testing.assert_allclose(
                 tensor.grad, numerical, atol=3e-7, rtol=3e-6, err_msg=name + ":" + key
             )
@@ -294,7 +307,10 @@ def test_blur_exact_defaults_and_fractional_negative_oversized_offsets(name, siz
     for uniforms in ({}, params):
         effective = {**DEFAULTS[name], **uniforms}
         expected = _blur_reference(
-            inputs[_ORIGTEX_TEXT], effective[_OFFSET_TEXT], effective[_WEIGHT_TEXT], axis
+            inputs[_ORIGTEX_TEXT],
+            effective[_OFFSET_TEXT],
+            effective[_WEIGHT_TEXT],
+            axis,
         )
         np.testing.assert_allclose(
             _run(name, context, inputs, uniforms).numpy(), expected, atol=1e-15

@@ -246,7 +246,7 @@ class TestSlopLintCasesTwo:
             )
             for plugin in [
                 replace(custom, render_func=lambda *args: None),
-                replace(custom, shader=ShaderFile(_CIRCLE_TEXT, "custom.glsl")),
+                replace(custom, shader=ShaderFile(_CIRCLE_TEXT, "custom.wgsl")),
             ]:
                 monkeypatch.setitem(registry._plugins, custom.name, plugin)
                 with pytest.raises(

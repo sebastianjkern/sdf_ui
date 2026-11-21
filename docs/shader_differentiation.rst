@@ -121,7 +121,8 @@ from execution tapes, with explicit barriers between dependent GPU operations.
 
 Each shader descriptor exposes typed inputs, uniforms, outputs, and an
 independent CPU reference rule. The GPU graph executes the checked-in WGSL
-kernels in ``sdf_ui.gpu/shaders``. Composite shapes lower into those shader
+kernels colocated with their node implementations under
+``sdf_ui/gpu/nodes``. Composite shapes lower into those shader
 operations, and the CPU reference remains independently implemented.
 Host-side polygon, text, and glyph callbacks are not standalone shader operations;
 materialize them as inputs when using a compiled graph.

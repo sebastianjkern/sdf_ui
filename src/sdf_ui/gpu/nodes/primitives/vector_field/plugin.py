@@ -62,7 +62,7 @@ def _field_shader(name, uniforms=(), input_names=()):
 
     return shader(
         name,
-        f"primitives/vector_field/{name}.glsl",
+        f"primitives/vector_field/{name}.wgsl",
         derivative_contract=contract_for(name),
         interface=ShaderInterface(
             ImageBinding("destTex", 0, write=True),

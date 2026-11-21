@@ -7,7 +7,6 @@ from sdf_ui.gpu.nodes.differentiation import (
     ShaderArgument,
     ShaderDifferentiation,
 )
-from sdf_ui.gpu.nodes.shader_expression import ShaderProgram
 
 from ..segment_math import minimum_candidates
 
@@ -45,30 +44,10 @@ INTERFACE = ShaderInterface(
     (Uniform(_REPEAT_TEXT, "float"),),
 )
 CONTRACT = ShaderDifferentiation(
-    _REPEAT_TEXT, "gpu/nodes/primitives/repeat/shader.glsl",
+    _REPEAT_TEXT, "gpu/nodes/primitives/repeat/repeat.wgsl",
     (ShaderArgument("sdf0", (), "r32f"),), (ShaderArgument(_REPEAT_TEXT, (), "float"),),
     (ShaderArgument("destTex", (), "r32f"),),
     zero_gradient_parameters=(_REPEAT_TEXT,), sampling="integer_zero_outside",
     notes="Integer imageLoad addresses: spacing derivative zero away from jumps, source gradients accumulate.",
     reference=reference,
 )
-BODY = r"""
-void evaluate(ivec2 pos,out D o[8]) {
-    vec2 p=vec2(pos);
-    // Integer addressing is discrete, including all dependence on spacing.
-    float spacing=U_repeat.v;
-    vec2 cell=roundEven(p/spacing), direction=sign(p-spacing*cell);
-    D candidates[5]; candidates[0]=c(1e20);
-    for(int j=0;j<2;j++) for(int i=0;i<2;i++) {
-        vec2 address=p-spacing*(cell+vec2(i,j)*direction);
-        candidates[1+j*2+i]=ld(0,ivec2(address),0);
-    }
-    float value=candidates[0].v, derivative=0.0, count=0.0;
-    for(int i=1;i<5;i++) value=min(value,candidates[i].v);
-    for(int i=0;i<5;i++) if(candidates[i].v==value) {
-        derivative+=candidates[i].d; count+=1.0;
-    }
-    o[0]=D(value,derivative/count);
-}
-"""
-PROGRAM = ShaderProgram(_REPEAT_TEXT, BODY)

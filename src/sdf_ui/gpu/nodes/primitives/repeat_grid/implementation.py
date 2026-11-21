@@ -2,7 +2,6 @@
 
 from sdf_ui.gpu.nodes.base import ImageBinding, ShaderInterface, Uniform
 from sdf_ui.gpu.nodes.differentiation import ShaderArgument, ShaderDifferentiation
-from sdf_ui.gpu.nodes.shader_expression import ShaderProgram
 
 
 def _repeat_anchor(context, center, spacing, columns, rows):
@@ -68,7 +67,7 @@ INTERFACE = ShaderInterface(
 )
 CONTRACT = ShaderDifferentiation(
     "repeat_grid",
-    "gpu/nodes/primitives/repeat_grid/shader.glsl",
+    "gpu/nodes/primitives/repeat_grid/repeat_grid.wgsl",
     (ShaderArgument("sdf0", (), "r32f"),),
     (
         ShaderArgument("columns", (), "float"),
@@ -82,23 +81,3 @@ CONTRACT = ShaderDifferentiation(
     reference=reference,
     notes="Finite 3x3 neighboring-cell sampling; each cell uses integer source coordinates.",
 )
-BODY = r"""
-void evaluate(ivec2 pos,out D o[8]) {
-    vec2 counts=vec2(U_columns.v,U_rows.v);
-    vec2 spacing=vec2(U_spacing.x.v,U_spacing.y.v);
-    vec2 center=vec2(U_center.x.v,U_center.y.v);
-    vec2 anchor=floor((vec2(pos)-center)/spacing+(counts-1.0)*0.5+0.5);
-    D distance=c(float(max(imageSize(destTex).x,imageSize(destTex).y)));
-    ivec2 sourceSize=imageSize(sdf0);
-    for(int y=-1;y<=1;y++) for(int x=-1;x<=1;x++) {
-        vec2 cell=anchor+vec2(x,y);
-        if(cell.x<0.0||cell.y<0.0||cell.x>=U_columns.v||cell.y>=U_rows.v) continue;
-        vec2 offset=(cell-(counts-1.0)*0.5)*spacing;
-        ivec2 source=ivec2(round(vec2(pos)-offset));
-        if(any(lessThan(source,ivec2(0)))||any(greaterThanEqual(source,sourceSize))) continue;
-        distance=minD(distance,ld(0,source,0));
-    }
-    o[0]=distance;
-}
-"""
-PROGRAM = ShaderProgram("repeat_grid", BODY)

@@ -149,8 +149,8 @@ def test_inspection_exposes_zero_gradient_and_topology_controls():
 
 
 def test_inspection_reports_missing_gpu_derivative(tmp_path, monkeypatch):
-    path = tmp_path / "custom.glsl"
-    path.write_text("#version 430\nlayout(local_size_x=1) in;\nvoid main(){}\n")
+    path = tmp_path / "custom.wgsl"
+    path.write_text("@compute @workgroup_size(1)\nfn compute_main() {}\n")
     name = "inspection_missing_derivative"
     contract = ShaderDifferentiation(
         name, str(path), (), (), (ShaderArgument("destTex", (), "r32f"),)

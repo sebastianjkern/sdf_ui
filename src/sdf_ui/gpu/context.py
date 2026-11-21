@@ -520,12 +520,9 @@ class Context:
     def _shader_path(self, name, color_format="rgba8"):
         if not name or Path(name).name != name:
             raise ValueError("Shader name must be a simple file name")
-        shader_dir = Path(__file__).with_name("shaders")
-        if color_format == "rgba32f":
-            variant = shader_dir / f"{name}_rgba32f.wgsl"
-            if variant.is_file():
-                return variant
-        return shader_dir / f"{name}.wgsl"
+        from ._shader_layout import kernel_path
+
+        return kernel_path(name, color_format)
 
     def run_shader(
         self,
@@ -538,10 +535,12 @@ class Context:
         source_code=None,
     ):
         """Load a packaged WGSL compute shader and dispatch it by resource name."""
-        path = self._shader_path(name, color_format)
-        if source_code is None and not path.is_file():
-            raise KeyError(f"Unknown WebGPU shader '{name}'")
-        code = path.read_text(encoding="utf-8") if source_code is None else source_code
+        code = source_code
+        if code is None:
+            path = self._shader_path(name, color_format)
+            if not path.is_file():
+                raise KeyError(f"Unknown WebGPU shader '{name}'")
+            code = path.read_text(encoding="utf-8")
         groups = self.run_compute(
             code,
             resources,
@@ -556,7 +555,9 @@ class Context:
         return groups
 
     def supports_shader(self, name):
-        if (Path(__file__).with_name("shaders") / f"{name}.wgsl").is_file():
+        from ._shader_layout import supports
+
+        if supports(name):
             return True
         from .nodes.registry import registry
 

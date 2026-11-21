@@ -26,7 +26,7 @@ repos:
         pass_filenames: false
       - id: slop
         name: slop lint
-        entry: uv run --locked slop lint --output quiet
+        entry: uv run --locked slop lint --output human
         language: system
         pass_filenames: false
         always_run: true
@@ -51,6 +51,12 @@ repos:
       - id: gpu-lifecycle-lint
         name: GPU lifecycle lint
         entry: uv run --locked python build_tools/lint/gpu_lifecycle.py
+        language: system
+        pass_filenames: false
+        files: ^(src/)
+      - id: shader-layout-lint
+        name: shader layout lint
+        entry: uv run --locked python build_tools/lint/shader_layout.py
         language: system
         pass_filenames: false
         files: ^(src/)

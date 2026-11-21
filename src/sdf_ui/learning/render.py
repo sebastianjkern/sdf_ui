@@ -46,6 +46,8 @@ _LAB_RGB_Y_SCALE = 0.2040
 _SRGB_LINEAR_BREAKPOINT = 0.0031308
 _PIXEL_INTERPOLATION_SCALE = 1.5
 _FILL_EDGE_EPSILON = 0.0001
+_COLOR_NAME = "color"
+_INFLATE_NAME = "inflate"
 _TRANSFORM_MINIMUM_SCALE = 1e-12
 
 
@@ -350,7 +352,7 @@ class DifferentiableRenderer:
         )
         input_modes = tuple(modes.get(id(item)) for item in node.inputs)
         mode = plugin.mode or next((item for item in input_modes if item), None)
-        if node.kind == "color":
+        if node.kind == _COLOR_NAME:
             mode = mode or ColorSpaceMode.LAB
         result, mode = self._evaluate_node_operation(
             node, plugin, inputs, params, input_modes, mode
@@ -368,7 +370,7 @@ class DifferentiableRenderer:
             memo[key], modes[key] = result, mode
             return result
         expected = (self.size[1], self.size[0])
-        if node.kind == "color":
+        if node.kind == _COLOR_NAME:
             expected += (4,)
         if result.shape != expected:
             raise ValueError(
@@ -428,7 +430,7 @@ class DifferentiableRenderer:
         weight = _smoothstep(
             _tensor(params.get("inner", -_PIXEL_INTERPOLATION_SCALE)),
             _tensor(params.get("outer", 0.0)) + _FILL_EDGE_EPSILON,
-            distance - _tensor(params.get("inflate", 0.0)),
+            distance - _tensor(params.get(_INFLATE_NAME, 0.0)),
         )[..., None]
         return _mix(
             _rgb_to_lab(self._color(params["fg_color"])),
@@ -462,9 +464,9 @@ class DifferentiableRenderer:
                 self,
                 {"sdf": inputs[0]},
                 {
-                    "color": self._color(params["fg_color"]),
+                    _COLOR_NAME: self._color(params["fg_color"]),
                     "background": self._color(params["bg_color"]),
-                    "inflate": params["inflate"],
+                    _INFLATE_NAME: params[_INFLATE_NAME],
                     "first": params["inner"],
                     "second": params["outer"],
                 },
@@ -545,7 +547,7 @@ class DifferentiableRenderer:
         return _mix(inputs[1], inputs[0], weight) - k * weight * (1.0 - weight)
 
     def _clear(self, params):
-        return _rgb_to_lab(self._color(params["color"])) + np.zeros(
+        return _rgb_to_lab(self._color(params[_COLOR_NAME])) + np.zeros(
             (self.size[1], self.size[0], 4)
         )
 
@@ -556,7 +558,7 @@ class DifferentiableRenderer:
                 {
                     "fg_color": params["color1"],
                     "bg_color": params["color0"],
-                    "inflate": params["inflate"],
+                    _INFLATE_NAME: params[_INFLATE_NAME],
                 },
             )
         )
@@ -634,7 +636,7 @@ class DifferentiableRenderer:
         Returns the output Path. SDFs should first be shaded with ``fill`` or
         ``generate_mask``. No parameter gradients are changed by saving.
         """
-        if not isinstance(scene, TextureNode) or scene.kind != "color":
+        if not isinstance(scene, TextureNode) or scene.kind != _COLOR_NAME:
             raise ValueError("save expects a color scene; shade SDFs with fill first")
         result, mode = self._render(scene)
         display = as_tensor(np.array(result.data, copy=True))

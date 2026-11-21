@@ -174,10 +174,8 @@ def lint_file(path: Path) -> list[str]:
 
 def lint_tree(root: Path) -> Iterable[tuple[Path, list[str]]]:
     """Lint every module below root and yield (file, violations) pairs."""
-    for path in sorted(root.rglob("*.py")):
-        problems = lint_file(path)
-        if problems:
-            yield path, problems
+    paths = sorted(root.rglob("*.py"))
+    return ((path, problems) for path in paths if (problems := lint_file(path)))
 
 
 def main() -> int:

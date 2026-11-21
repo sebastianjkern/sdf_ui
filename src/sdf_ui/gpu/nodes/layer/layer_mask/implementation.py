@@ -5,9 +5,6 @@ from sdf_ui.gpu.nodes.differentiation import (
     ShaderArgument,
     ShaderDifferentiation,
 )
-from sdf_ui.gpu.nodes.shader_expression import ShaderProgram
-
-from ..glsl import color_program
 
 
 def _alpha_composite(first, second, alpha):
@@ -60,7 +57,7 @@ INTERFACE = ShaderInterface(
 )
 CONTRACT = ShaderDifferentiation(
     "layer_mask",
-    "gpu/nodes/layer/layer_mask/shader.glsl",
+    "gpu/nodes/layer/layer_mask/layer_mask.wgsl",
     tuple(ShaderArgument(name, (4,), "rgba8") for name in ("tex0", "tex1", "mask")),
     (ShaderArgument("mode", (), "float"),),
     (ShaderArgument("destTex", (4,), "rgba8"),),
@@ -70,37 +67,3 @@ CONTRACT = ShaderDifferentiation(
     reference=reference,
     defaults={"mode": 0.0},
 )
-BODY = color_program(r"""
-    D4 first=load4(0,pos), second=load4(1,pos);
-    D alpha=ld(2,pos,0);
-    D4 mixed=mix4(second,first,alpha);
-    D4 product=D4(mul(first.x,second.x),mul(first.y,second.y),
-                  mul(first.z,second.z),mul(first.w,second.w));
-    D4 screen=D4(sub(c(1.0),mul(sub(c(1.0),first.x),sub(c(1.0),second.x))),
-                 sub(c(1.0),mul(sub(c(1.0),first.y),sub(c(1.0),second.y))),
-                 sub(c(1.0),mul(sub(c(1.0),first.z),sub(c(1.0),second.z))),
-                 first.w);
-    D4 darken=D4(minD(first.x,second.x),minD(first.y,second.y),
-                 minD(first.z,second.z),minD(first.w,second.w));
-    D4 lighten=D4(maxD(first.x,second.x),maxD(first.y,second.y),
-                  maxD(first.z,second.z),maxD(first.w,second.w));
-    D4 col=mixed;
-    if(U_mode.v>0.5 && U_mode.v<1.5) col=mix4(second,product,alpha);
-    else if(U_mode.v>1.5 && U_mode.v<2.5) col=mix4(second,screen,alpha);
-    else if(U_mode.v>2.5 && U_mode.v<3.5) {
-        D topAlpha=mul(first.w,alpha);
-        D remaining=sub(c(1.0),topAlpha);
-        D outAlpha=add(topAlpha,mul(second.w,remaining));
-        D3 rgb=D3(vec3(0.0));
-        if(outAlpha.v>0.0) {
-            D3 top=D3(first.x,first.y,first.z);
-            D3 base=D3(second.x,second.y,second.z);
-            rgb=div3(add3(mul3(top,topAlpha),
-                          mul3(mul3(base,second.w),remaining)),outAlpha);
-        }
-        col=D4(rgb.x,rgb.y,rgb.z,outAlpha);
-    }
-    else if(U_mode.v>3.5 && U_mode.v<4.5) col=mix4(second,darken,alpha);
-    else if(U_mode.v>4.5) col=mix4(second,lighten,alpha);
-""")
-PROGRAM = ShaderProgram("layer_mask", BODY)

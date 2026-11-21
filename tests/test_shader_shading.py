@@ -1,8 +1,5 @@
 """Shader-name contracts and analytic shading gradients."""
 
-
-
-
 import numpy as np
 import pytest
 
@@ -11,9 +8,11 @@ from sdf_ui.learning.autodiff import Parameter, Tensor
 from sdf_ui.learning.shaders.shading import RULES
 from tests.helpers import shader_context
 
-_ISOLINES_TEXT = 'isolines'
+_ISOLINES_TEXT = "isolines"
 
-_LIGHT_TEXT = 'light'
+_LIGHT_TEXT = "light"
+_FINITE_DIFFERENCE_STEP = 2e-5
+
 
 def _fill_params(foreground, background):
     return dict(
@@ -96,7 +95,7 @@ def _finite_difference(parameter, objective):
         parameter.assign(minus)
         low = objective().item()
         parameter.assign(original)
-        numeric[index] = (high - low) / 2e-5
+        numeric[index] = (high - low) / _FINITE_DIFFERENCE_STEP
     return numeric
 
 
@@ -149,7 +148,9 @@ def test_rules_cover_exact_standalone_shader_descriptors():
         if descriptor.path.startswith("gpu/nodes/shading/")
     }
     assert set(RULES) <= descriptors.keys()
-    assert all(callable(shader.differentiation.reference) for shader in descriptors.values())
+    assert all(
+        callable(shader.differentiation.reference) for shader in descriptors.values()
+    )
     for name, rule in RULES.items():
         inputs, params = _case(name)
         value = rule(
@@ -247,7 +248,9 @@ def test_partial_derivative_explicit_oob_zero_and_adjoint(size):
 
 def test_uniform_tensor_containers_keep_their_graphs():
     red = Parameter("red", 0.37)
-    value = RULES["clear_color"](shader_context((4, 3)), {}, {"color": (red, 0.2, 0.4, 0.8)})
+    value = RULES["clear_color"](
+        shader_context((4, 3)), {}, {"color": (red, 0.2, 0.4, 0.8)}
+    )
     value.mean().backward()
     assert red.grad is not None and np.isfinite(red.grad) and red.grad != 0
 
@@ -257,8 +260,12 @@ def test_isolines_invalid_distances_and_clamped_parameters():
     params.update(spacing=-1 / 5, line_width=-3 / 10, feather=-7 / 10)
     _check_gradients(_ISOLINES_TEXT, overrides=params)
     inputs["sdf"][:] = 1e21
-    actual = RULES[_ISOLINES_TEXT](shader_context((4, 3)), {"sdf": Tensor(inputs["sdf"])}, params)
-    background = RULES["clear_color"](shader_context((4, 3)), {}, {"color": params["background"]})
+    actual = RULES[_ISOLINES_TEXT](
+        shader_context((4, 3)), {"sdf": Tensor(inputs["sdf"])}, params
+    )
+    background = RULES["clear_color"](
+        shader_context((4, 3)), {}, {"color": params["background"]}
+    )
     np.testing.assert_array_equal(actual.numpy(), background.numpy())
 
 

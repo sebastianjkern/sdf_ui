@@ -10,7 +10,7 @@ from sdf_ui.gpu.nodes.base import (
 )
 from sdf_ui.gpu.nodes.common import color, shader
 
-from .implementation import CONTRACT, PROGRAM
+from .implementation import CONTRACT
 
 _INFLATE_TEXT = 'inflate'
 
@@ -41,9 +41,8 @@ def register_plugins(registry):
                 "outer": 0.0,
             },
             shader=shader(
-                "fill", "shading/fill/shader.glsl",
+                "fill", "shading/fill/fill.wgsl",
                 derivative_contract=CONTRACT,
-                program=PROGRAM,
                 interface=ShaderInterface(
                     output=ImageBinding("destTex", 0, write=True),
                     inputs=(ImageBinding("sdf", 1, read=True),),

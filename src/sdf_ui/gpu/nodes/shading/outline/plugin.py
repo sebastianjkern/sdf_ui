@@ -3,15 +3,14 @@ __docformat__ = "google"
 from sdf_ui.gpu.nodes.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.gpu.nodes.common import color, shader
 
-from .implementation import CONTRACT, INTERFACE, PROGRAM
+from .implementation import CONTRACT, INTERFACE
 
 
 def register_plugins(registry):
     descriptor = shader(
         "outline",
-        "shading/outline/shader.glsl",
+        "shading/outline/outline.wgsl",
         derivative_contract=CONTRACT,
-        program=PROGRAM,
         interface=INTERFACE,
     )
     for name in ("outline", "stroke"):

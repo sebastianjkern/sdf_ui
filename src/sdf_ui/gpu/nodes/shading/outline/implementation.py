@@ -7,9 +7,6 @@ from sdf_ui.gpu.nodes.differentiation import (
     ShaderArgument,
     ShaderDifferentiation,
 )
-from sdf_ui.gpu.nodes.shader_expression import ShaderProgram
-
-from ..glsl import RGBA
 
 _OUTLINE_TEXT = 'outline'
 
@@ -39,7 +36,7 @@ INTERFACE = ShaderInterface(
 )
 CONTRACT = ShaderDifferentiation(
     _OUTLINE_TEXT,
-    "gpu/nodes/shading/outline/shader.glsl",
+    "gpu/nodes/shading/outline/outline.wgsl",
     (ShaderArgument("sdf", (), "r32f"),),
     (
         ShaderArgument("background", (4,), "vec4"),
@@ -52,14 +49,3 @@ CONTRACT = ShaderDifferentiation(
     reference=reference,
     defaults={"width": 1.5},
 )
-BODY = """
-void evaluate(ivec2 pos, out D o[8]) {
-    D distance = absD(sub(ld(0, pos, 0), U_inflate));
-    D halfWidth = maxD(mul(absD(U_width), c(0.5)), c(0.0001));
-    D lower = maxD(sub(halfWidth, c(0.75)), c(0.0));
-    D upper = add(halfWidth, c(0.7501));
-    D weight = smoothD(lower, upper, distance);
-    shadingOutput(shadingMix(rgbToLab(U_outline), rgbToLab(U_background), weight), o);
-}
-"""
-PROGRAM = ShaderProgram(_OUTLINE_TEXT, RGBA + BODY)

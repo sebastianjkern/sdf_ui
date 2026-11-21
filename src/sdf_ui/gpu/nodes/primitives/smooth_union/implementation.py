@@ -5,7 +5,6 @@ from sdf_ui.gpu.nodes.differentiation import (
     ShaderArgument,
     ShaderDifferentiation,
 )
-from sdf_ui.gpu.nodes.shader_expression import ShaderProgram
 
 
 def reference(context, inputs, params):
@@ -24,16 +23,8 @@ INTERFACE = ShaderInterface(
     (Uniform("smoothness", "float"),),
 )
 CONTRACT = ShaderDifferentiation(
-    "smooth_min", "gpu/nodes/primitives/smooth_union/shader.glsl",
+    "smooth_min", "gpu/nodes/primitives/smooth_union/smooth_min.wgsl",
     (ShaderArgument("sdf0", (), "r32f"), ShaderArgument("sdf1", (), "r32f")),
     (ShaderArgument("smoothness", (), "float"),), (ShaderArgument("destTex", (), "r32f"),),
     notes="Piecewise derivatives; min/max ties split adjoints equally.", reference=reference,
 )
-BODY = r"""
-void evaluate(ivec2 pos,out D o[8]) {
-    D a=ld(0,pos,0), b=ld(1,pos,0), k=maxD(U_smoothness,c(0.000001));
-    D h=clampD(add(c(0.5),mul(c(0.5),divD(sub(b,a),k))),c(0.0),c(1.0));
-    o[0]=sub(mixD(b,a,h),mul(k,mul(h,sub(c(1.0),h))));
-}
-"""
-PROGRAM = ShaderProgram("smooth_min", BODY)

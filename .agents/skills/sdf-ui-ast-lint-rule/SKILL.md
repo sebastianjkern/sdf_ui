@@ -91,8 +91,9 @@ In `.pre-commit-config.yaml`, add a `repo: local` hook mirroring `api-stubs`:
 Scope `files:` to the area the rule reads (`src/` unless the rule is about
 `tests/` or `build_tools/` itself), so unrelated commits do not pay for the
 scan. Add the same command as a CI step next to the closest existing one
-(existing custom-lint examples: `arch-lint`, `comment-lint`, and
-`gpu-lifecycle-lint`, all pointing at `build_tools/lint/<script>.py`).
+(existing custom-lint examples: `arch-lint`, `comment-lint`,
+`gpu-lifecycle-lint`, and `shader-layout-lint`, all pointing at
+`build_tools/lint/<script>.py`).
 
 ## Closing
 

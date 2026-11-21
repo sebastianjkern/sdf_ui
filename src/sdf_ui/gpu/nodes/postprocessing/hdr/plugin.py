@@ -330,7 +330,7 @@ def register_plugins(registry):
 
 def _register_operation(registry, op, inputs, parameters, body):
     name = f"hdr_{op}"
-    path = f"gpu/shaders/{name}.wgsl"
+    path = f"gpu/nodes/postprocessing/hdr/{name}.wgsl"
     contract = _shader_contract(name, path, op, inputs, parameters)
     descriptor = _shader_descriptor(name, path, op, inputs, parameters, body, contract)
     registry.register(Plugin(

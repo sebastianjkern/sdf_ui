@@ -5,6 +5,21 @@ from pathlib import Path
 from .lowering import GraphPlan, lower_graph
 
 
+def _packaged_kernels_complete(descriptor):
+    """Return whether the colocated WGSL kernels for one descriptor exist."""
+    declared = Path(descriptor.path)
+    folder = (
+        declared.parent
+        if declared.is_absolute()
+        else Path(__file__).resolve().parents[1] / declared.parent
+    )
+    forward = folder / f"{descriptor.name}_rgba32f.wgsl"
+    if not forward.is_file():
+        forward = folder / f"{descriptor.name}.wgsl"
+    backward = folder / f"{descriptor.name}_backward.wgsl"
+    return forward.is_file() and backward.is_file()
+
+
 def _validate_plan(plan, params):
     if params is not None:
         missing = sorted(
@@ -12,7 +27,7 @@ def _validate_plan(plan, params):
         )
         if missing:
             raise ValueError("Missing render parameters: " + ", ".join(missing))
-    shader_dir = Path(__file__).resolve().parents[1] / "gpu" / "shaders"
+
     for operation in plan.passes:
         descriptor = operation.shader
         if (
@@ -22,11 +37,7 @@ def _validate_plan(plan, params):
             raise ValueError(
                 f"Shader '{descriptor.name}' contract name or path does not match"
             )
-        forward = shader_dir / f"{descriptor.name}_rgba32f.wgsl"
-        if not forward.is_file():
-            forward = shader_dir / f"{descriptor.name}.wgsl"
-        backward = shader_dir / f"{descriptor.name}_backward.wgsl"
-        if not forward.is_file() or not backward.is_file():
+        if descriptor.wgsl is None and not _packaged_kernels_complete(descriptor):
             raise ValueError(
                 f"WebGPU kernels for shader '{descriptor.name}' are incomplete"
             )

@@ -19,11 +19,44 @@ PRINT_WIDTH = COLUMNS * PITCH
 OUTPUT = Path("out/examples/chromatic_drift/chromatic_drift.png")
 LANDSCAPE_OUTPUT = OUTPUT.with_stem("chromatic_drift_landscape")
 DEFAULT_SEED = 19
+SRGB_BREAKPOINT = 0.04045
+SRGB_LINEAR_SCALE = 12.92
+SRGB_OFFSET = 0.055
+SRGB_SCALE = 1.055
+SRGB_GAMMA = 2.4
+DRIFT_START = 0.17
+DRIFT_WIDTH = 0.83
+PHASE_Y_FREQUENCY = 13.0
+PHASE_X_FREQUENCY = 5.0
+RADIUS_BASE = 15.1
+RADIUS_DRIFT = 8.4
+RADIUS_NOISE = 1.55
+POSITION_WAVE_X = 1.1
+POSITION_WAVE_Y = 1.4
+POSITION_JITTER = 2.6
+SKIP_PROBABILITY = 0.13
+SKIP_RADIUS = 0.05
+BAND_JITTER = 0.13
+BAND_RIPPLE = 0.04
+PIGMENT_STOPS = (0.22, 0.37, 0.56, 0.70)
+PIGMENT_VARIATION_MIN = -22 / 100
+PIGMENT_VARIATION_MAX = 0.24
+GRAIN_BASE = 0.026
+GRAIN_AMOUNT = 0.075
+INK_MIN_OPACITY = 0.98
+INK_VARIATION = 0.02
+SWAY_SINE_AMOUNT = 0.68
+SWAY_RANDOM_AMOUNT = 0.32
+TILT_EXPONENT = 1.25
 
 
 def _linear(rgb):
     srgb = np.asarray(rgb, dtype=np.float32) / 255
-    return np.where(srgb <= 0.04045, srgb / 12.92, ((srgb + 0.055) / 1.055) ** 2.4)
+    return np.where(
+        srgb <= SRGB_BREAKPOINT,
+        srgb / SRGB_LINEAR_SCALE,
+        ((srgb + SRGB_OFFSET) / SRGB_SCALE) ** SRGB_GAMMA,
+    )
 
 
 PAPER = (*_linear((234, 226, 203)), 1.0)
@@ -54,39 +87,54 @@ def print_maps(seed, size=SIZE):
     rows = _rows(size)
     y = np.linspace(0, 1, rows)[:, None]
     lattice = (rows, COLUMNS)
-    drift = np.clip((x - 0.17) / 0.83, 0, 1)
+    drift = np.clip((x - DRIFT_START) / DRIFT_WIDTH, 0, 1)
+    phase = PHASE_Y_FREQUENCY * y + PHASE_X_FREQUENCY * x
+    dx, dy, radius = _geometry_cells(rng, drift, phase, lattice)
+    ink = _pigment_map(rng, x, y, drift, lattice, size)
+    sway = SWAY_SINE_AMOUNT * np.sin(phase)
+    sway += SWAY_RANDOM_AMOUNT * rng.uniform(-1, 1, lattice)
+    tilt = 0.5 + 0.5 * drift**TILT_EXPONENT * sway
+    geometry = _repeat_cells(np.stack((dx, dy, radius, tilt), axis=-1), size)
+    return geometry, ink
+
+
+def _geometry_cells(rng, drift, phase, lattice):
     middle = np.sin(np.pi * drift)
-    phase = 13 * y + 5 * x
-
-    radius = 15.1 - 8.4 * drift + rng.normal(0, 1.55, lattice) * middle
+    radius = RADIUS_BASE - RADIUS_DRIFT * drift
+    radius += rng.normal(0, RADIUS_NOISE, lattice) * middle
     radius = np.clip(radius, 4, 16.3)
-    dx = drift * (1.1 * np.sin(phase) + rng.uniform(-2.6, 2.6, lattice))
-    dy = drift * (1.4 * np.cos(phase) + rng.uniform(-2.6, 2.6, lattice))
-    skips = rng.random(lattice) < 0.13 * drift**2
-    radius = np.where(skips, 0.05, radius)
+    dx = drift * (
+        POSITION_WAVE_X * np.sin(phase)
+        + rng.uniform(-POSITION_JITTER, POSITION_JITTER, lattice)
+    )
+    dy = drift * (
+        POSITION_WAVE_Y * np.cos(phase)
+        + rng.uniform(-POSITION_JITTER, POSITION_JITTER, lattice)
+    )
+    skips = rng.random(lattice) < SKIP_PROBABILITY * drift**2
+    radius = np.where(skips, SKIP_RADIUS, radius)
+    return dx, dy, radius
 
-    band = x + 0.13 * middle * rng.normal(size=lattice)
-    band += 0.04 * np.sin(15 * y) * middle
-    pigment = PIGMENTS[np.searchsorted((0.22, 0.37, 0.56, 0.70), band)]
-    pigment *= (1 + middle * rng.uniform(-0.22, 0.24, lattice))[..., None]
 
+def _pigment_map(rng, x, y, drift, lattice, size):
+    middle = np.sin(np.pi * drift)
+    band = x + BAND_JITTER * middle * rng.normal(size=lattice)
+    band += BAND_RIPPLE * np.sin(15 * y) * middle
+    pigment = PIGMENTS[np.searchsorted(PIGMENT_STOPS, band)]
+    pigment *= (
+        1 + middle * rng.uniform(PIGMENT_VARIATION_MIN, PIGMENT_VARIATION_MAX, lattice)
+    )[..., None]
     ink = _repeat_cells(
         np.concatenate((pigment, np.ones((*lattice, 1))), axis=-1), size
     )
-    # Pinholes in the ink expose the paper. The red, green, and blue channels
-    # stay constant in each stamp while opacity is sampled at each pixel.
     grain = rng.random(ink.shape[:2], dtype=np.float32)
     wear = rng.random(ink.shape[:2], dtype=np.float32)
     across = np.linspace(0, 1, size[0], dtype=np.float32)
-    speckle = 0.026 + 0.075 * np.sin(np.pi * across) ** 2
-    ink[..., 3] *= np.where(grain < speckle, wear**2, 0.98 + 0.02 * wear)
-
-    # Neutral gray in alpha means no tilt. The right side gets a wider range
-    # of angles, with a wave that carries through neighboring cells.
-    sway = 0.68 * np.sin(phase) + 0.32 * rng.uniform(-1, 1, lattice)
-    tilt = 0.5 + 0.5 * drift**1.25 * sway
-    geometry = _repeat_cells(np.stack((dx, dy, radius, tilt), axis=-1), size)
-    return geometry, ink
+    speckle = GRAIN_BASE + GRAIN_AMOUNT * np.sin(np.pi * across) ** 2
+    ink[..., 3] *= np.where(
+        grain < speckle, wear**2, INK_MIN_OPACITY + INK_VARIATION * wear
+    )
+    return ink
 
 
 def chromatic_drift(geometry, pigment, size=SIZE):
@@ -117,21 +165,24 @@ def chromatic_drift(geometry, pigment, size=SIZE):
         for y in (-PITCH / 2, PITCH / 2)
     )
 
-    # Cover the outside of the print rectangle, giving the ink a clean edge.
+    return (
+        color.linear_rgba(PAPER)
+        .over(*layers, *_print_details(cx, cy, print_size))
+        .finish(tone=0, dither=0.45)
+    )
+
+
+def _print_details(cx, cy, print_size):
     trim = sdf.rect_from_size((cx, cy), print_size).fill_linear(
         (*PAPER[:3], 0), PAPER, inner=-0.5, outer=0.5
     )
     title = sdf.text("CHROMATIC DRIFT", size=13, ox=LEFT, oy=50, letter_spacing=2.5)
     label = title.ink_linear((*PIGMENTS[0], 0.92))
-    swatches = (
-        sdf.diamond((704 - 14 * i, 54), (5, 5)).ink_linear((*ink, 1))
-        for i, ink in enumerate(reversed(PIGMENTS))
+    swatches = tuple(
+        sdf.diamond((704 - 14 * index, 54), (5, 5)).ink_linear((*ink, 1))
+        for index, ink in enumerate(reversed(PIGMENTS))
     )
-    return (
-        color.linear_rgba(PAPER)
-        .over(*layers, trim, label, *swatches)
-        .finish(tone=0, dither=0.45)
-    )
+    return (trim, label, *swatches)
 
 
 @contextmanager

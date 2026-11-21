@@ -5,7 +5,6 @@ from sdf_ui.gpu.nodes.differentiation import (
     ShaderArgument,
     ShaderDifferentiation,
 )
-from sdf_ui.gpu.nodes.shader_expression import ShaderProgram
 
 
 def reference(context, inputs, params):
@@ -24,20 +23,8 @@ INTERFACE = ShaderInterface(
     uniforms=(Uniform("center", "vec2"), Uniform("radii", "vec2")),
 )
 CONTRACT = ShaderDifferentiation(
-    "ellipse", "gpu/nodes/primitives/ellipse/shader.glsl", (),
+    "ellipse", "gpu/nodes/primitives/ellipse/ellipse.wgsl", (),
     (ShaderArgument("center", (2,), "vec2"), ShaderArgument("radii", (2,), "vec2")),
     (ShaderArgument("destTex", (), "r32f"),),
     notes="Piecewise derivatives; min/max ties split adjoints equally.", reference=reference,
 )
-BODY = r"""
-void evaluate(ivec2 pos,out D o[8]) {
-    D2 p=sub2(v2(vec2(pos)),U_center);
-    D2 r=max2(abs2(U_radii),v2(vec2(0.000001)));
-    D2 q=D2(divD(p.x,r.x),divD(p.y,r.y));
-    D f=sub(dot2(q,q),c(1.0));
-    D2 gradient=D2(divD(mul(c(2.0),p.x),sqr(r.x)),
-                   divD(mul(c(2.0),p.y),sqr(r.y)));
-    o[0]=divD(f,maxD(len2(gradient),c(0.000001)));
-}
-"""
-PROGRAM = ShaderProgram("ellipse", BODY)

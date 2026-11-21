@@ -4,9 +4,8 @@ from sdf_ui.gpu.nodes.differentiation import (
     ShaderArgument,
     ShaderDifferentiation,
 )
-from sdf_ui.gpu.nodes.shader_expression import ShaderProgram
 
-from ..glsl import RGBA
+_SMOOTHSTEP_EPSILON = 0.0001
 
 
 def reference(context, inputs, params):
@@ -14,7 +13,9 @@ def reference(context, inputs, params):
 
     distance = inputs["sdf"] - _tensor(params["inflate"])
     weight = _smoothstep(
-        _tensor(params["first"]), _tensor(params["second"]) + 0.0001, distance
+        _tensor(params["first"]),
+        _tensor(params["second"]) + _SMOOTHSTEP_EPSILON,
+        distance,
     )
     return _mix(
         _rgb_to_lab(_tensor(params["color"])),
@@ -25,7 +26,7 @@ def reference(context, inputs, params):
 
 CONTRACT = ShaderDifferentiation(
     "fill",
-    "gpu/nodes/shading/fill/shader.glsl",
+    "gpu/nodes/shading/fill/fill.wgsl",
     (ShaderArgument("sdf", (), "r32f"),),
     (
         ShaderArgument("inflate", (), "float"),
@@ -39,11 +40,3 @@ CONTRACT = ShaderDifferentiation(
     reference=reference,
 )
 
-BODY = """
-void evaluate(ivec2 pos, out D o[8]) {
-    D distance = sub(ld(0, pos, 0), U_inflate);
-    D weight = smoothD(U_first, add(U_second, c(0.0001)), distance);
-    shadingOutput(shadingMix(rgbToLab(U_color), rgbToLab(U_background), weight), o);
-}
-"""
-PROGRAM = ShaderProgram("fill", RGBA + BODY)

@@ -8,6 +8,9 @@ from sdf_ui import Canvas, Plot, color, sdf
 
 SIZE = (1600, 640)
 OUTPUT = Path("out/examples/parametric_banner/banner.png")
+S_CUBIC_BASELINE = -1 / 10
+S_CONTROL_OVERSHOOT = -1 / 100
+U_BASELINE = -13 / 100
 
 # Segments have either two endpoints or four Bézier control points.
 # Each letter uses local coordinates with the baseline near y = 0.
@@ -16,7 +19,12 @@ S = (
         ((1.02, 1.24), (0.80, 1.51), (0.10, 1.49), (0.10, 1.06)),
         ((0.10, 1.06), (0.10, 0.83), (0.34, 0.78), (0.61, 0.72)),
         ((0.61, 0.72), (0.90, 0.65), (1.06, 0.54), (1.06, 0.34)),
-        ((1.06, 0.34), (1.06, -0.01), (0.42, -0.10), (0.06, 0.17)),
+        (
+            (1.06, 0.34),
+            (1.06, S_CONTROL_OVERSHOOT),
+            (0.42, S_CUBIC_BASELINE),
+            (0.06, 0.17),
+        ),
     ),
 )
 D = (
@@ -34,7 +42,7 @@ F = (
 U = (
     (
         ((0.08, 1.40), (0.08, 0.56)),
-        ((0.08, 0.56), (0.08, -0.13), (1.18, -0.13), (1.18, 0.56)),
+        ((0.08, 0.56), (0.08, U_BASELINE), (1.18, U_BASELINE), (1.18, 0.56)),
         ((1.18, 0.56), (1.18, 1.40)),
     ),
 )

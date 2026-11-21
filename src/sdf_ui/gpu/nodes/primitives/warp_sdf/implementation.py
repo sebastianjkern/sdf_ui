@@ -55,7 +55,7 @@ def _reference(context, inputs, params, color=False):
 
 SDF_CONTRACT = ShaderDifferentiation(
     "warp_sdf",
-    "gpu/nodes/primitives/warp_sdf/shader.glsl",
+    "gpu/nodes/primitives/warp_sdf/warp_sdf.wgsl",
     (ShaderArgument("sourceTex", (), "r32f"), ShaderArgument("fieldTex", (4,), "rgba32float")),
     (ShaderArgument("strength", (), "float"), ShaderArgument(_STEPS_TEXT, (), "int")),
     (ShaderArgument("destTex", (), "r32f"),),
@@ -65,7 +65,7 @@ SDF_CONTRACT = ShaderDifferentiation(
 )
 COLOR_CONTRACT = ShaderDifferentiation(
     "warp_color",
-    "gpu/nodes/shading/warp_color/shader.glsl",
+    "gpu/nodes/shading/warp_color/warp_color.wgsl",
     (ShaderArgument("sourceTex", (4,), "rgba8"), ShaderArgument("fieldTex", (4,), "rgba32float")),
     (ShaderArgument("strength", (), "float"), ShaderArgument(_STEPS_TEXT, (), "int")),
     (ShaderArgument("destTex", (4,), "rgba8"),),

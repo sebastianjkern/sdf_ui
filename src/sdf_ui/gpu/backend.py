@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 import struct
 from hashlib import sha256
-from pathlib import Path
 
 import numpy as np
 import wgpu
@@ -145,15 +144,17 @@ class GPUShaderBackend:
         return self._shader_path(name, backward=True).read_text(encoding="utf-8")
 
     def _shader_path(self, name, color_format="rgba8", backward=False):
-        shader_dir = Path(__file__).with_name("shaders")
+        from ._shader_layout import node_folder
+
+        folder = node_folder(name)
         if backward:
-            path = shader_dir / f"{name}_backward.wgsl"
+            path = folder / f"{name}_backward.wgsl"
         elif color_format == "rgba32f":
-            path = shader_dir / f"{name}_rgba32f.wgsl"
+            path = folder / f"{name}_rgba32f.wgsl"
             if not path.is_file():
-                path = shader_dir / f"{name}.wgsl"
+                path = folder / f"{name}.wgsl"
         else:
-            path = shader_dir / f"{name}.wgsl"
+            path = folder / f"{name}.wgsl"
         if not path.is_file():
             raise NotImplementedError(f"WGSL shader '{path.name}' is not available")
         return path

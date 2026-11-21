@@ -7,7 +7,6 @@ from sdf_ui.gpu.nodes.differentiation import (
     ShaderArgument,
     ShaderDifferentiation,
 )
-from sdf_ui.gpu.nodes.shader_expression import ShaderProgram
 
 _FLOAT_TEXT = 'float'
 
@@ -97,7 +96,7 @@ INTERFACE = ShaderInterface(
      Uniform("angle", _FLOAT_TEXT), Uniform("skew", "vec2")),
 )
 CONTRACT = ShaderDifferentiation(
-    "transform", "gpu/nodes/primitives/transform/shader.glsl",
+    "transform", "gpu/nodes/primitives/transform/transform.wgsl",
     (ShaderArgument("sdf", (), "r32f"),),
     (ShaderArgument("transform_kind", (), _FLOAT_TEXT), ShaderArgument("offset", (2,), "vec2"),
      ShaderArgument("center", (2,), "vec2"), ShaderArgument("factor", (), _FLOAT_TEXT),
@@ -106,41 +105,3 @@ CONTRACT = ShaderDifferentiation(
     notes="Bilinear source gradients scatter-add; transform_kind is a discrete mode.",
     sampling="clamped_bilinear", reference=reference,
 )
-BODY = r"""
-D primitiveBilinear(D2 coordinate) {
-    D x=clampD(coordinate.x,c(0.0),c(float(size.x-1)));
-    D y=clampD(coordinate.y,c(0.0),c(float(size.y-1)));
-    ivec2 p0=ivec2(floor(vec2(x.v,y.v))), upper=size-ivec2(1);
-    ivec2 p1=min(p0+ivec2(1,0),upper), p2=min(p0+ivec2(0,1),upper);
-    ivec2 p3=min(p0+ivec2(1),upper);
-    D tx=sub(x,c(float(p0.x))), ty=sub(y,c(float(p0.y)));
-    return mixD(mixD(ld(0,p0,0),ld(0,p1,0),tx),
-                mixD(ld(0,p2,0),ld(0,p3,0),tx),ty);
-}
-void evaluate(ivec2 pos,out D o[8]) {
-    D2 p=v2(vec2(pos));
-    D scale=c(1.0);
-    float kind=U_transform_kind.v;
-    if(kind<0.5) p=sub2(p,U_offset);
-    else {
-        p=sub2(p,U_center);
-        if(kind<1.5) { p=div2(p,U_factor); scale=absD(U_factor); }
-        else if(kind<2.5) {
-            D co=cosD(U_angle), si=sinD(U_angle);
-            p=D2(add(mul(co,p.x),mul(si,p.y)),sub(mul(co,p.y),mul(si,p.x)));
-        } else {
-            D determinant=sub(c(1.0),mul(U_skew.x,U_skew.y));
-            p=div2(D2(sub(p.x,mul(U_skew.x,p.y)),sub(p.y,mul(U_skew.y,p.x))),
-                   determinant);
-            if(kind>2.5) {
-                D stretchX=len2(div2(D2(c(1.0),neg(U_skew.y)),determinant));
-                D stretchY=len2(div2(D2(neg(U_skew.x),c(1.0)),determinant));
-                scale=maxD(mul(c(0.5),add(stretchX,stretchY)),c(0.000001));
-            }
-        }
-        p=add2(p,U_center);
-    }
-    o[0]=mul(primitiveBilinear(p),scale);
-}
-"""
-PROGRAM = ShaderProgram("transform", BODY)

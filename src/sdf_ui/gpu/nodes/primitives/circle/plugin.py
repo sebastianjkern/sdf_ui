@@ -10,7 +10,7 @@ from sdf_ui.gpu.nodes.base import (
 )
 from sdf_ui.gpu.nodes.common import shader
 
-from .implementation import CONTRACT, PROGRAM
+from .implementation import CONTRACT
 
 _RADIUS_TEXT = 'radius'
 
@@ -22,9 +22,8 @@ def _uniforms(params):
 
 def register_plugins(registry):
     descriptor = shader(
-        "circle", "primitives/circle/shader.glsl",
+        "circle", "primitives/circle/circle.wgsl",
         derivative_contract=CONTRACT,
-        program=PROGRAM,
         interface=ShaderInterface(
             output=ImageBinding("destTex", 0, write=True),
             uniforms=(Uniform("offset", "vec2"), Uniform(_RADIUS_TEXT, "float")),

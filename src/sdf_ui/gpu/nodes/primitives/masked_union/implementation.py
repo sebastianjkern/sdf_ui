@@ -5,7 +5,6 @@ from sdf_ui.gpu.nodes.differentiation import (
     ShaderArgument,
     ShaderDifferentiation,
 )
-from sdf_ui.gpu.nodes.shader_expression import ShaderProgram
 
 
 def reference(context, inputs, params):
@@ -26,7 +25,7 @@ INTERFACE = ShaderInterface(
 )
 CONTRACT = ShaderDifferentiation(
     "masked_union",
-    "gpu/nodes/primitives/masked_union/shader.glsl",
+    "gpu/nodes/primitives/masked_union/masked_union.wgsl",
     (ShaderArgument("sdf0", (), "r32f"), ShaderArgument("sdf1", (), "r32f")),
     (ShaderArgument("edgeWidth", (), "float"),),
     (ShaderArgument("destTex", (), "r32f"), ShaderArgument("maskTex", (4,), "rgba8")),
@@ -34,13 +33,3 @@ CONTRACT = ShaderDifferentiation(
     reference=reference,
     defaults={"edgeWidth": 0.5},
 )
-BODY = r"""
-void evaluate(ivec2 pos,out D o[8]) {
-    D a=ld(0,pos,0), b=ld(1,pos,0);
-    o[0]=minD(a,b);
-    D width=maxD(absD(U_edgeWidth),c(0.0001));
-    D mask=smoothD(neg(width),width,sub(b,a));
-    o[1]=mask; o[2]=mask; o[3]=mask; o[4]=c(1.0);
-}
-"""
-PROGRAM = ShaderProgram("masked_union", BODY)

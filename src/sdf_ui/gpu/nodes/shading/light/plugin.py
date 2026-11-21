@@ -4,7 +4,7 @@ from sdf_ui.core.expressions import Expr
 from sdf_ui.gpu.nodes.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.gpu.nodes.common import color, shader
 
-from .implementation import CONTRACT, INTERFACE, PROGRAM
+from .implementation import CONTRACT, INTERFACE
 
 _SHADE_BACKGROUND_TEXT = 'shade_background'
 
@@ -106,7 +106,7 @@ def register_plugins(registry):
                 "inner": -3 / 2,
                 "outer": 1.5,
             },
-            shader=shader("light", "shading/light/shader.glsl", derivative_contract=CONTRACT, program=PROGRAM, interface=INTERFACE),
+            shader=shader("light", "shading/light/light.wgsl", derivative_contract=CONTRACT, interface=INTERFACE),
             input_uniforms=("sdf",),
             make_uniforms=_uniforms,
             mode="RGB",

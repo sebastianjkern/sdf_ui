@@ -7,12 +7,9 @@ from sdf_ui.gpu.nodes.differentiation import (
     ShaderArgument,
     ShaderDifferentiation,
 )
-from sdf_ui.gpu.nodes.shader_expression import ShaderProgram
 
-from ..angular import GLSL as ANGULAR_GLSL
 from ..angular import angles
-from ..segment_math import GLSL as SEGMENT_GLSL
-from ..segment_math import MIN3_GLSL, minimum_candidates, segment
+from ..segment_math import minimum_candidates, segment
 
 _FLOAT_TEXT = 'float'
 
@@ -39,20 +36,9 @@ INTERFACE = ShaderInterface(
               Uniform("start_angle", _FLOAT_TEXT), Uniform("end_angle", _FLOAT_TEXT)),
 )
 CONTRACT = ShaderDifferentiation(
-    "sector", "gpu/nodes/primitives/sector/shader.glsl", (),
+    "sector", "gpu/nodes/primitives/sector/sector.wgsl", (),
     (ShaderArgument("center", (2,), "vec2"), ShaderArgument("radius", (), _FLOAT_TEXT),
      ShaderArgument("start_angle", (), _FLOAT_TEXT), ShaderArgument("end_angle", (), _FLOAT_TEXT)),
     (ShaderArgument("destTex", (), "r32f"),),
     notes="Piecewise derivatives; min/max ties split adjoints equally.", reference=reference,
 )
-BODY = ANGULAR_GLSL + SEGMENT_GLSL + MIN3_GLSL + r"""
-void evaluate(ivec2 pos,out D o[8]) {
-    D2 p=sub2(v2(vec2(pos)),U_center), zero=v2(vec2(0.0));
-    D radial=len2(p);
-    D distance=primitiveMin3(absD(sub(radial,U_radius)),
-        primitiveSegment(p,zero,primitiveEndpoint(U_start_angle,U_radius),0.000001),
-        primitiveSegment(p,zero,primitiveEndpoint(U_end_angle,U_radius),0.000001));
-    o[0]=primitiveInsideAngle(p) && radial.v<=U_radius.v ? neg(distance) : distance;
-}
-"""
-PROGRAM = ShaderProgram("sector", BODY)

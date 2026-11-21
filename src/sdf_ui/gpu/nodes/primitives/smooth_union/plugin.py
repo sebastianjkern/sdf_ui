@@ -3,7 +3,7 @@ __docformat__ = "google"
 from sdf_ui.gpu.nodes.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.gpu.nodes.common import shader
 
-from .implementation import CONTRACT, INTERFACE, PROGRAM
+from .implementation import CONTRACT, INTERFACE
 
 
 def register_plugins(registry):
@@ -15,7 +15,7 @@ def register_plugins(registry):
             (TextureKind.SDF, TextureKind.SDF),
             params=("k",),
             defaults={"k": 0.025},
-            shader=shader("smooth_min", "primitives/smooth_union/shader.glsl", derivative_contract=CONTRACT, program=PROGRAM, interface=INTERFACE),
+            shader=shader("smooth_min", "primitives/smooth_union/smooth_min.wgsl", derivative_contract=CONTRACT, interface=INTERFACE),
             input_uniforms=("sdf0", "sdf1"),
             make_uniforms=lambda p: {"smoothness": p["k"]},
             method_of=(TextureKind.SDF,),

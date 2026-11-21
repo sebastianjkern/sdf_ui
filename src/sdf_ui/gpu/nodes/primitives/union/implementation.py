@@ -5,7 +5,6 @@ from sdf_ui.gpu.nodes.differentiation import (
     ShaderArgument,
     ShaderDifferentiation,
 )
-from sdf_ui.gpu.nodes.shader_expression import Expression, ShaderProgram
 
 
 def reference(context, inputs, params):
@@ -15,10 +14,8 @@ def reference(context, inputs, params):
 
 INTERFACE = ShaderInterface(ImageBinding("destTex", 0, write=True), (ImageBinding("sdf0", 1, read=True), ImageBinding("sdf1", 2, read=True)))
 CONTRACT = ShaderDifferentiation(
-    "union", "gpu/nodes/primitives/union/shader.glsl",
+    "union", "gpu/nodes/primitives/union/union.wgsl",
     (ShaderArgument("sdf0", (), "r32f"), ShaderArgument("sdf1", (), "r32f")), (),
     (ShaderArgument("destTex", (), "r32f"),),
     notes="Piecewise derivatives; min/max ties split adjoints equally.", reference=reference,
 )
-EXPRESSION = Expression("min", (Expression("load", (0,)), Expression("load", (1,))))
-PROGRAM = ShaderProgram("union", "void evaluate(ivec2 pos,out D o[8]) { o[0]=" + EXPRESSION.emit(dual=True) + "; for(int i=1;i<8;i++)o[i]=c(0.0);}", EXPRESSION)

@@ -82,7 +82,6 @@ class ShaderFile:
     path: str
     derivative_contract: object = None
     gpu_derivative: Optional[str] = None
-    program: object = None
     interface: Optional[ShaderInterface] = None
     wgsl: object = None
 
@@ -95,7 +94,6 @@ class ShaderFile:
             self.path,
             self.differentiation,
             self.gpu_derivative,
-            self.program,
         )
 
     @property

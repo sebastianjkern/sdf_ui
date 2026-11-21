@@ -5,9 +5,8 @@ from sdf_ui.gpu.nodes.differentiation import (
     ShaderArgument,
     ShaderDifferentiation,
 )
-from sdf_ui.gpu.nodes.shader_expression import ShaderProgram
 
-from ..rotation import GLSL, rotate
+from ..rotation import rotate
 
 
 def reference(context, inputs, params):
@@ -31,20 +30,8 @@ INTERFACE = ShaderInterface(
     uniforms=(Uniform("size", "vec2"), Uniform("offset", "vec2"), Uniform("corner_radius", "vec4"), Uniform("angle", "float")),
 )
 CONTRACT = ShaderDifferentiation(
-    "rect", "gpu/nodes/primitives/rect/shader.glsl", (),
+    "rect", "gpu/nodes/primitives/rect/rect.wgsl", (),
     (ShaderArgument("size", (2,), "vec2"), ShaderArgument("offset", (2,), "vec2"), ShaderArgument("corner_radius", (4,), "vec4"), ShaderArgument("angle", (), "float")),
     (ShaderArgument("destTex", (), "r32f"),),
     notes="Piecewise derivatives; min/max ties split adjoints equally.", reference=reference,
 )
-BODY = GLSL + r"""
-void evaluate(ivec2 pos,out D o[8]) {
-    D2 p=primitiveRotate(sub2(v2(vec2(pos)),U_offset),U_angle);
-    D hx=smoothD(c(0.0),c(0.0001),p.x), hy=smoothD(c(0.0),c(0.0001),p.y);
-    D radius=mixD(mixD(U_corner_radius.x,U_corner_radius.z,hx),
-                  mixD(U_corner_radius.y,U_corner_radius.w,hx),hy);
-    D2 q=add2(sub2(abs2(p),U_size),D2(radius,radius));
-    o[0]=sub(add(minD(maxD(q.x,q.y),c(0.0)),len2(max2(q,v2(vec2(0.0))))),radius);
-}
-
-"""
-PROGRAM = ShaderProgram("rect", BODY)

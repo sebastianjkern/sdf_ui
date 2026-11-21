@@ -27,23 +27,3 @@ def segment(x, y, ax, ay, bx, by, epsilon=None):
     t = _clip((px * dx + py * dy) / denominator, 0.0, 1.0)
     return _length(px - t * dx, py - t * dy)
 
-
-GLSL = r"""
-D primitiveSegment(D2 p,D2 a,D2 b,float epsilon) {
-    D2 delta=sub2(p,a), edge=sub2(b,a);
-    D denominator=dot2(edge,edge);
-    if(epsilon>0.0) denominator=maxD(denominator,c(epsilon));
-    D t=clampD(divD(dot2(delta,edge),denominator),c(0.0),c(1.0));
-    return len2(sub2(delta,mul2(edge,t)));
-}
-"""
-
-MIN3_GLSL = r"""
-D primitiveMin3(D a,D b,D q) {
-    float value=min(a.v,min(b.v,q.v)), derivative=0.0, count=0.0;
-    if(a.v==value) { derivative+=a.d; count+=1.0; }
-    if(b.v==value) { derivative+=b.d; count+=1.0; }
-    if(q.v==value) { derivative+=q.d; count+=1.0; }
-    return D(value,derivative/count);
-}
-"""

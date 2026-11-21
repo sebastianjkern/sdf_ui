@@ -12,6 +12,16 @@ from sdf_ui import Canvas, color, sdf
 SIZE = (768, 576)
 CENTER = (384, 288)
 OUTPUT = Path("out/examples/texture_sampled_arrows")
+ANGLE_X_FREQUENCY = 0.83
+ANGLE_Y_FREQUENCY = 0.61
+ANGLE_CROSS_FREQUENCY = 0.94
+ANGLE_CROSS_X = 0.27
+ANGLE_PRIMARY_AMPLITUDE = 0.29
+ANGLE_SECONDARY_AMPLITUDE = 0.16
+FLOW_BASELINE = 0.26
+FLOW_RAMP = 0.39
+FLOW_WAVE = 0.16
+FLOW_WAVE_WIDTH = 0.17
 
 
 def arrow_field(direction_map, magnitude_map):
@@ -47,12 +57,14 @@ def write_maps(output):
     # A continuous angle ramp avoids interpolating across a full-turn seam.
     direction = (
         0.5
-        + 0.29 * np.sin(tau * (0.83 * x + 0.61 * y))
-        + 0.16 * np.cos(tau * (0.94 * y - 0.27 * x))
+        + ANGLE_PRIMARY_AMPLITUDE
+        * np.sin(tau * (ANGLE_X_FREQUENCY * x + ANGLE_Y_FREQUENCY * y))
+        + ANGLE_SECONDARY_AMPLITUDE
+        * np.cos(tau * (ANGLE_CROSS_FREQUENCY * y - ANGLE_CROSS_X * x))
     )
     # A separate map gives the current a wide band of stronger flow.
-    ridge = y - (0.26 + 0.39 * x + 0.16 * np.sin(tau * x))
-    magnitude = np.exp(-0.5 * (ridge / 0.17) ** 2)
+    ridge = y - (FLOW_BASELINE + FLOW_RAMP * x + FLOW_WAVE * np.sin(tau * x))
+    magnitude = np.exp(-0.5 * (ridge / FLOW_WAVE_WIDTH) ** 2)
 
     direction_path = output / "direction.png"
     magnitude_path = output / "magnitude.png"

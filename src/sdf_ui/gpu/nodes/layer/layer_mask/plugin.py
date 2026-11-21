@@ -7,7 +7,7 @@ from sdf_ui.gpu.nodes.common import (
     shader,
 )
 
-from .implementation import CONTRACT, INTERFACE, PROGRAM
+from .implementation import CONTRACT, INTERFACE
 
 _BLEND_MODES = {
     "mix": 0.0,
@@ -42,9 +42,8 @@ def render_layer_mask(renderer, inputs, params):
 def register_plugins(registry):
     descriptor = shader(
         "layer_mask",
-        "layer/layer_mask/shader.glsl",
+        "layer/layer_mask/layer_mask.wgsl",
         derivative_contract=CONTRACT,
-        program=PROGRAM,
         interface=INTERFACE,
     )
     registry.register(

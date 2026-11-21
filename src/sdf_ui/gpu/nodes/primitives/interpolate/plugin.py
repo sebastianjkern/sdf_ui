@@ -3,7 +3,7 @@ __docformat__ = "google"
 from sdf_ui.gpu.nodes.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.gpu.nodes.common import params, shader
 
-from .implementation import CONTRACT, INTERFACE, PROGRAM
+from .implementation import CONTRACT, INTERFACE
 
 
 def register_plugins(registry):
@@ -16,8 +16,8 @@ def register_plugins(registry):
             params=("t",),
             defaults={"t": 0.5},
             shader=shader(
-                "interpolation", "primitives/interpolate/shader.glsl",
-                derivative_contract=CONTRACT, program=PROGRAM, interface=INTERFACE,
+                "interpolation", "primitives/interpolate/interpolation.wgsl",
+                derivative_contract=CONTRACT, interface=INTERFACE,
             ),
             input_uniforms=("sdf0", "sdf1"),
             make_uniforms=params("t"),

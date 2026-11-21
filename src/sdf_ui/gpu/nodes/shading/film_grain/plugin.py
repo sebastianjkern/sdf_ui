@@ -3,7 +3,7 @@ __docformat__ = "google"
 from sdf_ui.gpu.nodes.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.gpu.nodes.common import shader
 
-from .implementation import CONTRACT, INTERFACE, PROGRAM
+from .implementation import CONTRACT, INTERFACE
 
 
 def register_plugins(registry):
@@ -12,7 +12,7 @@ def register_plugins(registry):
             "film_grain",
             PluginFamily.SHADING,
             TextureKind.COLOR,
-            shader=shader("film_grain", "shading/film_grain/shader.glsl", derivative_contract=CONTRACT, program=PROGRAM, interface=INTERFACE),
+            shader=shader("film_grain", "shading/film_grain/film_grain.wgsl", derivative_contract=CONTRACT, interface=INTERFACE),
             mode="RGB",
             public=True,
         )

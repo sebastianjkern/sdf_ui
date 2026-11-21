@@ -5,9 +5,6 @@ from sdf_ui.gpu.nodes.differentiation import (
     ShaderArgument,
     ShaderDifferentiation,
 )
-from sdf_ui.gpu.nodes.shader_expression import ShaderProgram
-
-from ..glsl import RGBA
 
 
 def reference(context, inputs, params):
@@ -21,15 +18,9 @@ INTERFACE = ShaderInterface(
     uniforms=(Uniform("color", "vec4"),),
 )
 CONTRACT = ShaderDifferentiation(
-    "clear_color", "gpu/nodes/shading/clear_color/shader.glsl", (),
+    "clear_color", "gpu/nodes/shading/clear_color/clear_color.wgsl", (),
     (ShaderArgument("color", (4,), "vec4"),),
     (ShaderArgument("destTex", (4,), "rgba8"),),
     notes="Piecewise derivatives; min/max ties split adjoints equally.",
     reference=reference,
 )
-BODY = """
-void evaluate(ivec2 pos, out D o[8]) {
-    shadingOutput(rgbToLab(U_color), o);
-}
-"""
-PROGRAM = ShaderProgram("clear_color", RGBA + BODY)

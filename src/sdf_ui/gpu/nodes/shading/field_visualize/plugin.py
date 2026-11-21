@@ -53,7 +53,7 @@ def register_plugins(registry):
             (TextureKind.FIELD,), params=(_SCALE, _MAGNITUDE),
             defaults={_SCALE: 1.0, _MAGNITUDE: 0.04},
             shader=shader(
-                "field_visualize", "shading/field_visualize/visualize.glsl",
+                "field_visualize", "shading/field_visualize/field_visualize.wgsl",
                 derivative_contract=VISUALIZE,
                 interface=ShaderInterface(
                     ImageBinding("destTex", 0, write=True),
@@ -72,7 +72,7 @@ def register_plugins(registry):
             (TextureKind.FIELD,), params=(_SPACING, _LINE_WIDTH, _SCALE),
             defaults={_SPACING: 8.0, _LINE_WIDTH: 1.0, _SCALE: 1.0},
             shader=shader(
-                "field_contours", "shading/field_visualize/contours.glsl",
+                "field_contours", "shading/field_visualize/field_contours.wgsl",
                 derivative_contract=CONTOURS,
                 interface=ShaderInterface(
                     ImageBinding("destTex", 0, write=True),

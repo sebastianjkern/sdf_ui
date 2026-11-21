@@ -70,7 +70,7 @@ def contours_reference(context, inputs, params):
 
 
 VISUALIZE = ShaderDifferentiation(
-    "field_visualize", "gpu/nodes/shading/field_visualize/visualize.glsl",
+    "field_visualize", "gpu/nodes/shading/field_visualize/field_visualize.wgsl",
     (ShaderArgument("fieldTex", (4,), "rgba32float"),),
     (ShaderArgument(_SCALE, (), _FLOAT_TYPE), ShaderArgument("magnitude", (), _FLOAT_TYPE)),
     (ShaderArgument("destTex", (4,), "rgba8"),),
@@ -79,7 +79,7 @@ VISUALIZE = ShaderDifferentiation(
     reference=visualize_reference,
 )
 CONTOURS = ShaderDifferentiation(
-    "field_contours", "gpu/nodes/shading/field_visualize/contours.glsl",
+    "field_contours", "gpu/nodes/shading/field_visualize/field_contours.wgsl",
     (ShaderArgument("fieldTex", (4,), "rgba32float"),),
     (ShaderArgument("spacing", (), _FLOAT_TYPE), ShaderArgument("line_width", (), _FLOAT_TYPE), ShaderArgument(_SCALE, (), _FLOAT_TYPE)),
     (ShaderArgument("destTex", (4,), "rgba8"),),

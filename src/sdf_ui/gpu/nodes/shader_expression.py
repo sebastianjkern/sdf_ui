@@ -2,8 +2,6 @@
 
 
 
-import re
-from dataclasses import dataclass
 
 from ._shader_expression_emit import _emit_expression
 from ._shader_expression_inputs import (
@@ -11,11 +9,10 @@ from ._shader_expression_inputs import (
     _reverse_input_scatter,
     _reverse_uniform_components,
 )
-from ._shader_expression_primal import _primal_only
+from ._shader_expression_primal import _primal_only  # noqa: F401
 
 _FLOAT_TEXT = 'float'
 
-@dataclass(frozen=True)
 class Expression:
     op: str
     args: tuple = ()
@@ -213,112 +210,13 @@ def _reverse_minmax_rule(op, children, index):
     )
 
 
-@dataclass(frozen=True)
-class ShaderProgram:
-    """A shared typed shader program compiled to primal and local VJP GLSL.
-
-    The program uses the dual arithmetic language, which also represents
-    branch selection and sampled image reads. A zero tangent gives the primal
-    evaluation; seeded tangents provide the local backward evaluation.
-    """
-
-    name: str
-    body: str
-    reverse_expression: object = None
-
-    def forward(
-        self, contract, *, sdf_format="r32f", color_format="rgba8", original_source=""
-    ):
-        from ..dual_glsl import PRELUDE
-
-        declarations, macros = _shader_declarations(
-            contract, sdf_format, color_format, original_source
-        )
-        reads = _shader_input_reads(contract)
-        stores = _shader_output_stores(contract)
-        source = "\n".join(
-            declarations
-            + ["ivec2 pixelSize;", PRELUDE]
-            + macros
-            + [
-                "D ld(int which,ivec2 p,int channel){"
-                + "".join(reads)
-                + "return c(0.0);}",
-                re.sub(r"\bsize\b", "pixelSize", self.body),
-                "void main(){ivec2 pos=ivec2(gl_GlobalInvocationID.xy);"
-                + f"pixelSize=imageSize({contract.outputs[0].name});"
-                + "if(any(greaterThanEqual(pos,pixelSize)))return;D o[8];evaluate(pos,o);"
-                + "".join(stores)
-                + "}",
-            ]
-        )
-        return _primal_only(re.sub(r"\bc\s*\(", "dualC(", source))
 
 
-def _shader_declarations(contract, sdf_format, color_format, original_source):
-    declarations = ["#version 430", "layout(local_size_x=16,local_size_y=16) in;"]
-    for index, arg in enumerate((*contract.outputs, *contract.inputs)):
-        output = index < len(contract.outputs)
-        fmt = sdf_format if arg.kind == "r32f" else color_format
-        access = "writeonly" if output else "readonly"
-        declarations.append(
-            f"layout({fmt},binding={index}) {access} uniform image2D {arg.name};"
-        )
-    parameter_declarations, macros = _shader_parameter_declarations(
-        contract, original_source
-    )
-    return declarations + parameter_declarations, macros
 
 
-def _shader_parameter_declarations(contract, original_source):
-    declarations, macros = [], []
-    for arg in contract.parameters:
-        match = re.search(
-            r"\buniform\s+"
-            + re.escape(arg.kind)
-            + r"\s+"
-            + re.escape(arg.name)
-            + r"(?:\s*\[\s*\w+\s*\])?\s*(?:=\s*([^;]+))?\s*;",
-            original_source,
-            re.DOTALL,
-        )
-        initializer = (
-            "" if match is None or match.group(1) is None else " = " + match.group(1)
-        )
-        array = arg.kind == _FLOAT_TEXT and len(arg.shape) == 1
-        suffix = f"[{arg.shape[0]}]" if array else ""
-        declarations.append(f"uniform {arg.kind} {arg.name}{suffix}{initializer};")
-        macros.append(_shader_parameter_macro(arg, array))
-    return declarations, macros
 
 
-def _shader_parameter_macro(arg, array):
-    if array:
-        return f"#define U_{arg.name}(i) c({arg.name}[i])"
-    if arg.kind == _FLOAT_TEXT:
-        expression = f"c({arg.name})"
-    elif arg.kind in {"int", "bool"}:
-        expression = f"c(float({arg.name}))"
-    else:
-        expression = f"v{arg.kind[-1]}({arg.name})"
-    return f"#define U_{arg.name} {expression}"
 
 
-def _shader_input_reads(contract):
-    return [
-        f"if(which=={index}){{ivec2 n=imageSize({arg.name});"
-        f"if(any(lessThan(p,ivec2(0)))||any(greaterThanEqual(p,n)))return c(0.0);"
-        f"return c(imageLoad({arg.name},p)[channel]);}}"
-        for index, arg in enumerate(contract.inputs)
-    ]
 
 
-def _shader_output_stores(contract):
-    stores, offset = [], 0
-    for arg in contract.outputs:
-        channels = 1 if arg.kind == "r32f" else 4
-        components = [f"o[{offset + index}].v" for index in range(channels)]
-        offset += channels
-        components.extend(["0.0"] * (4 - channels))
-        stores.append(f"imageStore({arg.name},pos,vec4({','.join(components)}));")
-    return stores

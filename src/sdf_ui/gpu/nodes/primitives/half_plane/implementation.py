@@ -5,7 +5,6 @@ from sdf_ui.gpu.nodes.differentiation import (
     ShaderArgument,
     ShaderDifferentiation,
 )
-from sdf_ui.gpu.nodes.shader_expression import ShaderProgram
 
 
 def reference(context, inputs, params):
@@ -20,15 +19,8 @@ def reference(context, inputs, params):
 
 INTERFACE = ShaderInterface(ImageBinding("destTex", 0, write=True), uniforms=(Uniform("point", "vec2"), Uniform("normal", "vec2")))
 CONTRACT = ShaderDifferentiation(
-    "half_plane", "gpu/nodes/primitives/half_plane/shader.glsl", (),
+    "half_plane", "gpu/nodes/primitives/half_plane/half_plane.wgsl", (),
     (ShaderArgument("point", (2,), "vec2"), ShaderArgument("normal", (2,), "vec2")),
     (ShaderArgument("destTex", (), "r32f"),),
     notes="Piecewise derivatives; min/max ties split adjoints equally.", reference=reference,
 )
-BODY = r"""
-void evaluate(ivec2 pos,out D o[8]) {
-    o[0]=divD(dot2(sub2(v2(vec2(pos)),U_point),U_normal),
-              maxD(len2(U_normal),c(0.000001)));
-}
-"""
-PROGRAM = ShaderProgram("half_plane", BODY)

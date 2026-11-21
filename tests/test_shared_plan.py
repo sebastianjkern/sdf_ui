@@ -1,4 +1,3 @@
-
 import numpy as np
 import pytest
 
@@ -14,7 +13,11 @@ from sdf_ui.learning import (
     ParameterStore,
 )
 
-_FIELD_TEXT = 'field'
+_FIELD_TEXT = "field"
+_IMAGE_NAME = "image"
+_TARGET_VALUE = 0.25
+_GRADIENT_TOLERANCE = 2e-5
+
 
 def test_display_layer_shaders_match_reference_without_readback(monkeypatch):
     rng = np.random.default_rng(13)
@@ -66,36 +69,55 @@ def _assert_display_layers(canvas, monkeypatch, scenes, expected):
 
 
 def test_shared_plan_executes_display_cpu_and_training():
+    params, image, plan, reference, expected_gradient = _shared_plan_case()
+    params["r"].zero_grad()
+    with Canvas((8, 6)) as canvas:
+        _assert_display_plan_matches(canvas, plan, params, reference)
+        _assert_compiled_plan_matches(
+            canvas, plan, params, reference, expected_gradient
+        )
+        _assert_legacy_plan_matches(canvas, plan, image, params)
+
+
+def _shared_plan_case():
     params = ParameterStore()
     params.define("r", 2.0)
     scene = sdf.circle((4, 3), param("r"))
     image = scene.fill("#ff0000", "#000000").to_rgb()
-    plan = lower_graph({_FIELD_TEXT: scene, "image": image})
+    plan = lower_graph({_FIELD_TEXT: scene, _IMAGE_NAME: image})
     reference = DifferentiableRenderer((8, 6), params).render_plan(plan)
-    ((reference["image"] - 0.25) ** 2).mean().backward()
+    ((reference[_IMAGE_NAME] - _TARGET_VALUE) ** 2).mean().backward()
     expected_gradient = params["r"].grad.copy()
-    params["r"].zero_grad()
-    with Canvas((8, 6)) as canvas:
-        display = canvas.render_plan(plan, params)
-        np.testing.assert_allclose(
-            np.frombuffer(display[_FIELD_TEXT].tex.read(), np.float32).reshape(6, 8),
-            reference[_FIELD_TEXT].numpy(),
-            atol=1e-5,
-        )
-        with canvas.compile(plan, params) as graph:
-            with graph.run(Objective().mse("image", 0.25)) as execution:
-                np.testing.assert_allclose(
-                    execution.read(_FIELD_TEXT), reference[_FIELD_TEXT].numpy(), atol=1e-5
-                )
-                np.testing.assert_allclose(
-                    execution.read("image"), reference["image"].numpy(), atol=2e-4
-                )
-                execution.backward()
-                np.testing.assert_allclose(params["r"].grad, expected_gradient, atol=2e-5)
-        legacy = canvas.render(image, params)
-        a = np.frombuffer(display["image"].tex.read(), np.uint8).astype(int)
-        b = np.frombuffer(legacy.tex.read(), np.uint8).astype(int)
-        assert np.max(np.abs(a - b)) <= 1
+    return params, image, plan, reference, expected_gradient
+
+
+def _assert_display_plan_matches(canvas, plan, params, reference):
+    display = canvas.render_plan(plan, params)
+    pixels = np.frombuffer(display[_FIELD_TEXT].tex.read(), np.float32).reshape(6, 8)
+    np.testing.assert_allclose(pixels, reference[_FIELD_TEXT].numpy(), atol=1e-5)
+
+
+def _assert_compiled_plan_matches(canvas, plan, params, reference, expected_gradient):
+    with canvas.compile(plan, params) as graph:
+        with graph.run(Objective().mse(_IMAGE_NAME, _TARGET_VALUE)) as execution:
+            np.testing.assert_allclose(
+                execution.read(_FIELD_TEXT), reference[_FIELD_TEXT].numpy(), atol=1e-5
+            )
+            np.testing.assert_allclose(
+                execution.read(_IMAGE_NAME), reference[_IMAGE_NAME].numpy(), atol=2e-4
+            )
+            execution.backward()
+            np.testing.assert_allclose(
+                params["r"].grad, expected_gradient, atol=_GRADIENT_TOLERANCE
+            )
+
+
+def _assert_legacy_plan_matches(canvas, plan, image, params):
+    display = canvas.render_plan(plan, params)
+    legacy = canvas.render(image, params)
+    actual = np.frombuffer(display[_IMAGE_NAME].tex.read(), np.uint8).astype(int)
+    expected = np.frombuffer(legacy.tex.read(), np.uint8).astype(int)
+    assert np.max(np.abs(actual - expected)) <= 1
 
 
 def test_custom_plugin_lowering_is_used_by_all_executors(monkeypatch):

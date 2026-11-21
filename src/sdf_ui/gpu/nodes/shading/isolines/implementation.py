@@ -7,9 +7,6 @@ from sdf_ui.gpu.nodes.differentiation import (
     ShaderArgument,
     ShaderDifferentiation,
 )
-from sdf_ui.gpu.nodes.shader_expression import ShaderProgram
-
-from ..glsl import RGBA
 
 _FLOAT_TEXT = 'float'
 
@@ -44,7 +41,7 @@ INTERFACE = ShaderInterface(
      Uniform("line_width", _FLOAT_TEXT), Uniform("feather", _FLOAT_TEXT), Uniform("phase", _FLOAT_TEXT)),
 )
 CONTRACT = ShaderDifferentiation(
-    "isolines", "gpu/nodes/shading/isolines/shader.glsl",
+    "isolines", "gpu/nodes/shading/isolines/isolines.wgsl",
     (ShaderArgument("sdf", (), "r32f"),),
     (ShaderArgument("background", (4,), "vec4"), ShaderArgument("line_color", (4,), "vec4"),
      ShaderArgument("inflate", (), _FLOAT_TEXT), ShaderArgument("spacing", (), _FLOAT_TEXT),
@@ -53,23 +50,3 @@ CONTRACT = ShaderDifferentiation(
     (ShaderArgument("destTex", (4,), "rgba8"),),
     notes="Piecewise derivatives; min/max ties split adjoints equally.", reference=reference,
 )
-BODY = """
-void evaluate(ivec2 pos, out D o[8]) {
-    D distance = absD(sub(ld(0, pos, 0), U_inflate));
-    D4 background = rgbToLab(U_background);
-    if (isnan(distance.v) || distance.v > 1e20) {
-        shadingOutput(background, o);
-        return;
-    }
-    D period = maxD(U_spacing, c(1e-6));
-    D wrapped = modD(add(distance, U_phase), period);
-    if (wrapped.v < 0.0) wrapped = add(wrapped, period);
-    D band = minD(wrapped, sub(period, wrapped));
-    D halfWidth = maxD(mul(U_line_width, c(0.5)), c(0.0));
-    D aa = add(c(1.5001), maxD(U_feather, c(0.0)));
-    D weight = sub(c(1.0), smoothD(maxD(sub(halfWidth, aa), c(0.0)),
-                                  add(halfWidth, aa), band));
-    shadingOutput(shadingMix(background, rgbToLab(U_line_color), weight), o);
-}
-"""
-PROGRAM = ShaderProgram("isolines", RGBA + BODY)

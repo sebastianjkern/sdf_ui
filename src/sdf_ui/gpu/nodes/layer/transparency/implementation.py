@@ -5,9 +5,6 @@ from sdf_ui.gpu.nodes.differentiation import (
     ShaderArgument,
     ShaderDifferentiation,
 )
-from sdf_ui.gpu.nodes.shader_expression import ShaderProgram
-
-from ..glsl import color_program
 
 
 def reference(context, inputs, params):
@@ -22,13 +19,8 @@ INTERFACE = ShaderInterface(
     (ImageBinding("tex0", 1, read=True),), (Uniform("alpha", "float"),),
 )
 CONTRACT = ShaderDifferentiation(
-    "transparency", "gpu/nodes/layer/transparency/shader.glsl",
+    "transparency", "gpu/nodes/layer/transparency/transparency.wgsl",
     (ShaderArgument("tex0", (4,), "rgba8"),), (ShaderArgument("alpha", (), "float"),),
     (ShaderArgument("destTex", (4,), "rgba8"),), behavior="smooth_for_fixed_sampling",
     notes="Piecewise derivatives; min/max ties split adjoints equally.", reference=reference,
 )
-BODY = color_program(r"""
-    D4 col=load4(0,pos);
-    col.w=mul(col.w,U_alpha);
-""")
-PROGRAM = ShaderProgram("transparency", BODY)

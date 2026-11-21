@@ -5,7 +5,7 @@ from math import isfinite
 from sdf_ui.gpu.nodes.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.gpu.nodes.common import lower_composite, shader
 
-from .implementation import CONTRACT, INTERFACE, PROGRAM
+from .implementation import CONTRACT, INTERFACE
 
 _CENTER_TEXT = 'center'
 
@@ -86,7 +86,7 @@ def _render_skew(renderer, inputs, params):
 
 
 def register_plugins(registry):
-    descriptor = shader("transform", "primitives/transform/shader.glsl", derivative_contract=CONTRACT, program=PROGRAM, interface=INTERFACE)
+    descriptor = shader("transform", "primitives/transform/transform.wgsl", derivative_contract=CONTRACT, interface=INTERFACE)
     registry.register(
         Plugin(
             "translate",

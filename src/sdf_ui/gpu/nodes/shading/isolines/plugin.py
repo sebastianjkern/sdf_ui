@@ -3,7 +3,7 @@ __docformat__ = "google"
 from sdf_ui.gpu.nodes.base import Plugin, PluginFamily, TextureKind
 from sdf_ui.gpu.nodes.common import color, shader
 
-from .implementation import CONTRACT, INTERFACE, PROGRAM
+from .implementation import CONTRACT, INTERFACE
 
 
 def register_plugins(registry):
@@ -30,7 +30,7 @@ def register_plugins(registry):
                 "feather": 0.15,
                 "phase": 0.0,
             },
-            shader=shader("isolines", "shading/isolines/shader.glsl", derivative_contract=CONTRACT, program=PROGRAM, interface=INTERFACE),
+            shader=shader("isolines", "shading/isolines/isolines.wgsl", derivative_contract=CONTRACT, interface=INTERFACE),
             input_uniforms=("sdf",),
             make_uniforms=lambda p: {
                 "background": color(p["bg_color"]),

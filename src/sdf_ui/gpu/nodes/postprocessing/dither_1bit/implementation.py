@@ -5,10 +5,8 @@ from sdf_ui.gpu.nodes.differentiation import (
     ShaderArgument,
     ShaderDifferentiation,
 )
-from sdf_ui.gpu.nodes.layer.glsl import color_program
-from sdf_ui.gpu.nodes.shader_expression import ShaderProgram
 
-from ..bayer import GLSL, threshold
+from ..bayer import threshold
 
 
 def reference(context, inputs, params):
@@ -26,16 +24,9 @@ INTERFACE = ShaderInterface(
     ImageBinding("destTex", 0, write=True), (ImageBinding("origTex", 1, read=True),)
 )
 CONTRACT = ShaderDifferentiation(
-    "dither_1bit", "gpu/nodes/postprocessing/dither_1bit/shader.glsl",
+    "dither_1bit", "gpu/nodes/postprocessing/dither_1bit/dither_1bit.wgsl",
     (ShaderArgument("origTex", (4,), "rgba8"),), (),
     (ShaderArgument("destTex", (4,), "rgba8"),), behavior="zero_almost_everywhere",
     notes="True zero derivative almost everywhere; undefined at thresholds. No straight-through estimator.",
     reference=reference,
 )
-BODY = GLSL + color_program(r"""
-    D4 source=load4(0,pos);
-    float luminance=source.x.v*0.299+source.y.v*0.587+source.z.v*0.114;
-    D bit=c(luminance<effectsThreshold(pos)?0.0:1.0);
-    D4 col=D4(bit,bit,bit,c(1.0));
-""")
-PROGRAM = ShaderProgram("dither_1bit", BODY)
