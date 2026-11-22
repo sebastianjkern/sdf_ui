@@ -23,3 +23,14 @@ Tasks:
   `tests/` in a formatting-only change. The full-tree formatter check reports
   174 files outside Ruff's current formatting conventions. CI checks only a
   subset of those directories.
+
+- **Small:** Clarify pen-up speed control in `src/sdf_ui/export.py`.
+  `travel_speed_mm_min` is emitted as an `F` word on `G0` moves, but GRBL and
+  LinuxCNC use controller-configured rapid rates for `G0`. An explicit
+  feed-controlled travel mode would make the configured speed effective.
+
+- **Medium:** Clear existing Slop findings in `examples/alpine_engraving.py`.
+  `_hatch` combines clipping and mark generation in nested loops, while
+  `_make_drawing` combines composition data and drawing logic. The hatch and
+  lighting code also embeds unnamed numeric tuning values. Preserve the
+  default seed's render when refactoring.

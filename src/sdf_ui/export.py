@@ -6,7 +6,8 @@ from html import escape
 from pathlib import Path
 from typing import Mapping
 
-from .vector import VectorDrawing, VectorPath
+from ._plotter_paths import optimize_paths
+from .vector import Polyline, VectorDrawing, VectorPath
 
 
 @dataclass(frozen=True)
@@ -27,6 +28,8 @@ class PlotterProfile:
     travel_speed_mm_min: float
     draw_speed_mm_min: float
     pen_change_commands: Mapping[str, str] | None = None
+    program_end_command: str | None = "M2"
+    optimize_travel: bool = False
 
 
 def write_svg(drawing: VectorDrawing, path: str | Path) -> Path:
@@ -48,17 +51,23 @@ def write_gcode(
     *,
     plotter: PlotterProfile,
 ) -> Path:
-    paths = _normalized_paths(drawing)
+    paths = tuple(
+        (vector_path.pen, points)
+        for vector_path, points in _normalized_paths(drawing)
+        if points
+    )
     _validate_profile(drawing, plotter)
-    commands = ["G21", "G90", plotter.pen_up_command]
+    if plotter.optimize_travel:
+        origin = (0.0, plotter.size_mm[1] / plotter.mm_per_unit)
+        paths = optimize_paths(paths, origin)
+    commands = ["G21", "G90", "G17", "G94", plotter.pen_up_command]
     active_pen = None
-    for vector_path, points in paths:
-        if points:
-            active_pen = _append_path(
-                commands, vector_path, points, plotter, active_pen
-            )
+    for pen, points in paths:
+        active_pen = _append_path(commands, pen, points, plotter, active_pen)
     if commands[-1] != plotter.pen_up_command:
         commands.append(plotter.pen_up_command)
+    if plotter.program_end_command is not None:
+        commands.append(plotter.program_end_command)
     return _write_text(path, "\n".join(commands) + "\n")
 
 
@@ -76,13 +85,13 @@ def _svg_path(vector_path: VectorPath, points: tuple[tuple[float, float], ...]) 
 
 def _append_path(
     commands: list[str],
-    vector_path: VectorPath,
-    points: tuple[tuple[float, float], ...],
+    pen: str | None,
+    points: Polyline,
     profile: PlotterProfile,
     active_pen: str | None,
 ) -> str | None:
-    if vector_path.pen is not None and vector_path.pen != active_pen:
-        active_pen = _change_pen(commands, vector_path.pen, profile)
+    if pen is not None and pen != active_pen:
+        active_pen = _change_pen(commands, pen, profile)
     _append_lift(commands, profile)
     first_x, first_y = points[0]
     commands.append(_travel_command(first_x, first_y, profile))
@@ -129,6 +138,8 @@ def _validate_profile(drawing: VectorDrawing, profile: PlotterProfile) -> None:
     _validate_scale_and_fit(drawing, profile)
     _validate_command("pen_up_command", profile.pen_up_command)
     _validate_command("pen_down_command", profile.pen_down_command)
+    if profile.program_end_command is not None:
+        _validate_command("program_end_command", profile.program_end_command)
     _validate_speeds(profile)
 
 

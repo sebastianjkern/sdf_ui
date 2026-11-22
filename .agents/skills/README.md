@@ -8,6 +8,7 @@ for GPU passes, caches, or texture ownership.
 | Skill | Use it for |
 | --- | --- |
 | [Engine feature](engine-feature/SKILL.md) | New primitives, effects, public API, and reusable widgets |
+| [Examples](sdf-ui-example/SKILL.md) | Example entry points, output paths, and previews |
 | [Learning support](learning-support/SKILL.md) | Making low-level and high-level components trainable |
 | [Shader lifecycle](shader-lifecycle/SKILL.md) | Shader implementation, resource lifetime, cache correctness, and repeated rendering |
 | [AST lint rule](sdf-ui-ast-lint-rule/SKILL.md) | Adding custom AST-based quality checks wired into build_tools, pre-commit, and CI |
