@@ -84,6 +84,12 @@ repos:
         language: system
         pass_filenames: false
         files: ^(src/sdf_ui/gpu/nodes/|src/sdf_ui/graph/lowering\.py$)
+      - id: plugin-shader-inputs
+        name: plugin shader input contract lint
+        entry: uv run --locked python build_tools/lint/plugin_shader_inputs.py
+        language: system
+        pass_filenames: false
+        files: ^(src/sdf_ui/gpu/nodes/)
       - id: pytest
         name: pytest
         entry: uv run --locked pytest

@@ -298,6 +298,8 @@ class Plugin:
         try:
             uniforms = {} if self.make_uniforms is None else self.make_uniforms(params)
             images = tuple(item.tex for item in inputs)
+            if self.input_uniforms:
+                images = dict(zip(self.input_uniforms, images, strict=True))
             ctx.run_node_shader(self.shader, texture, images, uniforms)
         except BaseException:
             texture.close()

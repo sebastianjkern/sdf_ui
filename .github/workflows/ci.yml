@@ -45,6 +45,8 @@ jobs:
         run: uv run --locked --no-sync python build_tools/lint/shader_rule_coverage.py
       - name: Shader lowering coverage lint
         run: uv run --locked --no-sync python build_tools/lint/shader_lowering_coverage.py
+      - name: Plugin shader input contract lint
+        run: uv run --locked --no-sync python build_tools/lint/plugin_shader_inputs.py
       - name: Type check
         run: uv run --locked --no-sync python -m mypy src build_tools
       - name: Check generated stubs
