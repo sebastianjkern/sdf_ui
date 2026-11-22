@@ -33,6 +33,8 @@ jobs:
         run: uv run --locked --no-sync python build_tools/lint/arch_lint.py
       - name: Forbid comments
         run: uv run --locked --no-sync python build_tools/lint/comment_lint.py
+      - name: Check repeated sequence materialization
+        run: uv run --locked --no-sync python build_tools/lint/repeated_materialization.py
       - name: GPU lifecycle lint
         run: uv run --locked --no-sync python build_tools/lint/gpu_lifecycle.py
       - name: Shader layout lint
