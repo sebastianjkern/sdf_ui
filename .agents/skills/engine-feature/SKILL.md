@@ -21,7 +21,7 @@ Classify the feature before coding:
   existing SDF operations.
 - A shading or color operation changes a color/field result while preserving
   its declared color-space and alpha behavior.
-- A layer combines inputs and must document order, ownership, and output mode.
+- A layer combines inputs and must define order, ownership, and output mode.
 - A postprocessing operation that samples neighbors must declare its sampling
   behavior and any required halo or full-frame constraint.
 - A widget or plot is a reusable composition of existing scene nodes where
@@ -41,7 +41,7 @@ parameter leaves at each execution. Do not evaluate a lazy expression during
 construction or retain an eager `Tensor` derived from trainable values in a
 persistent scene. Keep structural choices such as shader selection, array
 length, and graph topology explicit compile-time controls when the engine
-requires them. State that limitation at the API boundary.
+requires them.
 
 Keep literal inputs convenient. Validate finite values, shapes, units, and
 degenerate geometry at construction or execution boundaries. For bounded or
@@ -58,8 +58,7 @@ bounded scalar declarations. Preserve literal behavior and default rendering.
   degenerate cases have defined behavior.
 - The feature lowers through the shared graph when it is a built-in operation,
   preserves shared subexpressions, and exposes stable parameter names.
-- Runtime and type stubs agree, and user-facing documentation has a minimal
-  example at the right abstraction level.
+- Runtime and type stubs agree.
 - Tests cover public API construction, expected output, parameter updates after
   graph construction, and interactions with adjacent operations.
 - Repeated rendering does not cause unbounded cache entries, image allocations,

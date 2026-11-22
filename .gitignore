@@ -26,5 +26,3 @@ __pycache__/
 # Test build files
 build/
 dist/
-docs/_build/
-docs/_autosummary/

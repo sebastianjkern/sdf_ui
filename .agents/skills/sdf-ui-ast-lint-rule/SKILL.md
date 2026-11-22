@@ -25,7 +25,7 @@ does not gate pushes and PRs.
 3. Derive the rule from what the code actually does and from the architecture
    skills (engine-feature, learning-support, shader-lifecycle), not from an
    idealized layering. A rule that fails on today's tree is either wrong or
-   needs an explicit, documented justification before it lands — do not ship
+   needs an explicit justification before it lands — do not ship
    it red.
 4. Keep false positives near zero. A vacuous or noisy check gets deleted or
    muted by the next person who trips on it, which silently undoes the rule.

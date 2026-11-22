@@ -17,7 +17,7 @@ right constraints.
 For every uniform, decide whether it is a differentiable value or a fixed
 control. Continuous uniforms need a reference derivative and native GPU
 gradient path. Discrete values such as integer steps or mode selectors need a
-documented zero-gradient or rebuild rule. Check the rendered math before
+defined zero-gradient or rebuild rule. Check the rendered math before
 quantization when the training contract differentiates floating-point values.
 
 ## Resource ownership and cache rules

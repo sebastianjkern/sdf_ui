@@ -18,3 +18,8 @@ Tasks:
   `core/texture.py`, `gpu/spatial.py`, `gpu/tiled.py`, and the polyline and
   SVG primitive plugins exceeds the limit. Split responsibilities within each
   function and preserve its existing behavior.
+
+- **Small:** Apply the Ruff formatter across `src/`, `build_tools/`, and
+  `tests/` in a formatting-only change. The full-tree formatter check reports
+  174 files outside Ruff's current formatting conventions. CI checks only a
+  subset of those directories.

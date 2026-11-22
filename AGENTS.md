@@ -3,6 +3,7 @@
 ## Code Quality Rules
 
 - No comments, except ruff hints
+- Skip standalone documentation. Short docstrings are fine.
 
 ## Development hints
 
@@ -16,4 +17,8 @@ If you encounter preventable bugs, that could have been caught by a linter, but 
 
 If you write render code always output visual inspection images in form of examples, or focused renders to let me inspect the state of the problems.
 
-If you encounter potential side issues, document them in Tasks.md directly evaluating the problem difficulty and directly noting what the root cause is, if known, and files that are part of this issue, if known.
+Log potential side issues in Tasks.md with their difficulty, known root cause, and affected files.
+
+## Implementation
+
+Always implement features in gpt6 luna subagents set to medium to keep your context tidy. Make sure you check for newly occuring bugs, and check if linting rules using the /sdf-ui-ast-lint-rule skill could have helped flag the error and similar ones directly.

@@ -53,8 +53,6 @@ jobs:
         run: uv run --locked --no-sync python build_tools/generate_api_stubs.py --check
       - name: Test
         run: uv run --locked --no-sync python -m pytest -q
-      - name: Build documentation
-        run: uv run --locked --no-sync python -m sphinx -W -b html docs /tmp/sdf-ui-docs
       - name: Build distribution
         run: uv build
       - name: Smoke-test the built wheel

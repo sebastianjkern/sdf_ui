@@ -1,4 +1,4 @@
-<img src="docs/assets/banner.png" alt="SDF UI plotted on labeled Cartesian axes, with blue line segments, red cubic Bézier curves, and marked endpoints">
+<img src="examples/previews/banner.png" alt="SDF UI plotted on labeled Cartesian axes, with blue line segments, red cubic Bézier curves, and marked endpoints">
 
 # SDF UI
 
@@ -19,8 +19,8 @@ Many of the distance functions are based on [Inigo Quilez’s SDF reference](htt
     <th><a href="examples/texture_sampled_arrows.py">Texture Sampled Arrows</a></th>
   </tr>
   <tr>
-    <td align="center"><img src="docs/assets/examples/molten_reflection.png" height="180" alt="Warm reflections stretched through fluted red glass"></td>
-    <td align="center"><img src="docs/assets/examples/texture_sampled_arrows.png" height="180" alt="A dark field of pale arrows with varying angles and lengths"></td>
+    <td align="center"><img src="examples/previews/molten_reflection.png" height="180" alt="Warm reflections stretched through fluted red glass"></td>
+    <td align="center"><img src="examples/previews/texture_sampled_arrows.png" height="180" alt="A dark field of pale arrows with varying angles and lengths"></td>
   </tr>
   <tr>
     <td>Red light bends through fluted glass.</td>
@@ -31,8 +31,8 @@ Many of the distance functions are based on [Inigo Quilez’s SDF reference](htt
     <th><a href="examples/chromatic_drift.py">Chromatic Drift</a></th>
   </tr>
   <tr>
-    <td align="center"><img src="docs/assets/examples/drifting_squares.png" height="180" alt="A grid of outlined squares that increasingly shift and rotate toward the bottom"></td>
-    <td align="center"><img src="docs/assets/examples/chromatic_drift.png" height="180" alt="A dense navy lattice breaks apart into scattered teal and rust squares"></td>
+    <td align="center"><img src="examples/previews/drifting_squares.png" height="180" alt="A grid of outlined squares that increasingly shift and rotate toward the bottom"></td>
+    <td align="center"><img src="examples/previews/chromatic_drift.png" height="180" alt="A dense navy lattice breaks apart into scattered teal and rust squares"></td>
   </tr>
   <tr>
     <td>Sampled fields shift and rotate a grid of squares.</td>
@@ -108,10 +108,9 @@ with Canvas((640, 360)) as canvas:
 The math plot gallery draws a five-petal rose and a Lissajous curve in separate
 viewports.
 
-<img src="docs/assets/examples/plot_parametric_curves.png" width="560" alt="A coral five-petal rose and a blue Lissajous curve plotted side by side">
+<img src="examples/previews/plot_parametric_curves.png" width="560" alt="A coral five-petal rose and a blue Lissajous curve plotted side by side">
 
-See the [plotting guide](docs/plotting.rst), the
-[math plot gallery](examples/plot_gallery.py), and the
+See the [math plot gallery](examples/plot_gallery.py) and the
 [mark gallery](examples/mark_gallery.py).
 
 ### Learning API
@@ -152,17 +151,10 @@ print(f"Learned radius: {radius.item():.2f}")
 The center-div example shows the optimizer moving a rounded panel toward
 the center of the canvas over successive training steps.
 
-<img src="docs/assets/examples/center_div.gif" width="560" alt="A rounded panel moving toward the center of the canvas as the layout optimizer runs">
+<img src="examples/previews/center_div.gif" width="560" alt="A rounded panel moving toward the center of the canvas as the layout optimizer runs">
 
-See the [learning guide](docs/learning.rst), the
-[UI learning demos](examples/learning_ui.py), and the
+See the [UI learning demos](examples/learning_ui.py) and the
 [center-div source](examples/center_div.py).
-
-## Documentation
-
-- [Rendering and tiled export](docs/high_fidelity.rst)
-- [Texture sampling and repetition](docs/spatial_parameters.rst)
-- [Core API](docs/api.rst) and [extensions](EXTENSIONS.md)
 
 ## Development
 
