@@ -34,3 +34,7 @@ Tasks:
   `_make_drawing` combines composition data and drawing logic. The hatch and
   lighting code also embeds unnamed numeric tuning values. Preserve the
   default seed's render when refactoring.
+
+- **Small:** Correct the pre-existing Ruff import-order failure in
+  `examples/__main__.py`. The `hand_hatch_example` import precedes
+  `half_plane_example`, contrary to Ruff's alphabetical ordering.

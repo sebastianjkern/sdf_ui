@@ -72,6 +72,7 @@ uv run python -m examples.high_level_learning
 uv run python -m examples.contextual_graph_learning
 uv run python -m examples.dawn_example
 uv run python -m examples.distance_corrections_example
+uv run python -m examples.venice_line_art
 uv run python -m examples.field_flow_animation
 uv run python -m examples.generative_art_animation
 uv run python -m examples.github_banner_example
@@ -92,6 +93,11 @@ share that directory. The folder usually matches the module name without
 `_example`; named pieces such as `tidal_bloom` use their artwork name.
 Use `--output` to choose a separate destination where the example supports it.
 The narrated optimization video also requires ffmpeg and espeak-ng.
+
+`venice_line_art` fetches a bounded OpenStreetMap extract and draws Venice's
+crosshatched buildings, streets, and canals. It writes PNG and SVG under
+`out/examples/venice_line_art/`. Pass `--input path/to/overpass.json` to render
+a saved Overpass response without fetching data again.
 
 `texture_sampled_arrows` samples two grayscale textures at each arrow's grid
 cell center. One map sets the angle and the other sets the scale. The two maps
