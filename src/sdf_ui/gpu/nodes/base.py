@@ -11,6 +11,7 @@ class TextureKind:
     SDF = "sdf"
     COLOR = "color"
     FIELD = "field"
+    HEIGHT = "height"
     MULTI_OUTPUT = "multi_output"
 
 
@@ -286,7 +287,7 @@ class Plugin:
         return self.mode if self.mode is not None or not inputs or not hasattr(inputs[0], "mode") else inputs[0].mode
 
     def _create_output_texture(self, ctx, mode, ColorSpaceMode):
-        if self.result == TextureKind.SDF:
+        if self.result in {TextureKind.SDF, TextureKind.HEIGHT}:
             return ctx.r32f()
         if self.result == TextureKind.COLOR:
             return ctx.rgba32f() if mode == ColorSpaceMode.LINEAR else ctx.rgba8()
@@ -310,6 +311,10 @@ class Plugin:
     ):
         if self.result == TextureKind.SDF:
             return SDFTexture(tex=texture, context=ctx)
+        if self.result == TextureKind.HEIGHT:
+            from sdf_ui.core.surface import HeightTexture
+
+            return HeightTexture(tex=texture, context=ctx)
         if self.result == TextureKind.FIELD:
             return FieldTexture(tex=texture, context=ctx)
         return ColorTexture(tex=texture, context=ctx, mode=mode or ColorSpaceMode.LAB)

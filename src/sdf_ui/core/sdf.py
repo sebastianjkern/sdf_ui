@@ -4,6 +4,7 @@ __docformat__ = "google"
 
 from ..gpu.nodes.common import build
 from .color import _transparent_ink
+from .surface import HeightTexture
 from .texture import WarpableTextureNode
 
 
@@ -67,6 +68,30 @@ class SDFTexture(WarpableTextureNode):
     def ink_linear(self, rgba):
         """Paint this SDF with linear RGBA, allowing RGB values above one."""
         return build("hdr_ink", self, rgba)
+
+    def light_surface(
+        self,
+        height_field: HeightTexture,
+        fg_color,
+        *,
+        light_dir=(-9 / 20, -13 / 20, 0.7),
+        ambient=0.35,
+        diffuse=0.75,
+        specular=0.2,
+        shininess=24.0,
+    ):
+        """Light an independent canvas-space height field through this silhouette."""
+        return build(
+            "light_surface",
+            self,
+            height_field,
+            fg_color=fg_color,
+            light_dir=light_dir,
+            ambient=ambient,
+            diffuse=diffuse,
+            specular=specular,
+            shininess=shininess,
+        )
 
     def fill_linear(self, rgba, background, *, inner=0.0, outer=1.0):
         """Interpolate two linear RGBA colors over a signed distance interval."""

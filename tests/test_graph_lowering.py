@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from sdf_ui import color, param, sdf
+from sdf_ui import color, param, sdf, surface
 from sdf_ui import field as vector_field
 from sdf_ui.core.expressions import evaluate_expr
 from sdf_ui.core.sdf import SDFTexture
@@ -432,6 +432,10 @@ class TestSlopLintCasesOneA:
                     "amount": 0.2,
                     "tone": 0.3,
                     "dither": 0.5,
+                    "origin": (0.1, 0.2),
+                    "slope": (0.1, 0.2),
+                    "sigma": (1.4, 2.8),
+                    "amplitude": 1.7,
                 }
                 registry.ensure_loaded()
                 plan = _lower_every_shader(field, image, sample)
@@ -606,6 +610,7 @@ def _lower_every_shader(field, image, sample):
         TextureKind.SDF: field,
         TextureKind.COLOR: image,
         TextureKind.FIELD: vector_field.constant((0.1, 0.2)),
+        TextureKind.HEIGHT: surface.ramp((0, 0), (0.1, 0.2)),
     }
     nodes = {
         plugin.name: _build_required_plugin_node(plugin, sources, sample)
@@ -645,5 +650,4 @@ def _assert_lowered_shader_contracts(plan):
         assert set(uniforms) <= allowed
         assert len(operation.inputs) == len(operation.contract.inputs)
         for argument, value in zip(operation.contract.inputs, operation.inputs):
-            expected = {"r32f": TextureKind.SDF, "rgba32float": TextureKind.FIELD}
-            assert value.kind == expected.get(argument.kind, TextureKind.COLOR)
+            assert value.kind == argument.texture_kind

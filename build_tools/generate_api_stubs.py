@@ -210,6 +210,7 @@ class _StubRenderer:
                 "stroke": _COLORTEXTURE_TEXT,
                 "ink_linear": _COLORTEXTURE_TEXT,
                 "fill_linear": _COLORTEXTURE_TEXT,
+                "light_surface": _COLORTEXTURE_TEXT,
                 "__or__": _SDFTEXTURE_TEXT,
                 "__and__": _SDFTEXTURE_TEXT,
                 "__sub__": _SDFTEXTURE_TEXT,
@@ -531,6 +532,7 @@ class _StubRenderer:
             "from typing import Any",
             "",
             "from .color import ColorTexture",
+            "from .surface import HeightTexture",
             "from .texture import MultiOutputResult, WarpableTextureNode",
             "",
             _render_class("SDFTexture(WarpableTextureNode)", methods).rstrip(),
@@ -573,6 +575,7 @@ class _StubRenderer:
                 "from .field import FieldNamespace as FieldNamespace, FieldTexture as FieldTexture",
                 "from .palette import Palette as Palette, get_palette as get_palette, palettes as palettes",
                 "from .sdf import SDFTexture as SDFTexture",
+                "from .surface import HeightTexture as HeightTexture, SurfaceNamespace as SurfaceNamespace",
                 "",
             ]
         )
@@ -586,9 +589,10 @@ class _StubRenderer:
                 "from . import core as core, learning as learning",
                 "from .core import paint as paint",
                 "from .gpu.context import Context as Context, DispatchConfig as DispatchConfig",
-                "from .core import ColorTexture as ColorTexture, FieldTexture as FieldTexture, SDFTexture as SDFTexture",
+                "from .core import ColorTexture as ColorTexture, FieldTexture as FieldTexture, HeightTexture as HeightTexture, SDFTexture as SDFTexture",
                 "from .core.api import ColorNamespace, SDFNamespace",
                 "from .core.field import FieldNamespace",
+                "from .core.surface import SurfaceNamespace",
                 "from .core.palette import Palette as Palette, get_palette as get_palette, palettes as palettes",
                 "from .core.expressions import Expr as Expr, cos as cos, ease_in_cubic as ease_in_cubic, ease_in_out_sine as ease_in_out_sine, ease_out_cubic as ease_out_cubic, input_value as input_value, param as param, percent as percent, percent_of_min as percent_of_min, percent_x as percent_x, percent_y as percent_y, sin as sin",
                 "from .plot import Plot as Plot",
@@ -598,6 +602,7 @@ class _StubRenderer:
                 "sdf: SDFNamespace",
                 "color: ColorNamespace",
                 "field: FieldNamespace",
+                "surface: SurfaceNamespace",
                 "logger: Any",
                 "",
             ]

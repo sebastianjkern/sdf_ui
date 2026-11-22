@@ -119,10 +119,13 @@ def _output_modes(plan, pass_index):
 
 def _wrap_display_outputs(arguments, outputs, modes, canvas):
     from ..core.field import FieldTexture
+    from ..core.surface import HeightTexture
 
     wrapped = []
     for index, (argument, texture) in enumerate(zip(arguments, outputs)):
-        if argument.kind == "r32f":
+        if argument.texture_kind == "height":
+            wrapped.append(cast(Any, HeightTexture)(tex=texture, context=canvas))
+        elif argument.kind == "r32f":
             wrapped.append(cast(Any, SDFTexture)(tex=texture, context=canvas))
         elif argument.kind == "rgba32float":
             wrapped.append(cast(Any, FieldTexture)(tex=texture, context=canvas))

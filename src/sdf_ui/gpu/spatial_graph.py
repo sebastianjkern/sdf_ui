@@ -10,8 +10,9 @@ from .nodes.base import ImageBinding, ShaderFile, ShaderInterface, Uniform
 from .nodes.differentiation import ShaderArgument, ShaderDifferentiation
 from .spatial import Compiler
 
-_FORMATS = {"sdf": "r32float", "field": "rgba32float", "color": "rgba32float"}
-_PORTS = {"sdf": "r32f", "field": "rgba32float", "color": "rgba8"}
+_SCALAR_KINDS = {"sdf", "height"}
+_FORMATS = {"sdf": "r32float", "height": "r32float", "field": "rgba32float", "color": "rgba32float"}
+_PORTS = {"sdf": "r32f", "height": "r32f", "field": "rgba32float", "color": "rgba8"}
 _STATE = """
 var<private> world: vec2<f32>;
 var<private> cell: vec2<f32>;
@@ -104,8 +105,8 @@ fn compute_main(@builtin(global_invocation_id) id: vec3<u32>) {{
     def backward(self):
         maps = len(self.source_kinds)
         formats = tuple(_FORMATS[kind] for kind in self.source_kinds)
-        channels = tuple(1 if kind == "sdf" else 4 for kind in self.source_kinds)
-        output_channels = 1 if self.result_kind == "sdf" else 4
+        channels = tuple(1 if kind in _SCALAR_KINDS else 4 for kind in self.source_kinds)
+        output_channels = 1 if self.result_kind in _SCALAR_KINDS else 4
         capacity = 128
         return f"""
 struct Offset {{ @size(16) value: i32, }}
@@ -234,15 +235,21 @@ fn compute_main(@builtin(global_invocation_id) id: vec3<u32>,
 """
 
 
+def _spatial_argument(name, kind):
+    return ShaderArgument(
+        name, () if kind in _SCALAR_KINDS else (4,), _PORTS[kind], port_kind=kind,
+    )
+
+
 def _shader_file(name, path, kernel, node, constants, kinds):
     arguments = tuple(
-        ShaderArgument(f"tex_{index}", () if kind == "sdf" else (4,), _PORTS[kind])
+        _spatial_argument(f"tex_{index}", kind)
         for index, kind in enumerate(kinds)
     )
     contract = ShaderDifferentiation(
         name, path, arguments,
         (ShaderArgument("values", (len(constants),), "float"),),
-        (ShaderArgument("dest", () if node.kind == "sdf" else (4,), _PORTS[node.kind]),),
+        (_spatial_argument("dest", node.kind),),
         sampling="spatial",
         notes="GPU pullback uses centered differences through the fused parameter program.",
     )

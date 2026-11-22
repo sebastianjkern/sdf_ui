@@ -624,9 +624,12 @@ fn sample_{i}(p: vec2<f32>) -> vec4<f32> {{
 def _spatial_output(ctx, node, output):
     from ..core.field import FieldTexture
     from ..core.sdf import SDFTexture
+    from ..core.surface import HeightTexture
 
     if node.kind == "sdf":
         return SDFTexture(tex=output, context=ctx)
+    if node.kind == "height":
+        return HeightTexture(tex=output, context=ctx)
     if node.kind == "field":
         return FieldTexture(tex=output, context=ctx)
     return _color_output(node, output, ctx)
@@ -679,7 +682,7 @@ def _run_spatial_shader(ctx, compiler, node, target, output):
 
 
 def _spatial_allocator(ctx, node):
-    if node.kind == "sdf":
+    if node.kind in {"sdf", "height"}:
         return ctx.r32f
     if node.kind == "field" or node.mode == "LINEAR":
         return ctx.rgba32f
@@ -688,7 +691,7 @@ def _spatial_allocator(ctx, node):
 
 def render_spatial(renderer, node):
     """Render a fused spatial graph to one GPU texture."""
-    if node.kind not in {"sdf", "field", "color"}:
+    if node.kind not in {"sdf", "field", "color", "height"}:
         raise ValueError("Select individual outputs before rendering a spatial shader")
     compiler = Compiler(renderer)
     target = compiler.evaluate(node)

@@ -1,5 +1,11 @@
 Tasks:
 
+- **Small:** Make built-in plugin loading atomic. If a plugin registration
+  raises, `PluginRegistry.ensure_loaded()` has already set `_loaded`, so
+  subsequent lookups see a partially populated registry and report
+  unrelated plugins as missing. The root cause is in
+  `src/sdf_ui/gpu/nodes/registry.py`.
+
 - **Small:** Resolve the existing Slop duplicate code failure for the hard
   Boolean GPU plugin registrations. Intersection, subtraction, and union repeat
   the same registration structure in their respective

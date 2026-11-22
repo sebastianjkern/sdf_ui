@@ -232,6 +232,8 @@ _SPATIAL_PARAMS = {
 }
 _SPATIAL_PARAMS_BY_OPERATION = {
     "hatch_fill": {"origin_x", "origin_y", "phase"},
+    "height_gaussian": {"amplitude", "sigma"},
+    "height_ramp": {"origin"},
     "isolines": {"phase"},
 }
 
@@ -1366,7 +1368,7 @@ class TextureNode(ABC):
     def read(self) -> NDArray[Any]:
         """Copy this materialized texture's pixels into a NumPy array.
 
-        SDF textures return a two-dimensional float array. Color textures
+        SDF and height textures return a two-dimensional float array. Color textures
         return an ``(height, width, 4)`` array in the image's native dtype.
         """
         if self.tex is None:

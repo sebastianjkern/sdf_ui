@@ -10,12 +10,19 @@ from typing import TYPE_CHECKING, Literal, Union
 
 import numpy as np
 
-from .._hatch_geometry import HatchFrame, StrokeDrift, relief_shadow, stroke_lines
+from .._hatch_geometry import (
+    HatchFrame,
+    StrokeDrift,
+    height_shadow,
+    relief_shadow,
+    stroke_lines,
+)
 from ..gpu.nodes.common import build
 from ..gpu.nodes.common import color as normalize_color
 from ..vector import VectorDrawing, VectorPath, contour_lines, hatch_lines
 from .color import ColorTexture
 from .sdf import SDFTexture
+from .surface import HeightTexture
 
 if TYPE_CHECKING:
     from ..export import PlotterProfile
@@ -71,14 +78,17 @@ class HandStroke:
 
 @dataclass(frozen=True)
 class HatchLight:
-    """Directional light on a rounded SDF relief. Axes are right, up and forward."""
+    """Directional light for hatching. Axes are right, up and forward."""
 
     direction: tuple[Scalar, Scalar, Scalar] = (-1.0, 1.0, 1.0)
     depth: Scalar = 60.0
+    surface: HeightTexture | None = None
 
     def __post_init__(self):
         if len(self.direction) != 3:
             raise ValueError("Hatch light direction requires three coordinates")
+        if self.surface is not None and not isinstance(self.surface, HeightTexture):
+            raise TypeError("Hatch light surface must be a HeightTexture")
         _validate_literals(depth=self.depth)
 
 
@@ -202,7 +212,7 @@ class PaintLayer:
         ink = ink[:7] if channels[3] == 255 else ink
         height, width_px = pixels.shape
         scale_x, scale_y = size[0] / width_px, size[1] / height
-        for lines, width in self._geometry(pixels, inflate * scale, resolve, scale):
+        for lines, width in self._geometry(pixels, inflate * scale, resolve, scale, renderer):
             for line in lines:
                 points = tuple(
                     (
@@ -213,10 +223,10 @@ class PaintLayer:
                 )
                 yield VectorPath(points, ink, width, self.pen)
 
-    def _geometry(self, pixels, inflate: float, resolve, scale: float):
+    def _geometry(self, pixels, inflate: float, resolve, scale: float, renderer):
         if self.operation == "fill":
             hatch = self.hatch or _SOLID_PLOT_STYLE
-            yield from _fill_geometry(pixels, inflate, hatch, resolve, scale)
+            yield from _fill_geometry(pixels, inflate, hatch, resolve, scale, renderer)
         else:
             width = resolve("width", self.width)
             for level in self._levels(pixels, inflate, resolve, scale):
@@ -233,11 +243,11 @@ class PaintLayer:
         )
 
 
-def _fill_geometry(pixels, inflate, hatch, resolve, scale):
+def _fill_geometry(pixels, inflate, hatch, resolve, scale, renderer):
     x, y = hatch.origin
     origin = (resolve("origin", x) * scale, resolve("origin", y) * scale)
     drift = _resolve_drift(hatch.hand, resolve, scale)
-    depth, shadow = _resolve_shadow(pixels, inflate, hatch.light, resolve, scale)
+    depth, shadow = _resolve_shadow(pixels, inflate, hatch.light, resolve, scale, renderer)
     for item in hatch.passes:
         angle = resolve("angle", item.angle)
         spacing = resolve("spacing", item.spacing) * scale
@@ -270,14 +280,28 @@ def _resolve_drift(hand, resolve, scale):
     )
 
 
-def _resolve_shadow(pixels, inflate, light, resolve, scale):
+def _resolve_shadow(pixels, inflate, light, resolve, scale, renderer):
     if light is None:
         return 0.0, None
     direction = tuple(resolve("direction", value) for value in light.direction)
     if math.hypot(*direction) == 0:
         raise ValueError("Hatch light direction must be nonzero")
     depth = resolve("depth", light.depth) * scale
+    if light.surface is not None:
+        height = _read_height(renderer, light.surface)
+        if height.shape != pixels.shape:
+            raise ValueError("Hatch light surface must match the canvas dimensions")
+        return depth, height_shadow(height, direction)
     return depth, relief_shadow(pixels, inflate, direction, depth)
+
+
+def _read_height(renderer, surface):
+    rendered = renderer.render(surface)
+    try:
+        return rendered.read()
+    finally:
+        if rendered is not surface:
+            rendered.close()
 
 
 _SOLID_PLOT_STYLE = HatchStyle((HatchPass(0.0, 8.0),))

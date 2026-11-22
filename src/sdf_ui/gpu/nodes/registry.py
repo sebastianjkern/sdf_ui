@@ -83,9 +83,12 @@ class PluginRegistry:
         from sdf_ui.core.color import ColorTexture
         from sdf_ui.core.field import FieldTexture
         from sdf_ui.core.sdf import SDFTexture
+        from sdf_ui.core.surface import HeightTexture
 
         if plugin.result == TextureKind.SDF:
             return SDFTexture(op=plugin.name, inputs=inputs, params=params)
+        if plugin.result == TextureKind.HEIGHT:
+            return HeightTexture(op=plugin.name, inputs=inputs, params=params)
         if plugin.result == TextureKind.COLOR:
             return ColorTexture(
                 op=plugin.name, inputs=inputs, params=params,

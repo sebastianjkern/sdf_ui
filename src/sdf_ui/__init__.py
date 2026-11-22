@@ -1,5 +1,5 @@
 from . import core, learning
-from .core import ColorTexture, FieldTexture, SDFTexture, paint
+from .core import ColorTexture, FieldTexture, HeightTexture, SDFTexture, paint
 from .core.api import ColorNamespace, SDFNamespace
 from .core.expressions import (
     Expr,
@@ -17,6 +17,7 @@ from .core.expressions import (
 )
 from .core.field import FieldNamespace
 from .core.palette import Palette, get_palette, palettes
+from .core.surface import SurfaceNamespace
 from .gpu.context import Context, DispatchConfig
 from .log import logger
 from .plot import Plot
@@ -26,6 +27,7 @@ Canvas = Context
 sdf = SDFNamespace()
 color = ColorNamespace()
 field = FieldNamespace()
+surface = SurfaceNamespace()
 
 __all__ = [
     "Canvas",
@@ -34,6 +36,7 @@ __all__ = [
     "DispatchConfig",
     "ColorTexture",
     "FieldTexture",
+    "HeightTexture",
     "Palette",
     "Plot",
     "SDFTexture",
@@ -60,4 +63,5 @@ __all__ = [
     "percent_y",
     "sdf",
     "sin",
+    "surface",
 ]

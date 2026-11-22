@@ -17,6 +17,7 @@ from .expressions import (
 from .field import FieldNamespace, FieldTexture
 from .palette import Palette, get_palette, palettes
 from .sdf import SDFTexture
+from .surface import HeightTexture, SurfaceNamespace
 
 __all__ = [
     "ColorSpaceMode",
@@ -24,8 +25,10 @@ __all__ = [
     "Expr",
     "FieldNamespace",
     "FieldTexture",
+    "HeightTexture",
     "Palette",
     "SDFTexture",
+    "SurfaceNamespace",
     "cos",
     "input_value",
     "get_palette",

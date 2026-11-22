@@ -46,8 +46,8 @@ def channel(texture: TextureNode, name: str | int) -> TextureChannel:
     index = _CHANNELS.get(name.lower()) if isinstance(name, str) else name
     if isinstance(index, bool) or not isinstance(index, int) or not 0 <= index < 4:
         raise ValueError("A texture channel must be a name or an index from 0 to 3")
-    if texture.kind == "sdf" and index != 0:
-        raise ValueError("An SDF has one numeric channel")
+    if texture.kind in {"sdf", "height"} and index != 0:
+        raise ValueError(f"A {texture.kind.upper()} texture has one numeric channel")
     return TextureChannel(texture, index)
 
 

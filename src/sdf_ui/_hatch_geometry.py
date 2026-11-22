@@ -33,6 +33,11 @@ def relief_shadow(distance, level, direction, depth):
     """Shadow strength from an SDF shaped into a rounded relief."""
     inward = np.clip((level - distance) / depth, 0, 1)
     height = depth * np.sqrt(inward * (2 - inward))
+    return height_shadow(height, direction)
+
+
+def height_shadow(height, direction):
+    """Shadow strength from the gradient of a sampled height field."""
     sy = np.gradient(height, axis=0) if height.shape[0] > 1 else np.zeros_like(height)
     sx = np.gradient(height, axis=1) if height.shape[1] > 1 else np.zeros_like(height)
     light = np.asarray(direction, dtype=float)

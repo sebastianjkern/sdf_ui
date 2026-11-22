@@ -461,7 +461,7 @@ class RenderGraph:
             )
         if tuple(node.tex.size) != self.size:
             raise ValueError("Graph texture inputs must match the canvas size")
-        return self.backend.import_texture(node.tex, 1 if node.kind == "sdf" else 4)
+        return self.backend.import_texture(node.tex, node.tex.components)
 
     def refresh_inputs(self):
         """Snapshot current external textures between executions, without readback."""

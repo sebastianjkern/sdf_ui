@@ -9,6 +9,13 @@ class ShaderArgument:
     name: str
     shape: tuple
     kind: str
+    port_kind: str | None = None
+
+    @property
+    def texture_kind(self) -> str:
+        return self.port_kind or {"r32f": "sdf", "rgba32float": "field"}.get(
+            self.kind, "color"
+        )
 
 
 @dataclass(frozen=True)

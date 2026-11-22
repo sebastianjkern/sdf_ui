@@ -22,10 +22,12 @@ NEIGHBOR_SHADERS = {
     "blur_ver_9",
     "blur_hor_13",
     "blur_ver_13",
+    "light_surface",
     "warp_sdf",
     "warp_color",
 }
 _WARPS = {"warp_sdf", "warp_color"}
+_FIXED_HALOS = {"light_surface": 1}
 _TURBULENCE_BOUND_EPSILON = 0.0001
 
 
@@ -99,6 +101,7 @@ def required_halo(renderer, scene):
             return halo
         children = renderer._region_children(node, registry, tiled=True)
         halo = max((visit(child) for child in children), default=0)
+        halo += _FIXED_HALOS.get(node.op, 0)
         if node.op in {"blur", "blur_9", "blur_13"}:
             params = resolve(node)
             radius = 6 if node.op == "blur_13" or params.get("base") == 13 else 4

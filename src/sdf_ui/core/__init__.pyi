@@ -3,3 +3,4 @@ from .expressions import Expr as Expr, cos as cos, input_value as input_value, p
 from .field import FieldNamespace as FieldNamespace, FieldTexture as FieldTexture
 from .palette import Palette as Palette, get_palette as get_palette, palettes as palettes
 from .sdf import SDFTexture as SDFTexture
+from .surface import HeightTexture as HeightTexture, SurfaceNamespace as SurfaceNamespace

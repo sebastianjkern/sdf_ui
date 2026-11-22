@@ -480,7 +480,7 @@ def _write_offset_arrays(payload, offsets, input_offsets, output_offsets):
 def _uniform_binding(source):
     import re
 
-    match = re.search(r"@binding\((\d+)\)\s*\nvar<uniform> _Uniforms", source)
+    match = re.search(r"@binding\((\d+)\)\s+var<uniform>\s+_Uniforms\b", source)
     if match is None:
         raise ValueError("Backward WGSL kernel has no uniform binding")
     return int(match.group(1))
