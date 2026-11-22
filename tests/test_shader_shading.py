@@ -12,6 +12,8 @@ _ISOLINES_TEXT = "isolines"
 
 _LIGHT_TEXT = "light"
 _FINITE_DIFFERENCE_STEP = 2e-5
+_HATCH_PHASE_OFFSET = 0.29
+_HATCH_ORIGIN_Y_OFFSET = 0.17
 
 
 def _fill_params(foreground, background):
@@ -76,6 +78,17 @@ def _case(name, size=(4, 3)):
         params = dict(background=background, inflate=0.13)
     elif name == _ISOLINES_TEXT:
         params = _isolines_params(foreground, background)
+    elif name == "hatch_fill":
+        params = dict(
+            fg_color=foreground,
+            inflate=0.13,
+            angle=0.31,
+            spacing=2.17,
+            phase=-_HATCH_PHASE_OFFSET,
+            width=0.67,
+            origin_x=0.23,
+            origin_y=-_HATCH_ORIGIN_Y_OFFSET,
+        )
     elif name == _LIGHT_TEXT:
         params = _light_params(foreground, background)
     else:
@@ -171,6 +184,7 @@ def test_rules_cover_exact_standalone_shader_descriptors():
         "outline",
         "fill_from_texture",
         _ISOLINES_TEXT,
+        "hatch_fill",
         "partial_derivative",
     ],
 )

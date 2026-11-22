@@ -1,6 +1,7 @@
 from typing import Any
 
 from . import core as core, learning as learning
+from .core import paint as paint
 from .gpu.context import Context as Context, DispatchConfig as DispatchConfig
 from .core import ColorTexture as ColorTexture, FieldTexture as FieldTexture, SDFTexture as SDFTexture
 from .core.api import ColorNamespace, SDFNamespace

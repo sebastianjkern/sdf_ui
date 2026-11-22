@@ -230,6 +230,10 @@ _SPATIAL_PARAMS = {
     "feather", "edge_width", "spacing", "distance", "blur", "base", "first_line_indent",
     "decoration_thickness", "word_spacing", "letter_spacing", "min_render_size",
 }
+_SPATIAL_PARAMS_BY_OPERATION = {
+    "hatch_fill": {"origin_x", "origin_y", "phase"},
+    "isolines": {"phase"},
+}
 
 
 def _scale_spatial_params(op, params, scale):
@@ -245,7 +249,8 @@ def _scale_spatial_params(op, params, scale):
         return value
 
     result = dict(params)
-    for key in _SPATIAL_PARAMS.intersection(result):
+    spatial = _SPATIAL_PARAMS | _SPATIAL_PARAMS_BY_OPERATION.get(op, set())
+    for key in spatial.intersection(result):
         if op == "blur" and key == "base":
             continue
         result[key] = scaled(result[key])

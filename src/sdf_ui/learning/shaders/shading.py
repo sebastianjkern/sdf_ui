@@ -19,6 +19,9 @@ from ...gpu.nodes.shading.fill_from_texture.implementation import (
 from ...gpu.nodes.shading.film_grain.implementation import (
     reference as _film_grain,
 )
+from ...gpu.nodes.shading.hatch_fill.implementation import (
+    reference as _hatch_fill,
+)
 from ...gpu.nodes.shading.isolines.implementation import (
     reference as _isolines,
 )
@@ -43,6 +46,7 @@ RULES = {
     "fill_from_texture": _fill_from_texture,
     "film_grain": _film_grain,
     "isolines": _isolines,
+    "hatch_fill": _hatch_fill,
     "light": _light,
     "partial_derivative": _partial_derivative,
     "perlin_noise": _perlin_noise,

@@ -1,5 +1,5 @@
 from . import core, learning
-from .core import ColorTexture, FieldTexture, SDFTexture
+from .core import ColorTexture, FieldTexture, SDFTexture, paint
 from .core.api import ColorNamespace, SDFNamespace
 from .core.expressions import (
     Expr,
@@ -53,6 +53,7 @@ __all__ = [
     "input_value",
     "param",
     "palettes",
+    "paint",
     "percent",
     "percent_of_min",
     "percent_x",

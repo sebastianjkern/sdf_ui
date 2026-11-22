@@ -1,0 +1,1 @@
+"""Raster hatch shading plugin."""

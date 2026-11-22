@@ -32,6 +32,7 @@ The catalog also supports `all` (the default) and `--no-stats`. Run
 | --- | --- | --- |
 | Shapes and operations | `arc`, `capsule`, `complex`, `convex_polygon`, `diamond`, `ellipse`, `half_plane`, `masked_union`, `ngon`, `parallelogram`, `polygon`, `ring`, `sector` | Shape primitives, composition, and boolean operations |
 | Rendering and effects | `distance_corrections`, `isolines`, `light`, `neuromorphism`, `render_api`, `transparency`, `vortices`, `voronoi` | Render controls, fields, lighting, and color effects |
+| Pen plotting | `crosshatch`, `hand_hatch` | Shared PNG, SVG, and G-code output with bowed strokes and hatch density driven by light |
 | Text | `font`, `text`, `text_layout`, `text_opentype` | Font selection, layout, shaping, and rendering |
 | Animation and artwork | `anim`, `art`, `blue_hour`, `github`, `striped_circles`, `tidal_bloom`, `field_flow`, `starry_current`, `ic` | Animated scenes and finished compositions |
 | Learning | `learned_score`, `pd` | Learned layout and partial derivative visualization |

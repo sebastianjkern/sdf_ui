@@ -7,6 +7,7 @@ from examples.arc_example import arc_example
 from examples.capsule_example import capsule_example
 from examples.complex_shapes_example import complex_shapes_example
 from examples.convex_polygon_example import convex_polygon_example
+from examples.crosshatch_example import crosshatch_example
 from examples.dawn_example import dawn_example
 from examples.diamond_example import diamond_example
 from examples.distance_corrections_example import distance_corrections_example
@@ -15,6 +16,7 @@ from examples.field_flow_animation import field_flow_animation_example
 from examples.font_example import font_example
 from examples.generative_art_animation import generative_art_animation
 from examples.github_banner_example import github_banner_example
+from examples.hand_hatch_example import hand_hatch_example
 from examples.half_plane_example import half_plane_example
 from examples.impossible_city import impossible_city_example
 from examples.isolines_example import isolines_example
@@ -63,6 +65,8 @@ examples = {
     "starry_current": starry_current_animation,
     "preset_gallery": preset_gallery_example,
     "complex": complex_shapes_example,
+    "crosshatch": crosshatch_example,
+    "hand_hatch": hand_hatch_example,
     "anim": animation_example,
     "arc": arc_example,
     "pd": partial_derivative_example,
